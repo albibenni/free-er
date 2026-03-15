@@ -1,0 +1,35 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+
+# Build artifacts
+dist/
+build/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.direnv/
+
+# Env / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Extension build output
+extension/dist/
+extension/*.zip
+
+# Config overrides (user-local)
+config.local.json
