@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "free-er",
+  "version": "0.1.0",
+  "description": "Focus session enforcer — blocks distracting sites while free-er daemon is active.",
+
+  "permissions": [
+    "tabs",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:10000/*"
+  ],
+
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://127.0.0.1:10000/*"],
+      "js": ["dist/content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "free-er"
+  }
+}
