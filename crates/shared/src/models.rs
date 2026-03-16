@@ -1,0 +1,71 @@
+use chrono::{NaiveTime, Weekday};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// A named list of allowed URL patterns (wildcards supported).
+/// During a focus session, only URLs matching this list are accessible.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleSet {
+    pub id: Uuid,
+    pub name: String,
+    /// Wildcard URL patterns, e.g. "github.com", "*.rust-lang.org"
+    pub allowed_urls: Vec<String>,
+}
+
+impl RuleSet {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name: name.into(),
+            allowed_urls: Vec::new(),
+        }
+    }
+}
+
+/// A recurring weekly schedule that activates a focus session automatically.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Schedule {
+    pub id: Uuid,
+    pub name: String,
+    pub days: Vec<Weekday>,
+    pub start: NaiveTime,
+    pub end: NaiveTime,
+    pub rule_set_id: Uuid,
+    pub enabled: bool,
+}
+
+impl Schedule {
+    /// Returns true if this schedule is active at the given weekday + time.
+    pub fn is_active(&self, day: Weekday, time: NaiveTime) -> bool {
+        self.enabled && self.days.contains(&day) && time >= self.start && time < self.end
+    }
+}
+
+/// Configuration for the Pomodoro timer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PomodoroConfig {
+    pub focus_secs: u64,
+    pub break_secs: u64,
+    /// If true, the user cannot manually end a break early.
+    pub strict_breaks: bool,
+}
+
+impl Default for PomodoroConfig {
+    fn default() -> Self {
+        Self {
+            focus_secs: 25 * 60,
+            break_secs: 5 * 60,
+            strict_breaks: false,
+        }
+    }
+}
+
+/// Top-level persisted config written to ~/.config/free-er/config.json
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Config {
+    pub rule_sets: Vec<RuleSet>,
+    pub schedules: Vec<Schedule>,
+    pub pomodoro: PomodoroConfig,
+    /// If true, focus cannot be stopped manually while a schedule is active.
+    pub strict_mode: bool,
+}
