@@ -1,0 +1,14 @@
+{
+  "name": "free-er-extension",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/background.ts src/content.ts src/popup/popup.ts --bundle --outdir=dist --target=chrome120,firefox120 --format=esm",
+    "watch": "esbuild src/background.ts src/content.ts src/popup/popup.ts --bundle --outdir=dist --target=chrome120,firefox120 --format=esm --watch"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.37",
+    "esbuild": "^0.27.4",
+    "typescript": "^5.9.3"
+  }
+}
