@@ -33,3 +33,5 @@ extension/*.zip
 
 # Config overrides (user-local)
 config.local.json
+
+node_modules/
