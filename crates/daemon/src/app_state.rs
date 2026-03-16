@@ -60,6 +60,35 @@ impl AppState {
         self.0.lock().unwrap().config.rule_sets.push(rule_set);
     }
 
+    /// Called every second by the background tick loop.
+    /// Advances the pomodoro phase when the current phase expires.
+    pub fn tick(&self) {
+        let mut inner = self.0.lock().unwrap();
+        if let Some(pom) = &mut inner.pomodoro {
+            if pom.is_expired() {
+                pom.advance();
+                // When moving back to Focus, ensure focus_active stays true.
+                inner.focus_active = true;
+            }
+        }
+    }
+
+    /// Skip the current break and return to Focus immediately.
+    /// Returns false if strict_breaks is enabled.
+    pub fn skip_break(&self) -> bool {
+        let mut inner = self.0.lock().unwrap();
+        if inner.config.pomodoro.strict_breaks {
+            return false;
+        }
+        if let Some(pom) = &mut inner.pomodoro {
+            if pom.phase == crate::pomodoro::Phase::Break {
+                pom.advance();
+                inner.focus_active = true;
+            }
+        }
+        true
+    }
+
     pub fn remove_rule_set(&self, id: Uuid) {
         let mut inner = self.0.lock().unwrap();
         inner.config.rule_sets.retain(|r| r.id != id);

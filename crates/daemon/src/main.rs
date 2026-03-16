@@ -23,6 +23,16 @@ async fn main() -> Result<()> {
     let config = persistence::load().await?;
     let state = app_state::AppState::new(config);
 
+    // Background task: advance pomodoro phases automatically.
+    let tick_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+        loop {
+            interval.tick().await;
+            tick_state.tick();
+        }
+    });
+
     tokio::try_join!(
         ipc::serve(state.clone()),
         local_server::serve(state.clone()),

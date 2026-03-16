@@ -65,6 +65,13 @@ fn handle_command(cmd: Command, state: &AppState) -> String {
             state.stop_pomodoro();
             ok_response()
         }
+        Command::SkipBreak => {
+            if state.skip_break() {
+                ok_response()
+            } else {
+                r#"{"error": "strict breaks are enabled"}"#.into()
+            }
+        }
         Command::GetStatus => {
             let snap = state.snapshot();
             let resp = StatusResponse {

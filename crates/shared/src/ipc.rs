@@ -10,6 +10,9 @@ pub enum Command {
     TakeBreak { duration_secs: u64 },
     StartPomodoro { focus_secs: u64, break_secs: u64 },
     StopPomodoro,
+    /// Skip the current break and go straight to the next focus phase.
+    /// Rejected by the daemon if strict_breaks is enabled.
+    SkipBreak,
     GetStatus,
     AddRuleSet { name: String, allowed_urls: Vec<String> },
     RemoveRuleSet { id: Uuid },
