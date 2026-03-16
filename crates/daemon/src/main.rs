@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     tokio::try_join!(
         ipc::serve(state.clone()),
-        local_server::serve(),
+        local_server::serve(state.clone()),
     )?;
 
     Ok(())
