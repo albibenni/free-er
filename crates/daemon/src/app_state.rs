@@ -94,6 +94,26 @@ impl AppState {
         inner.config.rule_sets.retain(|r| r.id != id);
     }
 
+    /// Replace calendar-imported schedules with a fresh set.
+    /// Non-imported (manually created) schedules are left untouched.
+    pub fn apply_calendar_schedules(&self, imported: Vec<shared::models::Schedule>) {
+        let mut inner = self.0.lock().unwrap();
+        // Remove previously imported schedules (identified by a naming convention
+        // or, in the future, a dedicated `source` field). For now we replace all
+        // schedules that share a name with an incoming one.
+        let incoming_names: std::collections::HashSet<_> =
+            imported.iter().map(|s| s.name.clone()).collect();
+        inner
+            .config
+            .schedules
+            .retain(|s| !incoming_names.contains(&s.name));
+        inner.config.schedules.extend(imported);
+    }
+
+    pub fn caldav_config(&self) -> Option<shared::models::CalDavConfig> {
+        self.0.lock().unwrap().config.caldav.clone()
+    }
+
     pub fn snapshot(&self) -> StateSnapshot {
         let inner = self.0.lock().unwrap();
         let active_rule_set_name = inner

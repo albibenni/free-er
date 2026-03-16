@@ -60,12 +60,32 @@ impl Default for PomodoroConfig {
     }
 }
 
+/// A keyword rule: if a calendar event title contains `keyword`,
+/// it is imported as a focus session using `rule_set_id`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalendarImportRule {
+    pub keyword: String,
+    pub rule_set_id: Uuid,
+}
+
+/// CalDAV / remote .ics source configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalDavConfig {
+    /// Full URL to the .ics feed or CalDAV calendar.
+    pub url: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    /// How to map event titles → rule sets.
+    pub import_rules: Vec<CalendarImportRule>,
+}
+
 /// Top-level persisted config written to ~/.config/free-er/config.json
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     pub rule_sets: Vec<RuleSet>,
     pub schedules: Vec<Schedule>,
     pub pomodoro: PomodoroConfig,
+    pub caldav: Option<CalDavConfig>,
     /// If true, focus cannot be stopped manually while a schedule is active.
     pub strict_mode: bool,
 }
