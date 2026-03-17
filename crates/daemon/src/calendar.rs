@@ -178,16 +178,18 @@ fn google_event_to_schedule(
 ) -> Option<Schedule> {
     let summary = event["summary"].as_str()?;
 
-    let rule_set_id = import_rules.iter().find_map(|rule| {
-        if summary
-            .to_lowercase()
-            .contains(&rule.keyword.to_lowercase())
-        {
-            Some(rule.rule_set_id)
-        } else {
-            None
-        }
-    })?;
+    // Use the first matching rule's rule_set_id, or nil if none match.
+    // All events are imported regardless of whether a rule matches.
+    let rule_set_id = import_rules
+        .iter()
+        .find_map(|rule| {
+            if summary.to_lowercase().contains(&rule.keyword.to_lowercase()) {
+                Some(rule.rule_set_id)
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(Uuid::nil);
 
     let start_str = event["start"]["dateTime"]
         .as_str()
