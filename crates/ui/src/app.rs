@@ -3,7 +3,7 @@ use crate::sections::{
     allowed_lists::{AllowedListsInput, AllowedListsOutput, AllowedListsSection},
     focus::{FocusInput, FocusOutput, FocusSection},
     pomodoro::{PomodoroInput, PomodoroOutput, PomodoroSection},
-    settings::{SettingsOutput, SettingsSection},
+    settings::{SettingsInput, SettingsOutput, SettingsSection},
 };
 use gtk4::prelude::*;
 use relm4::prelude::*;
@@ -133,6 +133,9 @@ impl Component for App {
             .launch(false)
             .forward(sender.input_sender(), |out| match out {
                 SettingsOutput::StrictModeChanged(v) => AppMsg::StrictModeChanged(v),
+                SettingsOutput::QuickUrlToggled { url, enabled } => {
+                    if enabled { AppMsg::AddUrl(url.to_string()) } else { AppMsg::RemoveUrl(url.to_string()) }
+                }
                 SettingsOutput::CalDavSaved { url, user, pass } => {
                     AppMsg::SaveCalDav { url, user, pass }
                 }
@@ -291,6 +294,7 @@ impl Component for App {
                 let focus_sender = self.focus.sender().clone();
                 let pom_sender = self.pomodoro.sender().clone();
                 let lists_sender = self.allowed_lists.sender().clone();
+                let settings_sender = self.settings.sender().clone();
                 let tick_sender = _sender.clone();
                 tokio::spawn(async move {
                     match ipc_client::get_status().await {
@@ -313,7 +317,8 @@ impl Component for App {
                                 .iter()
                                 .flat_map(|s| s.allowed_urls.clone())
                                 .collect();
-                            lists_sender.emit(AllowedListsInput::UrlsUpdated(all_urls));
+                            lists_sender.emit(AllowedListsInput::UrlsUpdated(all_urls.clone()));
+                            settings_sender.emit(SettingsInput::QuickUrlsUpdated(all_urls));
                             tick_sender.input(AppMsg::RuleSetsUpdated(
                                 sets.into_iter().map(|s| s.id).collect(),
                             ));
