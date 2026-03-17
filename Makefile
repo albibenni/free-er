@@ -1,4 +1,4 @@
-.PHONY: all build daemon ui extension test clean dev help
+.PHONY: all build daemon ui extension test clean dev run help
 
 all: build extension
 
@@ -32,6 +32,14 @@ dev:
 	@echo "Starting UI..."
 	cargo run -p ui
 
+# Build everything (Rust + extension) and launch daemon + UI
+run: build extension
+	@echo "Starting daemon..."
+	@cargo run -p daemon &
+	@sleep 1
+	@echo "Starting UI..."
+	@cargo run -p ui
+
 clean:
 	cargo clean
 	rm -rf extension/dist
@@ -39,6 +47,7 @@ clean:
 help:
 	@echo "Usage: make <target>"
 	@echo ""
+	@echo "  run               Build everything and launch daemon + UI"
 	@echo "  build             Build all Rust crates (debug)"
 	@echo "  release           Build all Rust crates (release)"
 	@echo "  daemon            Run the daemon"
