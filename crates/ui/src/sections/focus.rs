@@ -88,10 +88,13 @@ impl SimpleComponent for FocusSection {
     fn update(&mut self, msg: FocusInput, sender: ComponentSender<Self>) {
         match msg {
             FocusInput::Toggle => {
+                // Optimistic update — flip immediately; corrected by next status poll
+                self.focus_active = !self.focus_active;
                 if self.focus_active {
-                    let _ = sender.output(FocusOutput::StopFocus);
-                } else {
                     let _ = sender.output(FocusOutput::StartFocus);
+                } else {
+                    self.active_rule_set = None;
+                    let _ = sender.output(FocusOutput::StopFocus);
                 }
             }
             FocusInput::SkipBreak => {

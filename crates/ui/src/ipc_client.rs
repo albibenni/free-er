@@ -1,5 +1,6 @@
 use anyhow::Result;
-use shared::ipc::{Command, StatusResponse};
+use shared::ipc::{Command, RuleSetSummary, StatusResponse};
+use uuid::Uuid;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 
@@ -21,4 +22,22 @@ pub async fn send(cmd: &Command) -> Result<String> {
 pub async fn get_status() -> Result<StatusResponse> {
     let raw = send(&Command::GetStatus).await?;
     Ok(serde_json::from_str(&raw)?)
+}
+
+/// Fetch all rule sets from the daemon.
+pub async fn list_rule_sets() -> Result<Vec<RuleSetSummary>> {
+    let raw = send(&Command::ListRuleSets).await?;
+    Ok(serde_json::from_str(&raw)?)
+}
+
+/// Create a new rule set and return its assigned UUID.
+pub async fn add_rule_set(name: &str) -> Result<Uuid> {
+    let raw = send(&Command::AddRuleSet {
+        name: name.to_string(),
+        allowed_urls: vec![],
+    })
+    .await?;
+    let v: serde_json::Value = serde_json::from_str(&raw)?;
+    let id = v["id"].as_str().ok_or_else(|| anyhow::anyhow!("no id in response"))?;
+    Ok(id.parse()?)
 }

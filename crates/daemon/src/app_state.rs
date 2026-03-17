@@ -95,6 +95,22 @@ impl AppState {
         inner.config.rule_sets.retain(|r| r.id != id);
     }
 
+    pub fn list_rule_sets(&self) -> Vec<shared::models::RuleSet> {
+        self.0.lock().unwrap().config.rule_sets.clone()
+    }
+
+    pub fn add_url_to_rule_set(&self, rule_set_id: Uuid, url: String) -> bool {
+        let mut inner = self.0.lock().unwrap();
+        if let Some(rs) = inner.config.rule_sets.iter_mut().find(|r| r.id == rule_set_id) {
+            if !rs.allowed_urls.contains(&url) {
+                rs.allowed_urls.push(url);
+            }
+            true
+        } else {
+            false
+        }
+    }
+
     /// Replace calendar-imported schedules with a fresh set.
     /// Non-imported (manually created) schedules are left untouched.
     pub fn apply_calendar_schedules(&self, imported: Vec<shared::models::Schedule>) {

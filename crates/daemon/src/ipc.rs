@@ -90,12 +90,32 @@ fn handle_command(cmd: Command, state: &AppState) -> String {
         Command::AddRuleSet { name, allowed_urls } => {
             let mut rs = RuleSet::new(name);
             rs.allowed_urls = allowed_urls;
+            let id = rs.id;
             state.add_rule_set(rs);
-            ok_response()
+            serde_json::json!({ "ok": true, "id": id }).to_string()
         }
         Command::RemoveRuleSet { id } => {
             state.remove_rule_set(id);
             ok_response()
+        }
+        Command::AddUrlToRuleSet { rule_set_id, url } => {
+            if state.add_url_to_rule_set(rule_set_id, url) {
+                ok_response()
+            } else {
+                r#"{"error": "rule set not found"}"#.into()
+            }
+        }
+        Command::ListRuleSets => {
+            let rule_sets: Vec<shared::ipc::RuleSetSummary> = state
+                .list_rule_sets()
+                .into_iter()
+                .map(|rs| shared::ipc::RuleSetSummary {
+                    id: rs.id,
+                    name: rs.name,
+                    allowed_urls: rs.allowed_urls,
+                })
+                .collect();
+            serde_json::to_string(&rule_sets).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
         }
         Command::AddSchedule { .. } | Command::RemoveSchedule { .. } => {
             r#"{"error": "not yet implemented"}"#.into()

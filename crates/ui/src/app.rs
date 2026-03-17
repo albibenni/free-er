@@ -1,6 +1,6 @@
 use crate::ipc_client;
 use crate::sections::{
-    allowed_lists::{AllowedListsOutput, AllowedListsSection},
+    allowed_lists::{AllowedListsInput, AllowedListsOutput, AllowedListsSection},
     focus::{FocusInput, FocusOutput, FocusSection},
     pomodoro::{PomodoroInput, PomodoroOutput, PomodoroSection},
     settings::{SettingsOutput, SettingsSection},
@@ -9,6 +9,7 @@ use gtk4::prelude::*;
 use relm4::prelude::*;
 use shared::ipc::Command;
 use tracing::{error, warn};
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum Page {
@@ -20,6 +21,9 @@ pub enum Page {
 
 pub struct App {
     current_page: Page,
+    /// ID of the rule set used when starting a focus session.
+    /// Populated from ListRuleSets; defaults to nil until the first poll.
+    active_rule_set_id: Option<Uuid>,
     focus: Controller<FocusSection>,
     pomodoro: Controller<PomodoroSection>,
     allowed_lists: Controller<AllowedListsSection>,
@@ -40,6 +44,10 @@ pub enum AppMsg {
     SaveCalDav { url: String, user: String, pass: String },
     // Periodic status poll result
     StatusTick,
+    // Internal: rule sets fetched from daemon
+    RuleSetsUpdated(Vec<Uuid>),
+    // Internal: a new rule set was created, store its ID
+    RuleSetCreated(Uuid),
 }
 
 #[relm4::component(pub)]
@@ -130,6 +138,7 @@ impl Component for App {
 
         let model = App {
             current_page: Page::Focus,
+            active_rule_set_id: None,
             focus,
             pomodoro,
             allowed_lists,
@@ -174,10 +183,9 @@ impl Component for App {
             }
 
             AppMsg::StartFocus => {
-                tokio::spawn(async {
-                    if let Err(e) = ipc_client::send(&Command::StartFocus {
-                        rule_set_id: uuid::Uuid::nil(),
-                    }).await {
+                let rule_set_id = self.active_rule_set_id.unwrap_or_else(Uuid::nil);
+                tokio::spawn(async move {
+                    if let Err(e) = ipc_client::send(&Command::StartFocus { rule_set_id }).await {
                         error!("StartFocus IPC failed: {e}");
                     }
                 });
@@ -211,12 +219,29 @@ impl Component for App {
                 });
             }
             AppMsg::AddUrl(url) => {
+                let existing_id = self.active_rule_set_id;
+                let inner_sender = _sender.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = ipc_client::send(&Command::AddRuleSet {
-                        name: "Imported".into(),
-                        allowed_urls: vec![url],
-                    }).await {
-                        error!("AddRuleSet IPC failed: {e}");
+                    if let Some(id) = existing_id {
+                        if let Err(e) = ipc_client::send(&Command::AddUrlToRuleSet {
+                            rule_set_id: id,
+                            url,
+                        }).await {
+                            error!("AddUrlToRuleSet IPC failed: {e}");
+                        }
+                    } else {
+                        match ipc_client::add_rule_set("My List").await {
+                            Ok(id) => {
+                                inner_sender.input(AppMsg::RuleSetCreated(id));
+                                if let Err(e) = ipc_client::send(&Command::AddUrlToRuleSet {
+                                    rule_set_id: id,
+                                    url,
+                                }).await {
+                                    error!("AddUrlToRuleSet IPC failed: {e}");
+                                }
+                            }
+                            Err(e) => error!("AddRuleSet IPC failed: {e}"),
+                        }
                     }
                 });
             }
@@ -239,9 +264,20 @@ impl Component for App {
                 });
             }
 
+            AppMsg::RuleSetsUpdated(ids) => {
+                if self.active_rule_set_id.is_none() {
+                    self.active_rule_set_id = ids.into_iter().next();
+                }
+            }
+            AppMsg::RuleSetCreated(id) => {
+                self.active_rule_set_id = Some(id);
+            }
+
             AppMsg::StatusTick => {
                 let focus_sender = self.focus.sender().clone();
                 let pom_sender = self.pomodoro.sender().clone();
+                let lists_sender = self.allowed_lists.sender().clone();
+                let tick_sender = _sender.clone();
                 tokio::spawn(async move {
                     match ipc_client::get_status().await {
                         Ok(status) => {
@@ -255,6 +291,20 @@ impl Component for App {
                             });
                         }
                         Err(e) => warn!("status poll failed: {e}"),
+                    }
+                    match ipc_client::list_rule_sets().await {
+                        Ok(sets) => {
+                            // Flatten all URLs from all rule sets into the display list
+                            let all_urls: Vec<String> = sets
+                                .iter()
+                                .flat_map(|s| s.allowed_urls.clone())
+                                .collect();
+                            lists_sender.emit(AllowedListsInput::UrlsUpdated(all_urls));
+                            tick_sender.input(AppMsg::RuleSetsUpdated(
+                                sets.into_iter().map(|s| s.id).collect(),
+                            ));
+                        }
+                        Err(e) => warn!("list_rule_sets failed: {e}"),
                     }
                 });
             }

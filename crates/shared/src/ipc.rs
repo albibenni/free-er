@@ -16,6 +16,8 @@ pub enum Command {
     GetStatus,
     AddRuleSet { name: String, allowed_urls: Vec<String> },
     RemoveRuleSet { id: Uuid },
+    AddUrlToRuleSet { rule_set_id: Uuid, url: String },
+    ListRuleSets,
     AddSchedule {
         name: String,
         days: Vec<String>,
@@ -26,6 +28,14 @@ pub enum Command {
     RemoveSchedule { id: Uuid },
     SetStrictMode { enabled: bool },
     SetCalDav { url: String, username: String, password: String },
+}
+
+/// Returned by ListRuleSets.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleSetSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub allowed_urls: Vec<String>,
 }
 
 /// Current phase of the Pomodoro timer.
