@@ -110,6 +110,21 @@ async fn oauth_google_callback(
         }
     });
 
+    // Trigger an immediate calendar sync instead of waiting up to 15 minutes.
+    let sync_state = state.clone();
+    tokio::spawn(async move {
+        if let Some(cfg) = sync_state.google_calendar_config() {
+            let import_rules = cfg.import_rules.clone();
+            match crate::calendar::fetch_google_calendar_schedules(&cfg, &import_rules).await {
+                Ok(schedules) => {
+                    info!("Google Calendar initial sync: imported {} schedules", schedules.len());
+                    sync_state.apply_calendar_schedules(schedules);
+                }
+                Err(e) => tracing::warn!("Google Calendar initial sync failed: {e}"),
+            }
+        }
+    });
+
     axum::response::Html(
         "<html><body style='font-family:sans-serif;text-align:center;padding:4rem'>\
          <h1>✓ Google Calendar connected!</h1>\
