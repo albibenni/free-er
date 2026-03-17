@@ -79,6 +79,7 @@ fn event_to_schedule(
         end: end_time,
         rule_set_id,
         enabled: true,
+        specific_date: Some(start_dt.date()),
     })
 }
 
@@ -147,8 +148,16 @@ pub async fn fetch_google_calendar_schedules(
     let now = chrono::Utc::now();
     // Use Z (UTC) suffix so no encoding is needed for the `+` in ±offset timestamps
     let fmt = "%Y-%m-%dT%H:%M:%SZ";
-    let time_min = now.format(fmt).to_string();
-    let time_max = (now + chrono::Duration::days(30)).format(fmt).to_string();
+    // Start from Monday of the current week so that today's already-ended events
+    // and earlier-this-week events are included in the calendar view.
+    let today_local = chrono::Local::now();
+    let days_from_mon = today_local.weekday().num_days_from_monday() as i64;
+    let week_monday_local = today_local - chrono::Duration::days(days_from_mon);
+    let time_min = week_monday_local.date_naive()
+        .and_hms_opt(0, 0, 0).unwrap()
+        .and_utc()
+        .format(fmt).to_string();
+    let time_max = (now + chrono::Duration::days(35)).format(fmt).to_string();
     let url = format!(
         "https://www.googleapis.com/calendar/v3/calendars/primary/events\
          ?singleEvents=true&orderBy=startTime&timeMin={time_min}&timeMax={time_max}"
@@ -164,17 +173,18 @@ pub async fn fetch_google_calendar_schedules(
         .await?;
 
     let items = resp["items"].as_array().cloned().unwrap_or_default();
-    let local_now = chrono::Local::now().naive_local();
+    // Every instance is stored with its specific_date. The calendar view shows
+    // whichever events fall in the displayed week. Recurring events naturally
+    // appear on every week within the fetched window; one-time events appear once.
     Ok(items
         .iter()
-        .filter_map(|item| google_event_to_schedule(item, import_rules, local_now))
+        .filter_map(|item| google_event_to_schedule(item, import_rules))
         .collect())
 }
 
 fn google_event_to_schedule(
     event: &serde_json::Value,
     import_rules: &[CalendarImportRule],
-    now: chrono::NaiveDateTime,
 ) -> Option<Schedule> {
     let summary = event["summary"].as_str()?;
 
@@ -213,10 +223,6 @@ fn google_event_to_schedule(
         })
         .ok()?;
 
-    if end_dt <= now {
-        return None;
-    }
-
     Some(Schedule {
         id: Uuid::new_v4(),
         name: summary.to_string(),
@@ -225,6 +231,7 @@ fn google_event_to_schedule(
         end: end_dt.time(),
         rule_set_id,
         enabled: true,
+        specific_date: Some(start_dt.date()),
     })
 }
 

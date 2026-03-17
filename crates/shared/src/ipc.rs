@@ -39,12 +39,15 @@ pub enum Command {
 pub struct ScheduleSummary {
     pub id: Uuid,
     pub name: String,
-    /// Weekday indices: 0=Mon, 1=Tue, …, 6=Sun
+    /// Weekday indices: 0=Mon, 1=Tue, …, 6=Sun. Empty for one-time events.
     pub days: Vec<u8>,
     /// Minutes from midnight
     pub start_min: u32,
     pub end_min: u32,
     pub enabled: bool,
+    /// If set, this is a one-time event on this specific date (YYYY-MM-DD).
+    /// If None, the event repeats weekly on the days in `days`.
+    pub specific_date: Option<String>,
 }
 
 /// Returned by ListRuleSets.

@@ -240,15 +240,35 @@ fn draw_calendar(cr: &gtk4::cairo::Context, width: i32, height: i32, data: &Draw
     cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
 
     // ── Event blocks ──────────────────────────────────────────────────────
-    for (i, sched) in data.schedules.iter().enumerate() {
+    for sched in &data.schedules {
         if !sched.enabled {
             continue;
         }
 
-        let (r, g, b) = COLORS[i % COLORS.len()];
+        // Stable color derived from the event name so all instances of the same
+        // event (e.g. each day's "Study") share the same color.
+        let color_idx = sched.name.bytes().fold(0usize, |acc, b| acc.wrapping_add(b as usize));
+        let (r, g, b) = COLORS[color_idx % COLORS.len()];
 
-        for &day_idx in &sched.days {
-            let col = day_idx as usize;
+        // Determine which columns to draw in for this week.
+        let cols: Vec<usize> = if let Some(date_str) = &sched.specific_date {
+            // One-time event: only draw if the date falls within the displayed week.
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                let days_offset = (date - week_monday).num_days();
+                if days_offset >= 0 && days_offset < 7 {
+                    vec![days_offset as usize]
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![]
+            }
+        } else {
+            // Recurring: draw on each listed weekday.
+            sched.days.iter().map(|&d| d as usize).collect()
+        };
+
+        for col in cols {
             let x = MARGIN_LEFT + col as f64 * col_w + 2.0;
             let block_w = col_w - 4.0;
 

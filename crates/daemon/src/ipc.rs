@@ -149,6 +149,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                     start_min: s.start.hour() * 60 + s.start.minute(),
                     end_min: s.end.hour() * 60 + s.end.minute(),
                     enabled: s.enabled,
+                    specific_date: s.specific_date.map(|d| d.format("%Y-%m-%d").to_string()),
                 })
                 .collect();
             (serde_json::to_string(&summaries).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
