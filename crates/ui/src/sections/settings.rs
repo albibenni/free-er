@@ -20,8 +20,8 @@ pub struct SettingsSection {
 
 #[derive(Debug)]
 pub enum SettingsInput {
-    StrictModeToggled,
-    ToggleQuick(&'static str),
+    SetStrictMode(bool),
+    SetQuick(&'static str, bool),
     QuickUrlsUpdated(Vec<String>),
     SaveCalDav,
 }
@@ -58,13 +58,12 @@ impl SimpleComponent for SettingsSection {
             gtk4::Box {
                 set_orientation: gtk4::Orientation::Horizontal,
                 set_spacing: 12,
-
                 gtk4::Label { set_label: "Strict mode", set_hexpand: true, set_halign: gtk4::Align::Start },
                 gtk4::Switch {
                     #[watch]
                     set_active: model.strict_mode,
-                    connect_state_set[sender] => move |_, _| {
-                        sender.input(SettingsInput::StrictModeToggled);
+                    connect_state_set[sender] => move |_, state| {
+                        sender.input(SettingsInput::SetStrictMode(state));
                         gtk4::glib::Propagation::Proceed
                     },
                 },
@@ -85,8 +84,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.whatsapp,
-                    connect_state_set[sender] => move |_, _| {
-                        sender.input(SettingsInput::ToggleQuick(WHATSAPP));
+                    connect_state_set[sender] => move |_, state| {
+                        sender.input(SettingsInput::SetQuick(WHATSAPP, state));
                         gtk4::glib::Propagation::Proceed
                     },
                 },
@@ -99,8 +98,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.telegram,
-                    connect_state_set[sender] => move |_, _| {
-                        sender.input(SettingsInput::ToggleQuick(TELEGRAM));
+                    connect_state_set[sender] => move |_, state| {
+                        sender.input(SettingsInput::SetQuick(TELEGRAM, state));
                         gtk4::glib::Propagation::Proceed
                     },
                 },
@@ -113,8 +112,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.discord,
-                    connect_state_set[sender] => move |_, _| {
-                        sender.input(SettingsInput::ToggleQuick(DISCORD));
+                    connect_state_set[sender] => move |_, state| {
+                        sender.input(SettingsInput::SetQuick(DISCORD, state));
                         gtk4::glib::Propagation::Proceed
                     },
                 },
@@ -127,8 +126,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.spotify,
-                    connect_state_set[sender] => move |_, _| {
-                        sender.input(SettingsInput::ToggleQuick(SPOTIFY));
+                    connect_state_set[sender] => move |_, state| {
+                        sender.input(SettingsInput::SetQuick(SPOTIFY, state));
                         gtk4::glib::Propagation::Proceed
                     },
                 },
@@ -186,19 +185,22 @@ impl SimpleComponent for SettingsSection {
 
     fn update(&mut self, msg: SettingsInput, sender: ComponentSender<Self>) {
         match msg {
-            SettingsInput::StrictModeToggled => {
-                self.strict_mode = !self.strict_mode;
+            SettingsInput::SetStrictMode(enabled) => {
+                if self.strict_mode == enabled { return; }
+                self.strict_mode = enabled;
                 let _ = sender.output(SettingsOutput::StrictModeChanged(self.strict_mode));
             }
-            SettingsInput::ToggleQuick(url) => {
-                let enabled = match url {
-                    WHATSAPP => { self.whatsapp = !self.whatsapp; self.whatsapp }
-                    TELEGRAM => { self.telegram = !self.telegram; self.telegram }
-                    DISCORD  => { self.discord  = !self.discord;  self.discord  }
-                    SPOTIFY  => { self.spotify  = !self.spotify;  self.spotify  }
+            SettingsInput::SetQuick(url, enabled) => {
+                let changed = match url {
+                    WHATSAPP => { if self.whatsapp == enabled { return; } self.whatsapp = enabled; true }
+                    TELEGRAM => { if self.telegram == enabled { return; } self.telegram = enabled; true }
+                    DISCORD  => { if self.discord  == enabled { return; } self.discord  = enabled; true }
+                    SPOTIFY  => { if self.spotify  == enabled { return; } self.spotify  = enabled; true }
                     _ => return,
                 };
-                let _ = sender.output(SettingsOutput::QuickUrlToggled { url, enabled });
+                if changed {
+                    let _ = sender.output(SettingsOutput::QuickUrlToggled { url, enabled });
+                }
             }
             SettingsInput::QuickUrlsUpdated(urls) => {
                 self.whatsapp = urls.iter().any(|u| u == WHATSAPP);
