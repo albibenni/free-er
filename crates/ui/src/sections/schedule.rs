@@ -46,14 +46,14 @@ pub enum ScheduleInput {
     ShowCreateDialog { col: usize, start_min: u32, end_min: u32 },
     ShowViewDialog { name: String, col: usize, start_min: u32, end_min: u32 },
     ShowEditDialog { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32 },
-    CommitCreate { name: String, col: usize, start_min: u32, end_min: u32 },
+    CommitCreate { name: String, col: usize, start_min: u32, end_min: u32, specific_date: String },
     CommitEdit { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32 },
     CommitDelete(uuid::Uuid),
 }
 
 #[derive(Debug)]
 pub enum ScheduleOutput {
-    CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
+    CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32, specific_date: String },
     UpdateSchedule { id: uuid::Uuid, name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
     DeleteSchedule(uuid::Uuid),
 }
@@ -263,12 +263,13 @@ impl Component for ScheduleSection {
                 self.update_view(widgets, sender);
                 return;
             }
-            ScheduleInput::CommitCreate { name, col, start_min, end_min } => {
+            ScheduleInput::CommitCreate { name, col, start_min, end_min, specific_date } => {
                 let _ = sender.output(ScheduleOutput::CreateSchedule {
                     name,
                     days: vec![col as u8],
                     start_min,
                     end_min,
+                    specific_date,
                 });
             }
             ScheduleInput::CommitEdit { id, name, col, start_min, end_min } => {
@@ -847,13 +848,22 @@ fn show_create_dialog(
     let se = start_entry.clone();
     let ee = end_entry.clone();
     let day = col as u8;
+    let date_str = (week_monday + chrono::Duration::days(col as i64))
+        .format("%Y-%m-%d")
+        .to_string();
     save_btn.connect_clicked(move |_| {
         let name = ne.text().to_string();
         if name.is_empty() { return; }
         let Some(s_min) = parse_hhmm(&se.text()) else { return };
         let Some(e_min) = parse_hhmm(&ee.text()) else { return };
         if e_min <= s_min { return; }
-        sender.input(ScheduleInput::CommitCreate { name, col: day as usize, start_min: s_min, end_min: e_min });
+        sender.input(ScheduleInput::CommitCreate {
+            name,
+            col: day as usize,
+            start_min: s_min,
+            end_min: e_min,
+            specific_date: date_str.clone(),
+        });
         d.close();
     });
 

@@ -135,7 +135,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 .collect();
             (serde_json::to_string(&rule_sets).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
         }
-        Command::AddSchedule { name, days, start_min, end_min, rule_set_id } => {
+        Command::AddSchedule { name, days, start_min, end_min, rule_set_id, specific_date } => {
             use chrono::NaiveTime;
             fn wday(d: u8) -> Option<chrono::Weekday> {
                 match d {
@@ -150,6 +150,9 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             let end = NaiveTime::from_hms_opt(end_min / 60, end_min % 60, 0)
                 .unwrap_or_default();
             let weekdays = days.iter().filter_map(|&d| wday(d)).collect();
+            let parsed_date = specific_date.as_deref().and_then(|s| {
+                chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()
+            });
             let schedule = shared::models::Schedule {
                 id: Uuid::new_v4(),
                 name,
@@ -159,7 +162,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 rule_set_id: rule_set_id.unwrap_or_else(Uuid::nil),
                 enabled: true,
                 imported: false,
-                specific_date: None,
+                specific_date: parsed_date,
             };
             let id = schedule.id;
             state.add_schedule(schedule);

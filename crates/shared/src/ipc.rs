@@ -26,6 +26,8 @@ pub enum Command {
         start_min: u32,
         end_min: u32,
         rule_set_id: Option<Uuid>,
+        /// If set (YYYY-MM-DD), the event is pinned to that specific date only.
+        specific_date: Option<String>,
     },
     RemoveSchedule { id: Uuid },
     UpdateSchedule {

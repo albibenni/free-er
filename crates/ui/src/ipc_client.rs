@@ -54,13 +54,20 @@ pub async fn list_schedules() -> Result<Vec<ScheduleSummary>> {
     Ok(serde_json::from_str(&raw)?)
 }
 
-pub async fn add_schedule(name: &str, days: Vec<u8>, start_min: u32, end_min: u32) -> Result<Uuid> {
+pub async fn add_schedule(
+    name: &str,
+    days: Vec<u8>,
+    start_min: u32,
+    end_min: u32,
+    specific_date: Option<String>,
+) -> Result<Uuid> {
     let raw = send(&Command::AddSchedule {
         name: name.to_string(),
         days,
         start_min,
         end_min,
         rule_set_id: None,
+        specific_date,
     }).await?;
     let v: serde_json::Value = serde_json::from_str(&raw)?;
     let id = v["id"].as_str().ok_or_else(|| anyhow::anyhow!("no id in response"))?;

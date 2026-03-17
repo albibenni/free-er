@@ -56,9 +56,10 @@ pub enum AppMsg {
     RuleSetCreated(Uuid),
     // Internal: schedules fetched from daemon
     SchedulesUpdated(Vec<ScheduleSummary>),
-    CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
+    CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32, specific_date: String },
     UpdateSchedule { id: Uuid, name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
     DeleteSchedule(Uuid),
+    RefreshSchedules,
 }
 
 #[relm4::component(pub)]
@@ -146,8 +147,8 @@ impl Component for App {
         let schedule = ScheduleSection::builder()
             .launch(())
             .forward(sender.input_sender(), |out| match out {
-                ScheduleOutput::CreateSchedule { name, days, start_min, end_min } => {
-                    AppMsg::CreateSchedule { name, days, start_min, end_min }
+                ScheduleOutput::CreateSchedule { name, days, start_min, end_min, specific_date } => {
+                    AppMsg::CreateSchedule { name, days, start_min, end_min, specific_date }
                 }
                 ScheduleOutput::UpdateSchedule { id, name, days, start_min, end_min } => {
                     AppMsg::UpdateSchedule { id, name, days, start_min, end_min }
@@ -341,25 +342,39 @@ impl Component for App {
                 self.schedule.sender().emit(ScheduleInput::SchedulesUpdated(schedules));
             }
 
-            AppMsg::CreateSchedule { name, days, start_min, end_min } => {
+            AppMsg::CreateSchedule { name, days, start_min, end_min, specific_date } => {
+                let refresh = _sender.clone();
                 tokio::spawn(async move {
-                    match ipc_client::add_schedule(&name, days, start_min, end_min).await {
-                        Ok(_) => {}
+                    match ipc_client::add_schedule(&name, days, start_min, end_min, Some(specific_date)).await {
+                        Ok(_) => refresh.input(AppMsg::RefreshSchedules),
                         Err(e) => error!("add_schedule failed: {e}"),
                     }
                 });
             }
             AppMsg::UpdateSchedule { id, name, days, start_min, end_min } => {
+                let refresh = _sender.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = ipc_client::update_schedule(id, &name, days, start_min, end_min).await {
-                        error!("update_schedule failed: {e}");
+                    match ipc_client::update_schedule(id, &name, days, start_min, end_min).await {
+                        Ok(_) => refresh.input(AppMsg::RefreshSchedules),
+                        Err(e) => error!("update_schedule failed: {e}"),
                     }
                 });
             }
             AppMsg::DeleteSchedule(id) => {
+                let refresh = _sender.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = ipc_client::remove_schedule(id).await {
-                        error!("remove_schedule failed: {e}");
+                    match ipc_client::remove_schedule(id).await {
+                        Ok(_) => refresh.input(AppMsg::RefreshSchedules),
+                        Err(e) => error!("remove_schedule failed: {e}"),
+                    }
+                });
+            }
+            AppMsg::RefreshSchedules => {
+                let tick_sender = _sender.clone();
+                tokio::spawn(async move {
+                    match ipc_client::list_schedules().await {
+                        Ok(schedules) => tick_sender.input(AppMsg::SchedulesUpdated(schedules)),
+                        Err(e) => warn!("list_schedules failed: {e}"),
                     }
                 });
             }
