@@ -1,5 +1,5 @@
 use anyhow::Result;
-use shared::ipc::{Command, RuleSetSummary, ScheduleSummary, StatusResponse};
+use shared::ipc::{Command, RuleSetSummary, ScheduleSummary, ScheduleType, StatusResponse};
 use uuid::Uuid;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -60,27 +60,40 @@ pub async fn add_schedule(
     start_min: u32,
     end_min: u32,
     specific_date: Option<String>,
+    rule_set_id: Option<Uuid>,
+    schedule_type: ScheduleType,
 ) -> Result<Uuid> {
     let raw = send(&Command::AddSchedule {
         name: name.to_string(),
         days,
         start_min,
         end_min,
-        rule_set_id: None,
+        rule_set_id,
         specific_date,
+        schedule_type,
     }).await?;
     let v: serde_json::Value = serde_json::from_str(&raw)?;
     let id = v["id"].as_str().ok_or_else(|| anyhow::anyhow!("no id in response"))?;
     Ok(id.parse()?)
 }
 
-pub async fn update_schedule(id: Uuid, name: &str, days: Vec<u8>, start_min: u32, end_min: u32) -> Result<()> {
+pub async fn update_schedule(
+    id: Uuid,
+    name: &str,
+    days: Vec<u8>,
+    start_min: u32,
+    end_min: u32,
+    rule_set_id: Option<Uuid>,
+    schedule_type: ScheduleType,
+) -> Result<()> {
     send(&Command::UpdateSchedule {
         id,
         name: name.to_string(),
         days,
         start_min,
         end_min,
+        rule_set_id,
+        schedule_type,
     }).await?;
     Ok(())
 }

@@ -135,7 +135,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 .collect();
             (serde_json::to_string(&rule_sets).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
         }
-        Command::AddSchedule { name, days, start_min, end_min, rule_set_id, specific_date } => {
+        Command::AddSchedule { name, days, start_min, end_min, rule_set_id, specific_date, schedule_type } => {
             use chrono::NaiveTime;
             fn wday(d: u8) -> Option<chrono::Weekday> {
                 match d {
@@ -163,6 +163,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 enabled: true,
                 imported: false,
                 specific_date: parsed_date,
+                schedule_type,
             };
             let id = schedule.id;
             state.add_schedule(schedule);
@@ -172,7 +173,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             state.remove_schedule(id);
             ok(true)
         }
-        Command::UpdateSchedule { id, name, days, start_min, end_min } => {
+        Command::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, schedule_type } => {
             use chrono::NaiveTime;
             fn wday(d: u8) -> Option<chrono::Weekday> {
                 match d {
@@ -185,7 +186,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             let start = NaiveTime::from_hms_opt(start_min / 60, start_min % 60, 0).unwrap_or_default();
             let end = NaiveTime::from_hms_opt(end_min / 60, end_min % 60, 0).unwrap_or_default();
             let weekdays = days.iter().filter_map(|&d| wday(d)).collect();
-            state.update_schedule(id, name, weekdays, start, end);
+            state.update_schedule(id, name, weekdays, start, end, rule_set_id, schedule_type);
             ok(true)
         }
         Command::ListSchedules => {
@@ -202,6 +203,8 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                     enabled: s.enabled,
                     imported: s.imported,
                     specific_date: s.specific_date.map(|d| d.format("%Y-%m-%d").to_string()),
+                    schedule_type: s.schedule_type,
+                    rule_set_id: s.rule_set_id,
                 })
                 .collect();
             (serde_json::to_string(&summaries).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)

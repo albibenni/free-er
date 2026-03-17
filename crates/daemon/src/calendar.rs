@@ -81,6 +81,7 @@ fn event_to_schedule(
         enabled: true,
         imported: true,
         specific_date: Some(start_dt.date()),
+        schedule_type: shared::models::ScheduleType::Focus,
     })
 }
 
@@ -234,6 +235,7 @@ fn google_event_to_schedule(
         enabled: true,
         imported: true,
         specific_date: Some(start_dt.date()),
+        schedule_type: shared::models::ScheduleType::Focus,
     })
 }
 

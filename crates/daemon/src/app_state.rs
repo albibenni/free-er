@@ -13,6 +13,8 @@ struct Inner {
     pending_oauth_state: Option<String>,
     pending_google_client_id: Option<String>,
     pending_google_client_secret: Option<String>,
+    /// True when the current focus session was started automatically by a schedule.
+    schedule_activated: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -30,6 +32,7 @@ impl AppState {
         let mut inner = self.0.lock().unwrap();
         inner.focus_active = true;
         inner.active_rule_set_id = Some(rule_set_id);
+        inner.schedule_activated = false;
     }
 
     pub fn stop_focus(&self) {
@@ -37,6 +40,7 @@ impl AppState {
         inner.focus_active = false;
         inner.active_rule_set_id = None;
         inner.pomodoro = None;
+        inner.schedule_activated = false;
     }
 
     pub fn start_pomodoro(&self, focus_secs: u64, break_secs: u64) {
@@ -115,13 +119,58 @@ impl AppState {
         self.0.lock().unwrap().config.schedules.retain(|s| s.id != id);
     }
 
-    pub fn update_schedule(&self, id: Uuid, name: String, days: Vec<chrono::Weekday>, start: chrono::NaiveTime, end: chrono::NaiveTime) {
+    pub fn update_schedule(
+        &self,
+        id: Uuid,
+        name: String,
+        days: Vec<chrono::Weekday>,
+        start: chrono::NaiveTime,
+        end: chrono::NaiveTime,
+        rule_set_id: Option<Uuid>,
+        schedule_type: shared::models::ScheduleType,
+    ) {
         let mut inner = self.0.lock().unwrap();
         if let Some(s) = inner.config.schedules.iter_mut().find(|s| s.id == id) {
             s.name = name;
             s.days = days;
             s.start = start;
             s.end = end;
+            if let Some(rsid) = rule_set_id {
+                s.rule_set_id = rsid;
+            }
+            s.schedule_type = schedule_type;
+        }
+    }
+
+    /// Check active schedules and start/stop focus accordingly.
+    /// Called periodically by the background scheduler loop.
+    pub fn apply_schedule(&self) {
+        let mut inner = self.0.lock().unwrap();
+
+        // Find the first active Focus schedule
+        let active_focus = inner.config.schedules.iter()
+            .filter(|s| s.schedule_type == shared::models::ScheduleType::Focus && s.is_active_now())
+            .map(|s| s.rule_set_id)
+            .next();
+
+        // Find any active Break schedule
+        let has_break = inner.config.schedules.iter()
+            .any(|s| s.schedule_type == shared::models::ScheduleType::Break && s.is_active_now());
+
+        if let Some(rule_set_id) = active_focus {
+            // Start focus (or update rule set) if not already schedule-activated with same rule set
+            if !inner.focus_active || inner.active_rule_set_id != Some(rule_set_id) {
+                inner.focus_active = true;
+                inner.active_rule_set_id = Some(rule_set_id);
+                inner.schedule_activated = true;
+            }
+        } else if has_break || !inner.schedule_activated {
+            // Only auto-stop if we were the ones who started it
+            if inner.schedule_activated {
+                inner.focus_active = false;
+                inner.active_rule_set_id = None;
+                inner.schedule_activated = false;
+            }
         }
     }
 

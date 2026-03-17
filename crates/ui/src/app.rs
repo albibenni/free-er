@@ -8,7 +8,7 @@ use crate::sections::{
 };
 use gtk4::prelude::*;
 use relm4::prelude::*;
-use shared::ipc::{Command, ScheduleSummary};
+use shared::ipc::{Command, RuleSetSummary, ScheduleSummary, ScheduleType};
 use tracing::{error, warn};
 use uuid::Uuid;
 
@@ -56,8 +56,24 @@ pub enum AppMsg {
     RuleSetCreated(Uuid),
     // Internal: schedules fetched from daemon
     SchedulesUpdated(Vec<ScheduleSummary>),
-    CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32, specific_date: String },
-    UpdateSchedule { id: Uuid, name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
+    CreateSchedule {
+        name: String,
+        days: Vec<u8>,
+        start_min: u32,
+        end_min: u32,
+        specific_date: String,
+        rule_set_id: Option<Uuid>,
+        schedule_type: ScheduleType,
+    },
+    UpdateSchedule {
+        id: Uuid,
+        name: String,
+        days: Vec<u8>,
+        start_min: u32,
+        end_min: u32,
+        rule_set_id: Option<Uuid>,
+        schedule_type: ScheduleType,
+    },
     DeleteSchedule(Uuid),
     RefreshSchedules,
 }
@@ -147,11 +163,11 @@ impl Component for App {
         let schedule = ScheduleSection::builder()
             .launch(())
             .forward(sender.input_sender(), |out| match out {
-                ScheduleOutput::CreateSchedule { name, days, start_min, end_min, specific_date } => {
-                    AppMsg::CreateSchedule { name, days, start_min, end_min, specific_date }
+                ScheduleOutput::CreateSchedule { name, days, start_min, end_min, specific_date, rule_set_id, schedule_type } => {
+                    AppMsg::CreateSchedule { name, days, start_min, end_min, specific_date, rule_set_id, schedule_type }
                 }
-                ScheduleOutput::UpdateSchedule { id, name, days, start_min, end_min } => {
-                    AppMsg::UpdateSchedule { id, name, days, start_min, end_min }
+                ScheduleOutput::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, schedule_type } => {
+                    AppMsg::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, schedule_type }
                 }
                 ScheduleOutput::DeleteSchedule(id) => AppMsg::DeleteSchedule(id),
             });
@@ -342,19 +358,19 @@ impl Component for App {
                 self.schedule.sender().emit(ScheduleInput::SchedulesUpdated(schedules));
             }
 
-            AppMsg::CreateSchedule { name, days, start_min, end_min, specific_date } => {
+            AppMsg::CreateSchedule { name, days, start_min, end_min, specific_date, rule_set_id, schedule_type } => {
                 let refresh = _sender.clone();
                 tokio::spawn(async move {
-                    match ipc_client::add_schedule(&name, days, start_min, end_min, Some(specific_date)).await {
+                    match ipc_client::add_schedule(&name, days, start_min, end_min, Some(specific_date), rule_set_id, schedule_type).await {
                         Ok(_) => refresh.input(AppMsg::RefreshSchedules),
                         Err(e) => error!("add_schedule failed: {e}"),
                     }
                 });
             }
-            AppMsg::UpdateSchedule { id, name, days, start_min, end_min } => {
+            AppMsg::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, schedule_type } => {
                 let refresh = _sender.clone();
                 tokio::spawn(async move {
-                    match ipc_client::update_schedule(id, &name, days, start_min, end_min).await {
+                    match ipc_client::update_schedule(id, &name, days, start_min, end_min, rule_set_id, schedule_type).await {
                         Ok(_) => refresh.input(AppMsg::RefreshSchedules),
                         Err(e) => error!("update_schedule failed: {e}"),
                     }
@@ -384,6 +400,7 @@ impl Component for App {
                 let pom_sender = self.pomodoro.sender().clone();
                 let lists_sender = self.allowed_lists.sender().clone();
                 let settings_sender = self.settings.sender().clone();
+                let schedule_sender = self.schedule.sender().clone();
                 let tick_sender = _sender.clone();
                 tokio::spawn(async move {
                     match ipc_client::get_status().await {
@@ -411,6 +428,7 @@ impl Component for App {
                                 .collect();
                             lists_sender.emit(AllowedListsInput::UrlsUpdated(all_urls.clone()));
                             settings_sender.emit(SettingsInput::QuickUrlsUpdated(all_urls));
+                            schedule_sender.emit(ScheduleInput::RuleSetsUpdated(sets.clone()));
                             tick_sender.input(AppMsg::RuleSetsUpdated(
                                 sets.into_iter().map(|s| s.id).collect(),
                             ));

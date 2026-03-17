@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use crate::models::ScheduleType;
+
 /// Commands sent from a client (UI, CLI) to the daemon over the Unix socket.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "cmd")]
@@ -28,6 +30,7 @@ pub enum Command {
         rule_set_id: Option<Uuid>,
         /// If set (YYYY-MM-DD), the event is pinned to that specific date only.
         specific_date: Option<String>,
+        schedule_type: ScheduleType,
     },
     RemoveSchedule { id: Uuid },
     UpdateSchedule {
@@ -36,6 +39,8 @@ pub enum Command {
         days: Vec<u8>,
         start_min: u32,
         end_min: u32,
+        rule_set_id: Option<Uuid>,
+        schedule_type: ScheduleType,
     },
     ListSchedules,
     SetStrictMode { enabled: bool },
@@ -59,6 +64,9 @@ pub struct ScheduleSummary {
     /// If set, this is a one-time event on this specific date (YYYY-MM-DD).
     /// If None, the event repeats weekly on the days in `days`.
     pub specific_date: Option<String>,
+    pub schedule_type: ScheduleType,
+    /// UUID of the associated rule set (Uuid::nil if none).
+    pub rule_set_id: Uuid,
 }
 
 /// Returned by ListRuleSets.

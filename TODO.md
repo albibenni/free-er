@@ -4,7 +4,7 @@
 
 ### CALENDAR
 
-- [ ] allow modify existing schedules from calendar ui
+- [x] allow modify existing schedules from calendar ui
 - [ ] task should show start and end time
 - [ ] adding new task should overlay start time and end time while selecting
 - [ ] icon padding from title

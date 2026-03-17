@@ -4,7 +4,7 @@ use std::rc::Rc;
 use chrono::{Datelike, Duration, Local, Timelike};
 use gtk4::prelude::*;
 use relm4::prelude::*;
-use shared::ipc::ScheduleSummary;
+use shared::ipc::{RuleSetSummary, ScheduleSummary, ScheduleType};
 
 // Visible hour range
 const START_HOUR: u32 = 6;
@@ -31,6 +31,7 @@ struct DrawData {
 pub struct ScheduleSection {
     week_offset: i32,
     draw_data: Rc<RefCell<DrawData>>,
+    rule_sets: Vec<RuleSetSummary>,
 }
 
 #[derive(Debug)]
@@ -39,22 +40,23 @@ pub enum ScheduleInput {
     NextWeek,
     Today,
     SchedulesUpdated(Vec<ScheduleSummary>),
+    RuleSetsUpdated(Vec<RuleSetSummary>),
     DragBegin(f64, f64),
     DragUpdate(f64, f64, f64, f64),
     DragEnd(f64, f64, f64, f64),
     ClickAt(f64, f64, f64, f64),
     ShowCreateDialog { col: usize, start_min: u32, end_min: u32 },
     ShowViewDialog { name: String, col: usize, start_min: u32, end_min: u32 },
-    ShowEditDialog { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32 },
-    CommitCreate { name: String, col: usize, start_min: u32, end_min: u32, specific_date: String },
-    CommitEdit { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32 },
+    ShowEditDialog { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: uuid::Uuid },
+    CommitCreate { name: String, col: usize, start_min: u32, end_min: u32, specific_date: String, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
+    CommitEdit { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
     CommitDelete(uuid::Uuid),
 }
 
 #[derive(Debug)]
 pub enum ScheduleOutput {
-    CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32, specific_date: String },
-    UpdateSchedule { id: uuid::Uuid, name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
+    CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32, specific_date: String, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
+    UpdateSchedule { id: uuid::Uuid, name: String, days: Vec<u8>, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
     DeleteSchedule(uuid::Uuid),
 }
 
@@ -121,6 +123,7 @@ impl Component for ScheduleSection {
         let model = ScheduleSection {
             week_offset: 0,
             draw_data: draw_data.clone(),
+            rule_sets: vec![],
         };
 
         let widgets = view_output!();
@@ -224,11 +227,11 @@ impl Component for ScheduleSection {
                     let data = self.draw_data.borrow();
                     hit_test_event(x, y, w, h, data.week_offset, &data.schedules)
                 };
-                if let Some((id, name, col, start_min, end_min, imported)) = hit {
+                if let Some((id, name, col, start_min, end_min, imported, schedule_type, rule_set_id)) = hit {
                     if imported {
                         sender.input(ScheduleInput::ShowViewDialog { name, col, start_min, end_min });
                     } else {
-                        sender.input(ScheduleInput::ShowEditDialog { id, name, col, start_min, end_min });
+                        sender.input(ScheduleInput::ShowEditDialog { id, name, col, start_min, end_min, schedule_type, rule_set_id });
                     }
                 }
                 self.update_view(widgets, sender);
@@ -254,31 +257,39 @@ impl Component for ScheduleSection {
                     let this_mon = today - chrono::Duration::days(dfm);
                     this_mon + chrono::Duration::weeks(data.week_offset as i64)
                 };
-                show_create_dialog(col, start_min, end_min, week_monday, _root, sender.clone());
+                show_create_dialog(col, start_min, end_min, week_monday, self.rule_sets.clone(), _root, sender.clone());
                 self.update_view(widgets, sender);
                 return;
             }
-            ScheduleInput::ShowEditDialog { id, name, col, start_min, end_min } => {
-                show_edit_dialog(id, &name, col, start_min, end_min, _root, sender.clone());
+            ScheduleInput::ShowEditDialog { id, name, col, start_min, end_min, schedule_type, rule_set_id } => {
+                let rule_sets = self.rule_sets.clone();
+                show_edit_dialog(id, &name, col, start_min, end_min, schedule_type, rule_set_id, rule_sets, _root, sender.clone());
                 self.update_view(widgets, sender);
                 return;
             }
-            ScheduleInput::CommitCreate { name, col, start_min, end_min, specific_date } => {
+            ScheduleInput::RuleSetsUpdated(sets) => {
+                self.rule_sets = sets;
+            }
+            ScheduleInput::CommitCreate { name, col, start_min, end_min, specific_date, schedule_type, rule_set_id } => {
                 let _ = sender.output(ScheduleOutput::CreateSchedule {
                     name,
                     days: vec![col as u8],
                     start_min,
                     end_min,
                     specific_date,
+                    schedule_type,
+                    rule_set_id,
                 });
             }
-            ScheduleInput::CommitEdit { id, name, col, start_min, end_min } => {
+            ScheduleInput::CommitEdit { id, name, col, start_min, end_min, schedule_type, rule_set_id } => {
                 let _ = sender.output(ScheduleOutput::UpdateSchedule {
                     id,
                     name,
                     days: vec![col as u8],
                     start_min,
                     end_min,
+                    schedule_type,
+                    rule_set_id,
                 });
             }
             ScheduleInput::CommitDelete(id) => {
@@ -665,7 +676,7 @@ fn hit_test_event(
     x: f64, y: f64, w: f64, h: f64,
     week_offset: i32,
     schedules: &[ScheduleSummary],
-) -> Option<(uuid::Uuid, String, usize, u32, u32, bool)> {
+) -> Option<(uuid::Uuid, String, usize, u32, u32, bool, ScheduleType, uuid::Uuid)> {
     const MARGIN_LEFT: f64 = 52.0;
     const HEADER_H: f64 = 40.0;
     const MARGIN_RIGHT: f64 = 4.0;
@@ -695,7 +706,7 @@ fn hit_test_event(
             let ye = HEADER_H + ef * (h - HEADER_H);
             let bh = (ye - ys).max(4.0);
             if x >= ex && x <= ex + bw && y >= ys && y <= ys + bh {
-                return Some((sched.id, sched.name.clone(), col, sched.start_min, sched.end_min, sched.imported));
+                return Some((sched.id, sched.name.clone(), col, sched.start_min, sched.end_min, sched.imported, sched.schedule_type.clone(), sched.rule_set_id));
             }
         }
     }
@@ -782,19 +793,78 @@ fn show_view_dialog(
     dialog.present();
 }
 
+fn build_type_and_list_rows(
+    vbox: &gtk4::Box,
+    initial_type: &ScheduleType,
+    initial_rule_set_id: uuid::Uuid,
+    rule_sets: &[RuleSetSummary],
+) -> (gtk4::ToggleButton, gtk4::ToggleButton, gtk4::ComboBoxText) {
+    // ── Type row ──────────────────────────────────────────────────────────
+    let type_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+    let type_lbl = gtk4::Label::new(Some("Type:"));
+    type_lbl.set_width_chars(8);
+    type_lbl.set_halign(gtk4::Align::Start);
+    let focus_btn = gtk4::ToggleButton::with_label("Focus");
+    let break_btn = gtk4::ToggleButton::with_label("Break");
+    break_btn.set_group(Some(&focus_btn));
+    focus_btn.set_active(*initial_type == ScheduleType::Focus);
+    break_btn.set_active(*initial_type == ScheduleType::Break);
+    type_row.append(&type_lbl);
+    type_row.append(&focus_btn);
+    type_row.append(&break_btn);
+    vbox.append(&type_row);
+
+    // ── Allowed list row ──────────────────────────────────────────────────
+    let list_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+    let list_lbl = gtk4::Label::new(Some("Allowed list:"));
+    list_lbl.set_width_chars(8);
+    list_lbl.set_halign(gtk4::Align::Start);
+    let list_combo = gtk4::ComboBoxText::new();
+    list_combo.append_text("(none)");
+    for rs in rule_sets {
+        list_combo.append_text(&rs.name);
+    }
+    let sel_idx = rule_sets.iter().position(|r| r.id == initial_rule_set_id)
+        .map(|i| i + 1)
+        .unwrap_or(0);
+    list_combo.set_active(Some(sel_idx as u32));
+    list_combo.set_hexpand(true);
+    list_row.append(&list_lbl);
+    list_row.append(&list_combo);
+    list_row.set_visible(*initial_type == ScheduleType::Focus);
+    vbox.append(&list_row);
+
+    // Hide/show list row when type changes
+    {
+        let list_row = list_row.clone();
+        let bb = break_btn.clone();
+        focus_btn.connect_toggled(move |fb| {
+            list_row.set_visible(fb.is_active());
+            let _ = bb.is_active(); // suppress unused warning
+        });
+    }
+
+    (focus_btn, break_btn, list_combo)
+}
+
+fn resolve_rule_set(combo: &gtk4::ComboBoxText, rule_sets: &[RuleSetSummary]) -> Option<uuid::Uuid> {
+    let idx = combo.active().unwrap_or(0) as usize;
+    if idx == 0 { None } else { rule_sets.get(idx - 1).map(|r| r.id) }
+}
+
 fn show_create_dialog(
     col: usize,
     start_min: u32,
     end_min: u32,
     week_monday: chrono::NaiveDate,
+    rule_sets: Vec<RuleSetSummary>,
     root: &gtk4::Box,
     sender: ComponentSender<ScheduleSection>,
 ) {
-    use gtk4::prelude::*;
     let dialog = gtk4::Window::builder()
         .title("New Event")
         .modal(true)
-        .default_width(320)
+        .default_width(340)
         .resizable(false)
         .build();
     if let Some(top) = root.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
@@ -828,6 +898,10 @@ fn show_create_dialog(
     time_row.append(&end_entry);
     vbox.append(&time_row);
 
+    let (focus_btn, _break_btn, list_combo) = build_type_and_list_rows(
+        &vbox, &ScheduleType::Focus, uuid::Uuid::nil(), &rule_sets,
+    );
+
     let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
     btn_row.set_halign(gtk4::Align::End);
     btn_row.set_margin_top(8);
@@ -848,21 +922,23 @@ fn show_create_dialog(
     let se = start_entry.clone();
     let ee = end_entry.clone();
     let day = col as u8;
-    let date_str = (week_monday + chrono::Duration::days(col as i64))
-        .format("%Y-%m-%d")
-        .to_string();
+    let date_str = date.format("%Y-%m-%d").to_string();
     save_btn.connect_clicked(move |_| {
         let name = ne.text().to_string();
         if name.is_empty() { return; }
         let Some(s_min) = parse_hhmm(&se.text()) else { return };
         let Some(e_min) = parse_hhmm(&ee.text()) else { return };
         if e_min <= s_min { return; }
+        let stype = if focus_btn.is_active() { ScheduleType::Focus } else { ScheduleType::Break };
+        let rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
         sender.input(ScheduleInput::CommitCreate {
             name,
             col: day as usize,
             start_min: s_min,
             end_min: e_min,
             specific_date: date_str.clone(),
+            schedule_type: stype,
+            rule_set_id,
         });
         d.close();
     });
@@ -876,14 +952,16 @@ fn show_edit_dialog(
     col: usize,
     start_min: u32,
     end_min: u32,
+    schedule_type: ScheduleType,
+    rule_set_id: uuid::Uuid,
+    rule_sets: Vec<RuleSetSummary>,
     root: &gtk4::Box,
     sender: ComponentSender<ScheduleSection>,
 ) {
-    use gtk4::prelude::*;
     let dialog = gtk4::Window::builder()
         .title("Edit Event")
         .modal(true)
-        .default_width(320)
+        .default_width(340)
         .resizable(false)
         .build();
     if let Some(top) = root.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
@@ -910,6 +988,10 @@ fn show_edit_dialog(
     time_row.append(&sep_lbl);
     time_row.append(&end_entry);
     vbox.append(&time_row);
+
+    let (focus_btn, _break_btn, list_combo) = build_type_and_list_rows(
+        &vbox, &schedule_type, rule_set_id, &rule_sets,
+    );
 
     let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
     btn_row.set_hexpand(true);
@@ -951,7 +1033,17 @@ fn show_edit_dialog(
         let Some(s_min) = parse_hhmm(&se.text()) else { return };
         let Some(e_min) = parse_hhmm(&ee.text()) else { return };
         if e_min <= s_min { return; }
-        sender.input(ScheduleInput::CommitEdit { id, name, col: day as usize, start_min: s_min, end_min: e_min });
+        let stype = if focus_btn.is_active() { ScheduleType::Focus } else { ScheduleType::Break };
+        let rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
+        sender.input(ScheduleInput::CommitEdit {
+            id,
+            name,
+            col: day as usize,
+            start_min: s_min,
+            end_min: e_min,
+            schedule_type: stype,
+            rule_set_id,
+        });
         d.close();
     });
 

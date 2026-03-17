@@ -91,6 +91,16 @@ async fn main() -> Result<()> {
         }
     });
 
+    // Background task: activate focus / break based on user-defined schedules.
+    let sched_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            sched_state.apply_schedule();
+        }
+    });
+
     tokio::try_join!(
         ipc::serve(state.clone()),
         local_server::serve(state.clone()),

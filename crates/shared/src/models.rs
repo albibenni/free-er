@@ -1,4 +1,4 @@
-use chrono::{NaiveTime, Weekday};
+use chrono::{Datelike, NaiveTime, Weekday};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -22,6 +22,14 @@ impl RuleSet {
     }
 }
 
+/// Whether a schedule window is a focus session or a break.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub enum ScheduleType {
+    #[default]
+    Focus,
+    Break,
+}
+
 /// A recurring weekly schedule that activates a focus session automatically.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Schedule {
@@ -37,12 +45,30 @@ pub struct Schedule {
     /// If set, this is a one-time event on a specific date (not a recurring weekly schedule).
     #[serde(default)]
     pub specific_date: Option<chrono::NaiveDate>,
+    #[serde(default)]
+    pub schedule_type: ScheduleType,
 }
 
 impl Schedule {
     /// Returns true if this schedule is active at the given weekday + time.
     pub fn is_active(&self, day: Weekday, time: NaiveTime) -> bool {
         self.enabled && self.days.contains(&day) && time >= self.start && time < self.end
+    }
+
+    /// Returns true if this schedule is active right now (respects specific_date).
+    pub fn is_active_now(&self) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        let now = chrono::Local::now();
+        let today = now.date_naive();
+        let time = now.time();
+        let day_matches = if let Some(specific) = self.specific_date {
+            specific == today
+        } else {
+            self.days.contains(&today.weekday())
+        };
+        day_matches && time >= self.start && time < self.end
     }
 }
 
