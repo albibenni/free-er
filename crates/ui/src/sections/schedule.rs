@@ -44,6 +44,7 @@ pub enum ScheduleInput {
     DragEnd(f64, f64, f64, f64),
     ClickAt(f64, f64, f64, f64),
     ShowCreateDialog { col: usize, start_min: u32, end_min: u32 },
+    ShowViewDialog { name: String, col: usize, start_min: u32, end_min: u32 },
     ShowEditDialog { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32 },
     CommitCreate { name: String, col: usize, start_min: u32, end_min: u32 },
     CommitEdit { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32 },
@@ -224,10 +225,24 @@ impl Component for ScheduleSection {
                     hit_test_event(x, y, w, h, data.week_offset, &data.schedules)
                 };
                 if let Some((id, name, col, start_min, end_min, imported)) = hit {
-                    if !imported {
+                    if imported {
+                        sender.input(ScheduleInput::ShowViewDialog { name, col, start_min, end_min });
+                    } else {
                         sender.input(ScheduleInput::ShowEditDialog { id, name, col, start_min, end_min });
                     }
                 }
+                self.update_view(widgets, sender);
+                return;
+            }
+            ScheduleInput::ShowViewDialog { name, col, start_min, end_min } => {
+                let week_monday = {
+                    let data = self.draw_data.borrow();
+                    let today = chrono::Local::now().date_naive();
+                    let dfm = today.weekday().num_days_from_monday() as i64;
+                    let this_mon = today - chrono::Duration::days(dfm);
+                    this_mon + chrono::Duration::weeks(data.week_offset as i64)
+                };
+                show_view_dialog(&name, col, start_min, end_min, week_monday, _root);
                 self.update_view(widgets, sender);
                 return;
             }
@@ -692,6 +707,78 @@ fn parse_hhmm(s: &str) -> Option<u32> {
     let m: u32 = parts.next()?.trim().parse().ok()?;
     if h > 23 || m > 59 { return None; }
     Some(h * 60 + m)
+}
+
+fn show_view_dialog(
+    name: &str,
+    col: usize,
+    start_min: u32,
+    end_min: u32,
+    week_monday: chrono::NaiveDate,
+    root: &gtk4::Box,
+) {
+    let dialog = gtk4::Window::builder()
+        .title("Calendar Event")
+        .modal(true)
+        .default_width(320)
+        .resizable(false)
+        .build();
+    if let Some(top) = root.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+        dialog.set_transient_for(Some(&top));
+    }
+
+    let vbox = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
+    vbox.set_margin_all(16);
+
+    // Badge: "Imported from calendar"
+    let badge = gtk4::Label::new(Some("Imported from calendar"));
+    badge.add_css_class("caption");
+    badge.set_halign(gtk4::Align::Start);
+    badge.set_opacity(0.6);
+    vbox.append(&badge);
+
+    let name_lbl = gtk4::Label::new(Some(name));
+    name_lbl.add_css_class("title-3");
+    name_lbl.set_halign(gtk4::Align::Start);
+    name_lbl.set_wrap(true);
+    vbox.append(&name_lbl);
+
+    let date = week_monday + chrono::Duration::days(col as i64);
+    let day_lbl = gtk4::Label::new(Some(&date.format("%A, %B %-d").to_string()));
+    day_lbl.set_halign(gtk4::Align::Start);
+    day_lbl.set_opacity(0.7);
+    vbox.append(&day_lbl);
+
+    let time_lbl = gtk4::Label::new(Some(&format!(
+        "{:02}:{:02} – {:02}:{:02}",
+        start_min / 60, start_min % 60,
+        end_min / 60,   end_min % 60,
+    )));
+    time_lbl.set_halign(gtk4::Align::Start);
+    time_lbl.set_opacity(0.7);
+    vbox.append(&time_lbl);
+
+    let note = gtk4::Label::new(Some("This event is read-only. Edit it in your calendar app."));
+    note.add_css_class("caption");
+    note.set_halign(gtk4::Align::Start);
+    note.set_wrap(true);
+    note.set_margin_top(4);
+    note.set_opacity(0.55);
+    vbox.append(&note);
+
+    let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+    btn_row.set_halign(gtk4::Align::End);
+    btn_row.set_margin_top(8);
+    let close_btn = gtk4::Button::with_label("Close");
+    btn_row.append(&close_btn);
+    vbox.append(&btn_row);
+
+    dialog.set_child(Some(&vbox));
+
+    let d = dialog.clone();
+    close_btn.connect_clicked(move |_| d.close());
+
+    dialog.present();
 }
 
 fn show_create_dialog(

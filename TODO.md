@@ -4,7 +4,7 @@
 
 ### CALENDAR
 
-- [ ] modify existing schedules from calendar ui
+- [ ] allow modify existing schedules from calendar ui
 - [ ] task should show start and end time
 - [ ] adding new task should overlay start time and end time while selecting
 - [ ] icon padding from title
@@ -24,3 +24,4 @@
 - [x] focus button not responding - responsivness issue
 - [x] allowed list doesn't show the list of allowed sites
 - [ ] why clone on sender in app.rs
+- [ ] save schedule doesn't save the schedule on the calendar
