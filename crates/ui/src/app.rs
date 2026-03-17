@@ -3,11 +3,12 @@ use crate::sections::{
     allowed_lists::{AllowedListsInput, AllowedListsOutput, AllowedListsSection},
     focus::{FocusInput, FocusOutput, FocusSection},
     pomodoro::{PomodoroInput, PomodoroOutput, PomodoroSection},
+    schedule::{ScheduleInput, ScheduleSection},
     settings::{SettingsInput, SettingsOutput, SettingsSection},
 };
 use gtk4::prelude::*;
 use relm4::prelude::*;
-use shared::ipc::Command;
+use shared::ipc::{Command, ScheduleSummary};
 use tracing::{error, warn};
 use uuid::Uuid;
 
@@ -16,6 +17,7 @@ pub enum Page {
     Focus,
     AllowedLists,
     Pomodoro,
+    Schedule,
     Settings,
 }
 
@@ -27,6 +29,7 @@ pub struct App {
     focus: Controller<FocusSection>,
     pomodoro: Controller<PomodoroSection>,
     allowed_lists: Controller<AllowedListsSection>,
+    schedule: Controller<ScheduleSection>,
     settings: Controller<SettingsSection>,
 }
 
@@ -51,6 +54,8 @@ pub enum AppMsg {
     RuleSetsUpdated(Vec<Uuid>),
     // Internal: a new rule set was created, store its ID
     RuleSetCreated(Uuid),
+    // Internal: schedules fetched from daemon
+    SchedulesUpdated(Vec<ScheduleSummary>),
 }
 
 #[relm4::component(pub)]
@@ -87,6 +92,10 @@ impl Component for App {
                     gtk4::Button {
                         set_label: "Pomodoro",
                         connect_clicked => AppMsg::Navigate(Page::Pomodoro),
+                    },
+                    gtk4::Button {
+                        set_label: "Schedule",
+                        connect_clicked => AppMsg::Navigate(Page::Schedule),
                     },
                     gtk4::Button {
                         set_label: "Settings",
@@ -131,6 +140,10 @@ impl Component for App {
                 AllowedListsOutput::RemoveUrl(url) => AppMsg::RemoveUrl(url),
             });
 
+        let schedule = ScheduleSection::builder()
+            .launch(())
+            .detach();
+
         let settings = SettingsSection::builder()
             .launch(false)
             .forward(sender.input_sender(), |out| match out {
@@ -151,6 +164,7 @@ impl Component for App {
             focus,
             pomodoro,
             allowed_lists,
+            schedule,
             settings,
         };
 
@@ -160,6 +174,7 @@ impl Component for App {
         widgets.stack.add_named(model.focus.widget(), Some("focus"));
         widgets.stack.add_named(model.allowed_lists.widget(), Some("allowed_lists"));
         widgets.stack.add_named(model.pomodoro.widget(), Some("pomodoro"));
+        widgets.stack.add_named(model.schedule.widget(), Some("schedule"));
         widgets.stack.add_named(model.settings.widget(), Some("settings"));
 
         // Poll daemon status every 2 seconds
@@ -185,6 +200,7 @@ impl Component for App {
                     Page::Focus => "focus",
                     Page::AllowedLists => "allowed_lists",
                     Page::Pomodoro => "pomodoro",
+                    Page::Schedule => "schedule",
                     Page::Settings => "settings",
                 };
                 widgets.stack.set_visible_child_name(name);
@@ -310,6 +326,9 @@ impl Component for App {
             AppMsg::RuleSetCreated(id) => {
                 self.active_rule_set_id = Some(id);
             }
+            AppMsg::SchedulesUpdated(schedules) => {
+                self.schedule.sender().emit(ScheduleInput::SchedulesUpdated(schedules));
+            }
 
             AppMsg::StatusTick => {
                 let focus_sender = self.focus.sender().clone();
@@ -348,6 +367,12 @@ impl Component for App {
                             ));
                         }
                         Err(e) => warn!("list_rule_sets failed: {e}"),
+                    }
+                    match ipc_client::list_schedules().await {
+                        Ok(schedules) => {
+                            tick_sender.input(AppMsg::SchedulesUpdated(schedules));
+                        }
+                        Err(e) => warn!("list_schedules failed: {e}"),
                     }
                 });
             }

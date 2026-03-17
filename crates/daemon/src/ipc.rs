@@ -137,6 +137,22 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
         Command::AddSchedule { .. } | Command::RemoveSchedule { .. } => {
             (r#"{"error": "not yet implemented"}"#.into(), false)
         }
+        Command::ListSchedules => {
+            use chrono::Timelike;
+            let summaries: Vec<shared::ipc::ScheduleSummary> = state
+                .list_schedules()
+                .into_iter()
+                .map(|s| shared::ipc::ScheduleSummary {
+                    id: s.id,
+                    name: s.name,
+                    days: s.days.iter().map(|d| d.num_days_from_monday() as u8).collect(),
+                    start_min: s.start.hour() * 60 + s.start.minute(),
+                    end_min: s.end.hour() * 60 + s.end.minute(),
+                    enabled: s.enabled,
+                })
+                .collect();
+            (serde_json::to_string(&summaries).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
+        }
         Command::SetStrictMode { enabled } => {
             state.set_strict_mode(enabled);
             ok(true)

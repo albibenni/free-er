@@ -1,5 +1,5 @@
 use anyhow::Result;
-use shared::ipc::{Command, RuleSetSummary, StatusResponse};
+use shared::ipc::{Command, RuleSetSummary, ScheduleSummary, StatusResponse};
 use uuid::Uuid;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -46,6 +46,12 @@ pub async fn start_google_oauth() -> Result<String> {
 pub async fn revoke_google_calendar() -> Result<()> {
     send(&Command::RevokeGoogleCalendar).await?;
     Ok(())
+}
+
+/// Fetch all schedules from the daemon.
+pub async fn list_schedules() -> Result<Vec<ScheduleSummary>> {
+    let raw = send(&Command::ListSchedules).await?;
+    Ok(serde_json::from_str(&raw)?)
 }
 
 /// Create a new rule set and return its assigned UUID.

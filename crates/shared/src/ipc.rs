@@ -27,10 +27,24 @@ pub enum Command {
         rule_set_id: Uuid,
     },
     RemoveSchedule { id: Uuid },
+    ListSchedules,
     SetStrictMode { enabled: bool },
     SetCalDav { url: String, username: String, password: String },
     StartGoogleOAuth,
     RevokeGoogleCalendar,
+}
+
+/// Returned by ListSchedules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduleSummary {
+    pub id: Uuid,
+    pub name: String,
+    /// Weekday indices: 0=Mon, 1=Tue, …, 6=Sun
+    pub days: Vec<u8>,
+    /// Minutes from midnight
+    pub start_min: u32,
+    pub end_min: u32,
+    pub enabled: bool,
 }
 
 /// Returned by ListRuleSets.

@@ -18,3 +18,4 @@ relm4 = "0.10"
 relm4-components = "0.10"
 gtk4 = "0.10"
 uuid = { workspace = true }
+chrono = { workspace = true }
