@@ -11,3 +11,10 @@ path = "src/main.rs"
 shared = { path = "../shared" }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+relm4 = "0.10"
+relm4-components = "0.10"
+gtk4 = "0.10"
+uuid = { workspace = true }
