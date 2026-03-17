@@ -43,8 +43,9 @@ impl Component for AllowedListsSection {
 
                 gtk4::Entry {
                     set_buffer: &model.url_entry,
-                    set_placeholder_text: Some("hostname, *.domain.com, or full URL"),
+                    set_placeholder_text: Some("github.com/user/repo, *.domain.com, or full URL"),
                     set_hexpand: true,
+                    connect_activate => AllowedListsInput::AddUrl,
                 },
 
                 gtk4::Button {
@@ -136,18 +137,24 @@ impl Component for AllowedListsSection {
     }
 }
 
-/// If the input looks like a full URL, extract the hostname.
-/// Otherwise return it as-is (already a pattern like `*.rust-lang.org`).
+/// Normalise user input into a `host[/path]` pattern.
+///
+/// Full URLs have their scheme stripped and query/fragment removed so the
+/// path prefix is preserved:
+///   `https://www.youtube.com/watch?v=abc` → `www.youtube.com/watch`
+///   `https://github.com/torvalds/linux`   → `github.com/torvalds/linux`
+///
+/// Plain patterns are returned unchanged:
+///   `*.rust-lang.org`, `github.com`, `github.com/torvalds`
 fn extract_pattern(input: &str) -> String {
     if input.starts_with("http://") || input.starts_with("https://") {
-        if let Some(host) = input
+        let without_scheme = input
             .trim_start_matches("https://")
-            .trim_start_matches("http://")
-            .split('/')
-            .next()
-        {
-            return host.to_string();
-        }
+            .trim_start_matches("http://");
+        // Drop query string and fragment
+        let s = without_scheme.split('?').next().unwrap_or(without_scheme);
+        let s = s.split('#').next().unwrap_or(s);
+        return s.trim_end_matches('/').to_string();
     }
     input.to_string()
 }
@@ -157,14 +164,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extracts_hostname_from_full_url() {
-        assert_eq!(extract_pattern("https://www.youtube.com/watch?v=abc"), "www.youtube.com");
-        assert_eq!(extract_pattern("http://github.com/foo/bar"), "github.com");
+    fn extracts_host_and_path_from_full_url() {
+        assert_eq!(extract_pattern("https://www.youtube.com/watch?v=abc"), "www.youtube.com/watch");
+        assert_eq!(extract_pattern("http://github.com/foo/bar"), "github.com/foo/bar");
+        assert_eq!(extract_pattern("https://github.com/"), "github.com");
     }
 
     #[test]
     fn preserves_pattern_as_is() {
         assert_eq!(extract_pattern("*.rust-lang.org"), "*.rust-lang.org");
         assert_eq!(extract_pattern("github.com"), "github.com");
+        assert_eq!(extract_pattern("github.com/torvalds"), "github.com/torvalds");
     }
 }
