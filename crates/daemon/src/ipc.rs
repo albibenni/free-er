@@ -98,8 +98,15 @@ fn handle_command(cmd: Command, state: &AppState) -> String {
             ok_response()
         }
         Command::AddSchedule { .. } | Command::RemoveSchedule { .. } => {
-            // TODO: Phase 1 schedule management
             r#"{"error": "not yet implemented"}"#.into()
+        }
+        Command::SetStrictMode { enabled } => {
+            state.set_strict_mode(enabled);
+            ok_response()
+        }
+        Command::SetCalDav { url, username, password } => {
+            state.set_caldav(url, username, password);
+            ok_response()
         }
     }
 }

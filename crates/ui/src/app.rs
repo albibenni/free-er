@@ -36,6 +36,7 @@ pub enum AppMsg {
     StopPomodoro,
     AddUrl(String),
     StrictModeChanged(bool),
+    SaveCalDav { url: String, user: String, pass: String },
     // Periodic status poll result
     StatusTick,
 }
@@ -121,7 +122,9 @@ impl Component for App {
             .launch(false)
             .forward(sender.input_sender(), |out| match out {
                 SettingsOutput::StrictModeChanged(v) => AppMsg::StrictModeChanged(v),
-                SettingsOutput::CalDavSaved { .. } => AppMsg::StrictModeChanged(false), // placeholder
+                SettingsOutput::CalDavSaved { url, user, pass } => {
+                    AppMsg::SaveCalDav { url, user, pass }
+                }
             });
 
         let model = App {
@@ -208,7 +211,21 @@ impl Component for App {
                     .await;
                 });
             }
-            AppMsg::StrictModeChanged(_) => {}
+            AppMsg::StrictModeChanged(enabled) => {
+                tokio::spawn(async move {
+                    let _ = ipc_client::send(&Command::SetStrictMode { enabled }).await;
+                });
+            }
+            AppMsg::SaveCalDav { url, user, pass } => {
+                tokio::spawn(async move {
+                    let _ = ipc_client::send(&Command::SetCalDav {
+                        url,
+                        username: user,
+                        password: pass,
+                    })
+                    .await;
+                });
+            }
 
             AppMsg::StatusTick => {
                 let focus_sender = self.focus.sender().clone();

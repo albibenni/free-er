@@ -52,6 +52,7 @@ impl AppState {
         inner.config.rule_sets.iter().find(|r| r.id == id).cloned()
     }
 
+    #[allow(dead_code)]
     pub fn config(&self) -> Config {
         self.0.lock().unwrap().config.clone()
     }
@@ -112,6 +113,25 @@ impl AppState {
 
     pub fn caldav_config(&self) -> Option<shared::models::CalDavConfig> {
         self.0.lock().unwrap().config.caldav.clone()
+    }
+
+    pub fn set_strict_mode(&self, enabled: bool) {
+        self.0.lock().unwrap().config.strict_mode = enabled;
+    }
+
+    pub fn set_caldav(&self, url: String, username: String, password: String) {
+        let mut inner = self.0.lock().unwrap();
+        inner.config.caldav = Some(shared::models::CalDavConfig {
+            url,
+            username: Some(username),
+            password: Some(password),
+            import_rules: inner
+                .config
+                .caldav
+                .as_ref()
+                .map(|c| c.import_rules.clone())
+                .unwrap_or_default(),
+        });
     }
 
     pub fn snapshot(&self) -> StateSnapshot {

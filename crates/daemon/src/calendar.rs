@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
-use chrono::{Datelike, NaiveDateTime, NaiveTime, Timelike, Weekday};
+use anyhow::Result;
+use chrono::{Datelike, NaiveDateTime, NaiveTime};
 use ical::parser::ical::component::IcalEvent;
 use shared::models::{CalDavConfig, Schedule};
 use uuid::Uuid;

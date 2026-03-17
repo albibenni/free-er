@@ -4,6 +4,7 @@
 /// - `"github.com"`        → exact match
 /// - `"*.rust-lang.org"`   → any subdomain
 /// - `"*"`                 → matches everything
+#[allow(dead_code)]
 pub fn matches(pattern: &str, host: &str) -> bool {
     if pattern == "*" {
         return true;

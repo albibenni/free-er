@@ -24,6 +24,8 @@ pub enum Command {
         rule_set_id: Uuid,
     },
     RemoveSchedule { id: Uuid },
+    SetStrictMode { enabled: bool },
+    SetCalDav { url: String, username: String, password: String },
 }
 
 /// Current phase of the Pomodoro timer.

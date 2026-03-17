@@ -5,11 +5,13 @@
 
 use anyhow::Result;
 
+#[allow(dead_code)]
 pub async fn apply_blocked_domains(_domains: &[String]) -> Result<()> {
     // TODO: write managed section to /etc/hosts (Option A)
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn clear_blocked_domains() -> Result<()> {
     // TODO: remove managed section from /etc/hosts
     Ok(())

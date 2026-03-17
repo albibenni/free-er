@@ -17,6 +17,7 @@ pub async fn load() -> Result<Config> {
     Ok(serde_json::from_str(&raw)?)
 }
 
+#[allow(dead_code)]
 pub async fn save(config: &Config) -> Result<()> {
     let path = config_path();
     if let Some(parent) = path.parent() {
