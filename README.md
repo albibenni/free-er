@@ -160,6 +160,40 @@ Example config snippet:
 }
 ```
 
+### Google Calendar integration
+
+Google Calendar sync uses OAuth2. Because OAuth2 requires an app registration with Google, you need to create credentials once as the developer — after that, any user just clicks **Connect** in Settings and gets a browser login popup with no further setup.
+
+**One-time developer setup:**
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project
+2. Enable the **Google Calendar API**: APIs & Services → Enable APIs → search "Google Calendar API"
+3. Create credentials: APIs & Services → Credentials → Create Credentials → **OAuth client ID**
+   - Application type: **Web application**
+   - Authorized redirect URI: `http://127.0.0.1:10000/oauth/google/callback`
+4. Copy the client ID and secret, then create `~/.config/free-er/google_client.json`:
+
+```json
+{
+  "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+  "client_secret": "YOUR_CLIENT_SECRET"
+}
+```
+
+Once the file is in place, restart the daemon and click **Connect** in the Settings tab. A browser window will open for Google login. After authorizing, the daemon stores the tokens and syncs your calendar every 15 minutes.
+
+**Error 403: access_denied?**
+
+Unverified apps can only be used by approved test users. To add yourself:
+
+1. Go to your project → **Google Auth Platform** → **Audience** (in the left sidebar)
+2. Scroll to **Test users** → **Add users**
+3. Add your Google account email and save
+
+You can add up to 100 test users without going through Google's full verification process (only needed if you publish the app publicly).
+
+All Google Calendar events in the next 30 days are imported and shown in the Schedule tab.
+
 ## Workspace Structure
 
 ```text
