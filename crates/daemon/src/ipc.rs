@@ -6,7 +6,7 @@ use shared::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 const SOCKET_PATH: &str = "/tmp/free-er.sock";
 
@@ -33,43 +33,52 @@ async fn handle_connection(stream: tokio::net::UnixStream, state: AppState) -> R
     let mut lines = BufReader::new(reader).lines();
 
     while let Some(line) = lines.next_line().await? {
-        let response = match serde_json::from_str::<Command>(&line) {
+        let (response, mutated) = match serde_json::from_str::<Command>(&line) {
             Ok(cmd) => handle_command(cmd, &state),
-            Err(e) => format!("{{\"error\": \"{e}\"}}"),
+            Err(e) => (format!("{{\"error\": \"{e}\"}}"), false),
         };
         writer.write_all(response.as_bytes()).await?;
         writer.write_all(b"\n").await?;
+
+        if mutated {
+            let config = state.config();
+            tokio::spawn(async move {
+                if let Err(e) = crate::persistence::save(&config).await {
+                    warn!("Failed to persist config: {e}");
+                }
+            });
+        }
     }
     Ok(())
 }
 
-fn handle_command(cmd: Command, state: &AppState) -> String {
+fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
     match cmd {
         Command::StartFocus { rule_set_id } => {
             state.start_focus(rule_set_id);
-            ok_response()
+            ok(false)
         }
         Command::StopFocus => {
             state.stop_focus();
-            ok_response()
+            ok(false)
         }
         Command::TakeBreak { duration_secs } => {
             state.start_pomodoro(duration_secs, 0);
-            ok_response()
+            ok(false)
         }
         Command::StartPomodoro { focus_secs, break_secs } => {
             state.start_pomodoro(focus_secs, break_secs);
-            ok_response()
+            ok(false)
         }
         Command::StopPomodoro => {
             state.stop_pomodoro();
-            ok_response()
+            ok(false)
         }
         Command::SkipBreak => {
             if state.skip_break() {
-                ok_response()
+                ok(false)
             } else {
-                r#"{"error": "strict breaks are enabled"}"#.into()
+                (r#"{"error": "strict breaks are enabled"}"#.into(), false)
             }
         }
         Command::GetStatus => {
@@ -85,31 +94,31 @@ fn handle_command(cmd: Command, state: &AppState) -> String {
                 }),
                 seconds_remaining: snap.seconds_remaining,
             };
-            serde_json::to_string(&resp).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
+            (serde_json::to_string(&resp).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
         }
         Command::AddRuleSet { name, allowed_urls } => {
             let mut rs = RuleSet::new(name);
             rs.allowed_urls = allowed_urls;
             let id = rs.id;
             state.add_rule_set(rs);
-            serde_json::json!({ "ok": true, "id": id }).to_string()
+            (serde_json::json!({ "ok": true, "id": id }).to_string(), true)
         }
         Command::RemoveRuleSet { id } => {
             state.remove_rule_set(id);
-            ok_response()
+            ok(true)
         }
         Command::AddUrlToRuleSet { rule_set_id, url } => {
             if state.add_url_to_rule_set(rule_set_id, url) {
-                ok_response()
+                ok(true)
             } else {
-                r#"{"error": "rule set not found"}"#.into()
+                (r#"{"error": "rule set not found"}"#.into(), false)
             }
         }
         Command::RemoveUrlFromRuleSet { rule_set_id, url } => {
             if state.remove_url_from_rule_set(rule_set_id, &url) {
-                ok_response()
+                ok(true)
             } else {
-                r#"{"error": "rule set not found"}"#.into()
+                (r#"{"error": "rule set not found"}"#.into(), false)
             }
         }
         Command::ListRuleSets => {
@@ -122,22 +131,22 @@ fn handle_command(cmd: Command, state: &AppState) -> String {
                     allowed_urls: rs.allowed_urls,
                 })
                 .collect();
-            serde_json::to_string(&rule_sets).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
+            (serde_json::to_string(&rule_sets).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
         }
         Command::AddSchedule { .. } | Command::RemoveSchedule { .. } => {
-            r#"{"error": "not yet implemented"}"#.into()
+            (r#"{"error": "not yet implemented"}"#.into(), false)
         }
         Command::SetStrictMode { enabled } => {
             state.set_strict_mode(enabled);
-            ok_response()
+            ok(true)
         }
         Command::SetCalDav { url, username, password } => {
             state.set_caldav(url, username, password);
-            ok_response()
+            ok(true)
         }
     }
 }
 
-fn ok_response() -> String {
-    r#"{"ok": true}"#.into()
+fn ok(mutated: bool) -> (String, bool) {
+    (r#"{"ok": true}"#.into(), mutated)
 }
