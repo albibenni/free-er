@@ -19,5 +19,6 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tower-http = { version = "0.5", features = ["cors"] }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+rand = "0.9"
 ical = "0.11"

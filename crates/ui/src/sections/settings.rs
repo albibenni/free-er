@@ -16,6 +16,7 @@ pub struct SettingsSection {
     caldav_url: gtk4::EntryBuffer,
     caldav_user: gtk4::EntryBuffer,
     caldav_pass: gtk4::EntryBuffer,
+    google_connected: bool,
 }
 
 #[derive(Debug)]
@@ -24,6 +25,9 @@ pub enum SettingsInput {
     SetQuick(&'static str, bool),
     QuickUrlsUpdated(Vec<String>),
     SaveCalDav,
+    ConnectGoogle,  // no credentials needed — read from google_client.json
+    DisconnectGoogle,
+    GoogleStatusUpdated(bool),
 }
 
 #[derive(Debug)]
@@ -35,6 +39,8 @@ pub enum SettingsOutput {
         user: String,
         pass: String,
     },
+    ConnectGoogleRequested,
+    DisconnectGoogleRequested,
 }
 
 #[relm4::component(pub)]
@@ -161,6 +167,41 @@ impl SimpleComponent for SettingsSection {
                 set_halign: gtk4::Align::End,
                 connect_clicked => SettingsInput::SaveCalDav,
             },
+
+            gtk4::Separator {},
+
+            gtk4::Label {
+                set_label: "Google Calendar",
+                add_css_class: "title-2",
+                set_halign: gtk4::Align::Start,
+            },
+
+            gtk4::Box {
+                set_orientation: gtk4::Orientation::Horizontal,
+                set_spacing: 8,
+
+                gtk4::Label {
+                    #[watch]
+                    set_label: if model.google_connected { "● Connected" } else { "○ Not connected" },
+                    set_hexpand: true,
+                    set_halign: gtk4::Align::Start,
+                },
+
+                gtk4::Button {
+                    set_label: "Connect",
+                    set_css_classes: &["suggested-action"],
+                    #[watch]
+                    set_visible: !model.google_connected,
+                    connect_clicked => SettingsInput::ConnectGoogle,
+                },
+                gtk4::Button {
+                    set_label: "Disconnect",
+                    set_css_classes: &["destructive-action"],
+                    #[watch]
+                    set_visible: model.google_connected,
+                    connect_clicked => SettingsInput::DisconnectGoogle,
+                },
+            },
         }
     }
 
@@ -178,6 +219,7 @@ impl SimpleComponent for SettingsSection {
             caldav_url: gtk4::EntryBuffer::default(),
             caldav_user: gtk4::EntryBuffer::default(),
             caldav_pass: gtk4::EntryBuffer::default(),
+            google_connected: false,
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -214,6 +256,15 @@ impl SimpleComponent for SettingsSection {
                     user: self.caldav_user.text().to_string(),
                     pass: self.caldav_pass.text().to_string(),
                 });
+            }
+            SettingsInput::ConnectGoogle => {
+                let _ = sender.output(SettingsOutput::ConnectGoogleRequested);
+            }
+            SettingsInput::DisconnectGoogle => {
+                let _ = sender.output(SettingsOutput::DisconnectGoogleRequested);
+            }
+            SettingsInput::GoogleStatusUpdated(connected) => {
+                self.google_connected = connected;
             }
         }
     }

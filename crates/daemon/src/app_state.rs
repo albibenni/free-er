@@ -9,6 +9,10 @@ struct Inner {
     active_rule_set_id: Option<Uuid>,
     pomodoro: Option<PomodoroTimer>,
     config: Config,
+    // Ephemeral OAuth2 state (not persisted)
+    pending_oauth_state: Option<String>,
+    pending_google_client_id: Option<String>,
+    pending_google_client_secret: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -145,6 +149,67 @@ impl AppState {
         self.0.lock().unwrap().config.strict_mode = enabled;
     }
 
+    // ── Google Calendar OAuth2 ────────────────────────────────────────────────
+
+    pub fn set_pending_oauth_state(&self, state_token: String, client_id: String, client_secret: String) {
+        let mut inner = self.0.lock().unwrap();
+        inner.pending_oauth_state = Some(state_token);
+        inner.pending_google_client_id = Some(client_id);
+        inner.pending_google_client_secret = Some(client_secret);
+    }
+
+    /// Validate and consume the CSRF token. Returns the stored credentials if valid.
+    pub fn take_pending_oauth(&self, state_token: &str) -> Option<(String, String)> {
+        let mut inner = self.0.lock().unwrap();
+        let stored = inner.pending_oauth_state.take()?;
+        if stored != state_token {
+            return None;
+        }
+        match (inner.pending_google_client_id.take(), inner.pending_google_client_secret.take()) {
+            (Some(id), Some(secret)) => Some((id, secret)),
+            _ => None,
+        }
+    }
+
+    pub fn set_google_calendar_tokens(
+        &self,
+        client_id: String,
+        client_secret: String,
+        access_token: String,
+        refresh_token: String,
+        expiry_secs: i64,
+    ) {
+        let mut inner = self.0.lock().unwrap();
+        let import_rules = inner.config.google_calendar
+            .as_ref()
+            .map(|c| c.import_rules.clone())
+            .unwrap_or_default();
+        inner.config.google_calendar = Some(shared::models::GoogleCalendarConfig {
+            client_id,
+            client_secret,
+            access_token: Some(access_token),
+            refresh_token: Some(refresh_token),
+            token_expiry_secs: Some(expiry_secs),
+            import_rules,
+        });
+    }
+
+    pub fn update_google_tokens(&self, access_token: String, expiry_secs: i64) {
+        let mut inner = self.0.lock().unwrap();
+        if let Some(cfg) = &mut inner.config.google_calendar {
+            cfg.access_token = Some(access_token);
+            cfg.token_expiry_secs = Some(expiry_secs);
+        }
+    }
+
+    pub fn revoke_google_calendar(&self) {
+        self.0.lock().unwrap().config.google_calendar = None;
+    }
+
+    pub fn google_calendar_config(&self) -> Option<shared::models::GoogleCalendarConfig> {
+        self.0.lock().unwrap().config.google_calendar.clone()
+    }
+
     pub fn set_caldav(&self, url: String, username: String, password: String) {
         let mut inner = self.0.lock().unwrap();
         inner.config.caldav = Some(shared::models::CalDavConfig {
@@ -174,6 +239,11 @@ impl AppState {
                 (false, None, None)
             };
 
+        let google_calendar_connected = inner.config.google_calendar
+            .as_ref()
+            .map(|c| c.access_token.is_some())
+            .unwrap_or(false);
+
         StateSnapshot {
             focus_active: inner.focus_active,
             strict_mode: inner.config.strict_mode,
@@ -181,6 +251,7 @@ impl AppState {
             pomodoro_active,
             pomodoro_phase,
             seconds_remaining,
+            google_calendar_connected,
         }
     }
 }
@@ -192,4 +263,5 @@ pub struct StateSnapshot {
     pub pomodoro_active: bool,
     pub pomodoro_phase: Option<crate::pomodoro::Phase>,
     pub seconds_remaining: Option<u64>,
+    pub google_calendar_connected: bool,
 }

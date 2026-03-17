@@ -93,6 +93,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                     crate::pomodoro::Phase::Break => PomodoroPhase::Break,
                 }),
                 seconds_remaining: snap.seconds_remaining,
+                google_calendar_connected: snap.google_calendar_connected,
             };
             (serde_json::to_string(&resp).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
         }
@@ -142,6 +143,35 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
         }
         Command::SetCalDav { url, username, password } => {
             state.set_caldav(url, username, password);
+            ok(true)
+        }
+        Command::StartGoogleOAuth { .. } => {
+            let (client_id, client_secret) =
+                match crate::persistence::load_google_client() {
+                    Some(c) => c,
+                    None => return (
+                        r#"{"error":"google_client.json not found — see README"}"#.into(),
+                        false,
+                    ),
+                };
+            let csrf: String = (0..16)
+                .map(|_| format!("{:02x}", rand::random::<u8>()))
+                .collect();
+            state.set_pending_oauth_state(csrf.clone(), client_id.clone(), client_secret);
+            let auth_url = format!(
+                "https://accounts.google.com/o/oauth2/v2/auth\
+                 ?client_id={client_id}\
+                 &redirect_uri=http%3A%2F%2F127.0.0.1%3A10000%2Foauth%2Fgoogle%2Fcallback\
+                 &response_type=code\
+                 &scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.readonly\
+                 &access_type=offline\
+                 &prompt=consent\
+                 &state={csrf}"
+            );
+            (serde_json::json!({ "auth_url": auth_url }).to_string(), false)
+        }
+        Command::RevokeGoogleCalendar => {
+            state.revoke_google_calendar();
             ok(true)
         }
     }

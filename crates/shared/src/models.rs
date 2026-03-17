@@ -79,6 +79,19 @@ pub struct CalDavConfig {
     pub import_rules: Vec<CalendarImportRule>,
 }
 
+/// OAuth2 credentials and tokens for Google Calendar integration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GoogleCalendarConfig {
+    pub client_id: String,
+    pub client_secret: String,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    /// Unix timestamp (seconds) at which the access_token expires.
+    pub token_expiry_secs: Option<i64>,
+    /// How to map event titles → rule sets (shared with CalDAV import_rules).
+    pub import_rules: Vec<CalendarImportRule>,
+}
+
 /// Top-level persisted config written to ~/.config/free-er/config.json
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -86,6 +99,7 @@ pub struct Config {
     pub schedules: Vec<Schedule>,
     pub pomodoro: PomodoroConfig,
     pub caldav: Option<CalDavConfig>,
+    pub google_calendar: Option<GoogleCalendarConfig>,
     /// If true, focus cannot be stopped manually while a schedule is active.
     pub strict_mode: bool,
 }

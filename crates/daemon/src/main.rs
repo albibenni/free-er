@@ -54,6 +54,43 @@ async fn main() -> Result<()> {
         }
     });
 
+    // Background task: sync Google Calendar every 15 minutes.
+    let gcal_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(15 * 60));
+        loop {
+            interval.tick().await;
+            let cfg = match gcal_state.google_calendar_config() {
+                Some(c) if c.access_token.is_some() => c,
+                _ => continue,
+            };
+            // Refresh token if within 5 minutes of expiry
+            let cfg = if cfg.token_expiry_secs.map(|e| e - chrono::Utc::now().timestamp() < 300).unwrap_or(true) {
+                match calendar::refresh_google_token(&cfg).await {
+                    Ok((token, expiry)) => {
+                        gcal_state.update_google_tokens(token, expiry);
+                        let s = gcal_state.config();
+                        tokio::spawn(async move { let _ = persistence::save(&s).await; });
+                        match gcal_state.google_calendar_config() {
+                            Some(c) => c,
+                            None => continue,
+                        }
+                    }
+                    Err(e) => { warn!("Google token refresh failed: {e}"); continue; }
+                }
+            } else { cfg };
+
+            let import_rules = cfg.import_rules.clone();
+            match calendar::fetch_google_calendar_schedules(&cfg, &import_rules).await {
+                Ok(schedules) => {
+                    info!("Google Calendar sync: imported {} schedules", schedules.len());
+                    gcal_state.apply_calendar_schedules(schedules);
+                }
+                Err(e) => warn!("Google Calendar sync failed: {e}"),
+            }
+        }
+    });
+
     tokio::try_join!(
         ipc::serve(state.clone()),
         local_server::serve(state.clone()),

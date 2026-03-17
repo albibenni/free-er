@@ -29,6 +29,8 @@ pub enum Command {
     RemoveSchedule { id: Uuid },
     SetStrictMode { enabled: bool },
     SetCalDav { url: String, username: String, password: String },
+    StartGoogleOAuth,
+    RevokeGoogleCalendar,
 }
 
 /// Returned by ListRuleSets.
@@ -55,4 +57,5 @@ pub struct StatusResponse {
     pub pomodoro_active: bool,
     pub pomodoro_phase: Option<PomodoroPhase>,
     pub seconds_remaining: Option<u64>,
+    pub google_calendar_connected: bool,
 }

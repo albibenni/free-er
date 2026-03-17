@@ -41,6 +41,8 @@ pub enum AppMsg {
     StopPomodoro,
     AddUrl(String),
     RemoveUrl(String),
+    ConnectGoogle,
+    DisconnectGoogle,
     StrictModeChanged(bool),
     SaveCalDav { url: String, user: String, pass: String },
     // Periodic status poll result
@@ -139,6 +141,8 @@ impl Component for App {
                 SettingsOutput::CalDavSaved { url, user, pass } => {
                     AppMsg::SaveCalDav { url, user, pass }
                 }
+                SettingsOutput::ConnectGoogleRequested => AppMsg::ConnectGoogle,
+                SettingsOutput::DisconnectGoogleRequested => AppMsg::DisconnectGoogle,
             });
 
         let model = App {
@@ -262,6 +266,23 @@ impl Component for App {
                     });
                 }
             }
+            AppMsg::ConnectGoogle => {
+                tokio::spawn(async {
+                    match ipc_client::start_google_oauth().await {
+                        Ok(url) => {
+                            let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                        }
+                        Err(e) => error!("Google OAuth failed: {e}"),
+                    }
+                });
+            }
+            AppMsg::DisconnectGoogle => {
+                tokio::spawn(async {
+                    if let Err(e) = ipc_client::revoke_google_calendar().await {
+                        error!("RevokeGoogleCalendar IPC failed: {e}");
+                    }
+                });
+            }
             AppMsg::StrictModeChanged(enabled) => {
                 tokio::spawn(async move {
                     if let Err(e) = ipc_client::send(&Command::SetStrictMode { enabled }).await {
@@ -307,6 +328,9 @@ impl Component for App {
                                 phase: status.pomodoro_phase.map(|p| format!("{p:?}")),
                                 seconds_remaining: status.seconds_remaining,
                             });
+                            settings_sender.emit(SettingsInput::GoogleStatusUpdated(
+                                status.google_calendar_connected,
+                            ));
                         }
                         Err(e) => warn!("status poll failed: {e}"),
                     }
