@@ -1,43 +1,60 @@
-/// Matches a full URL against an allowed pattern.
+/// Matches a URL against an allowed pattern.
 ///
 /// Pattern syntax:
-/// - `"github.com"`            → exact host match (any path)
-/// - `"*.rust-lang.org"`       → any subdomain (any path)
-/// - `"github.com/torvalds"`   → host + path-prefix match
-/// - `"*.youtube.com/watch"`   → subdomain + path-prefix match
-/// - `"*"`                     → matches everything
+/// - `"github.com"`                    → exact host, any path
+/// - `"*.rust-lang.org"`               → any subdomain, any path
+/// - `"github.com/torvalds"`           → host + path-prefix
+/// - `"www.youtube.com/watch?v=abc"`   → host + path-prefix + required query param
+/// - `"*"`                             → matches everything
+///
+/// Query params in the pattern are treated as required subsets:
+/// the URL must contain all the pattern's query params (extra params are allowed).
 #[allow(dead_code)]
-pub fn matches(pattern: &str, host: &str, path: &str) -> bool {
+pub fn matches(pattern: &str, host: &str, path: &str, query: &str) -> bool {
     if pattern == "*" {
         return true;
     }
 
-    // Split pattern into host part and optional path prefix
-    let (host_pat, path_prefix) = match pattern.split_once('/') {
-        Some((h, p)) => (h, Some(p)),
+    // Split pattern into host+path part and optional query string
+    let (host_path, pattern_query) = match pattern.split_once('?') {
+        Some((hp, q)) => (hp, Some(q)),
         None => (pattern, None),
     };
 
-    // Match the host portion
+    // Split host+path into host part and optional path prefix
+    let (host_pat, path_prefix) = match host_path.split_once('/') {
+        Some((h, p)) => (h, Some(p)),
+        None => (host_path, None),
+    };
+
+    // Match host
     let host_ok = if let Some(suffix) = host_pat.strip_prefix("*.") {
         host == suffix || host.ends_with(&format!(".{suffix}"))
     } else {
         host_pat == host
     };
-
     if !host_ok {
         return false;
     }
 
-    // If the pattern has a path prefix, the URL path must start with it
-    match path_prefix {
-        None => true,
-        Some(p) => {
-            // path always starts with "/"; pattern prefix does not include the leading "/"
-            let full_prefix = format!("/{p}");
-            path == full_prefix || path.starts_with(&format!("{full_prefix}/"))
+    // Match path prefix
+    if let Some(p) = path_prefix {
+        let full_prefix = format!("/{p}");
+        if path != full_prefix && !path.starts_with(&format!("{full_prefix}/")) {
+            return false;
         }
     }
+
+    // Match query params (pattern params must all be present in the URL)
+    if let Some(pq) = pattern_query {
+        for pair in pq.split('&') {
+            if !query.split('&').any(|u| u == pair) {
+                return false;
+            }
+        }
+    }
+
+    true
 }
 
 #[cfg(test)]
@@ -46,34 +63,38 @@ mod tests {
 
     #[test]
     fn exact_host() {
-        assert!(matches("github.com", "github.com", "/"));
-        assert!(!matches("github.com", "gitlab.com", "/"));
+        assert!(matches("github.com", "github.com", "/", ""));
+        assert!(!matches("github.com", "gitlab.com", "/", ""));
     }
 
     #[test]
     fn wildcard_subdomain() {
-        assert!(matches("*.rust-lang.org", "doc.rust-lang.org", "/"));
-        assert!(matches("*.rust-lang.org", "rust-lang.org", "/"));
-        assert!(!matches("*.rust-lang.org", "notrust-lang.org", "/"));
+        assert!(matches("*.rust-lang.org", "doc.rust-lang.org", "/", ""));
+        assert!(matches("*.rust-lang.org", "rust-lang.org", "/", ""));
+        assert!(!matches("*.rust-lang.org", "notrust-lang.org", "/", ""));
     }
 
     #[test]
     fn wildcard_all() {
-        assert!(matches("*", "anything.com", "/foo"));
+        assert!(matches("*", "anything.com", "/foo", ""));
     }
 
     #[test]
     fn path_prefix() {
-        assert!(matches("github.com/torvalds/linux", "github.com", "/torvalds/linux"));
-        assert!(matches("github.com/torvalds/linux", "github.com", "/torvalds/linux/commits"));
-        assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds"));
-        assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds/linux-next"));
+        assert!(matches("github.com/torvalds/linux", "github.com", "/torvalds/linux", ""));
+        assert!(matches("github.com/torvalds/linux", "github.com", "/torvalds/linux/commits", ""));
+        assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds", ""));
+        assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds/linux-next", ""));
     }
 
     #[test]
-    fn subdomain_with_path() {
-        assert!(matches("*.youtube.com/watch", "www.youtube.com", "/watch"));
-        assert!(matches("*.youtube.com/watch", "www.youtube.com", "/watch/somesubpath"));
-        assert!(!matches("*.youtube.com/watch", "www.youtube.com", "/shorts"));
+    fn query_params() {
+        assert!(matches("www.youtube.com/watch?v=abc", "www.youtube.com", "/watch", "v=abc"));
+        // extra params in URL are fine
+        assert!(matches("www.youtube.com/watch?v=abc", "www.youtube.com", "/watch", "v=abc&feature=share"));
+        // wrong video id
+        assert!(!matches("www.youtube.com/watch?v=abc", "www.youtube.com", "/watch", "v=xyz"));
+        // no query at all
+        assert!(!matches("www.youtube.com/watch?v=abc", "www.youtube.com", "/watch", ""));
     }
 }

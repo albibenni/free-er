@@ -17,6 +17,7 @@ pub enum Command {
     AddRuleSet { name: String, allowed_urls: Vec<String> },
     RemoveRuleSet { id: Uuid },
     AddUrlToRuleSet { rule_set_id: Uuid, url: String },
+    RemoveUrlFromRuleSet { rule_set_id: Uuid, url: String },
     ListRuleSets,
     AddSchedule {
         name: String,

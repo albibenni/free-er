@@ -10,12 +10,14 @@ pub struct AllowedListsSection {
 #[derive(Debug)]
 pub enum AllowedListsInput {
     AddUrl,
+    RemoveUrl(String),
     UrlsUpdated(Vec<String>),
 }
 
 #[derive(Debug)]
 pub enum AllowedListsOutput {
     AddUrl(String),
+    RemoveUrl(String),
 }
 
 #[relm4::component(pub)]
@@ -107,11 +109,13 @@ impl Component for AllowedListsSection {
             AllowedListsInput::AddUrl => {
                 let raw = self.url_entry.text().to_string();
                 if !raw.is_empty() {
-                    // If the user pasted a full URL, extract just the hostname
                     let pattern = extract_pattern(&raw);
                     let _ = sender.output(AllowedListsOutput::AddUrl(pattern));
                     self.url_entry.set_text("");
                 }
+            }
+            AllowedListsInput::RemoveUrl(url) => {
+                let _ = sender.output(AllowedListsOutput::RemoveUrl(url));
             }
             AllowedListsInput::UrlsUpdated(urls) => {
                 self.urls = urls;
@@ -121,13 +125,31 @@ impl Component for AllowedListsSection {
                 }
                 for url in &self.urls {
                     let row = gtk4::ListBoxRow::new();
+
+                    let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+
                     let label = gtk4::Label::new(Some(url.as_str()));
                     label.set_halign(gtk4::Align::Start);
+                    label.set_hexpand(true);
                     label.set_margin_start(8);
                     label.set_margin_end(8);
                     label.set_margin_top(6);
                     label.set_margin_bottom(6);
-                    row.set_child(Some(&label));
+
+                    let delete_btn = gtk4::Button::new();
+                    delete_btn.set_icon_name("user-trash-symbolic");
+                    delete_btn.add_css_class("flat");
+                    delete_btn.set_margin_end(4);
+                    delete_btn.set_valign(gtk4::Align::Center);
+                    let url_clone = url.clone();
+                    let s = sender.clone();
+                    delete_btn.connect_clicked(move |_| {
+                        s.input(AllowedListsInput::RemoveUrl(url_clone.clone()));
+                    });
+
+                    row_box.append(&label);
+                    row_box.append(&delete_btn);
+                    row.set_child(Some(&row_box));
                     widgets.list_box.append(&row);
                 }
             }
@@ -151,9 +173,8 @@ fn extract_pattern(input: &str) -> String {
         let without_scheme = input
             .trim_start_matches("https://")
             .trim_start_matches("http://");
-        // Drop query string and fragment
-        let s = without_scheme.split('?').next().unwrap_or(without_scheme);
-        let s = s.split('#').next().unwrap_or(s);
+        // Drop fragment only (#...) — keep path and query string
+        let s = without_scheme.split('#').next().unwrap_or(without_scheme);
         return s.trim_end_matches('/').to_string();
     }
     input.to_string()
@@ -165,9 +186,10 @@ mod tests {
 
     #[test]
     fn extracts_host_and_path_from_full_url() {
-        assert_eq!(extract_pattern("https://www.youtube.com/watch?v=abc"), "www.youtube.com/watch");
+        assert_eq!(extract_pattern("https://www.youtube.com/watch?v=abc"), "www.youtube.com/watch?v=abc");
         assert_eq!(extract_pattern("http://github.com/foo/bar"), "github.com/foo/bar");
         assert_eq!(extract_pattern("https://github.com/"), "github.com");
+        assert_eq!(extract_pattern("https://example.com/page#section"), "example.com/page");
     }
 
     #[test]

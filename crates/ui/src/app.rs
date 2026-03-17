@@ -40,6 +40,7 @@ pub enum AppMsg {
     StartPomodoro { focus_secs: u64, break_secs: u64 },
     StopPomodoro,
     AddUrl(String),
+    RemoveUrl(String),
     StrictModeChanged(bool),
     SaveCalDav { url: String, user: String, pass: String },
     // Periodic status poll result
@@ -125,6 +126,7 @@ impl Component for App {
             .launch(())
             .forward(sender.input_sender(), |out| match out {
                 AllowedListsOutput::AddUrl(url) => AppMsg::AddUrl(url),
+                AllowedListsOutput::RemoveUrl(url) => AppMsg::RemoveUrl(url),
             });
 
         let settings = SettingsSection::builder()
@@ -244,6 +246,18 @@ impl Component for App {
                         }
                     }
                 });
+            }
+            AppMsg::RemoveUrl(url) => {
+                if let Some(id) = self.active_rule_set_id {
+                    tokio::spawn(async move {
+                        if let Err(e) = ipc_client::send(&Command::RemoveUrlFromRuleSet {
+                            rule_set_id: id,
+                            url,
+                        }).await {
+                            error!("RemoveUrlFromRuleSet IPC failed: {e}");
+                        }
+                    });
+                }
             }
             AppMsg::StrictModeChanged(enabled) => {
                 tokio::spawn(async move {

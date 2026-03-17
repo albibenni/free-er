@@ -99,6 +99,16 @@ impl AppState {
         self.0.lock().unwrap().config.rule_sets.clone()
     }
 
+    pub fn remove_url_from_rule_set(&self, rule_set_id: Uuid, url: &str) -> bool {
+        let mut inner = self.0.lock().unwrap();
+        if let Some(rs) = inner.config.rule_sets.iter_mut().find(|r| r.id == rule_set_id) {
+            rs.allowed_urls.retain(|u| u != url);
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn add_url_to_rule_set(&self, rule_set_id: Uuid, url: String) -> bool {
         let mut inner = self.0.lock().unwrap();
         if let Some(rs) = inner.config.rule_sets.iter_mut().find(|r| r.id == rule_set_id) {

@@ -105,6 +105,13 @@ fn handle_command(cmd: Command, state: &AppState) -> String {
                 r#"{"error": "rule set not found"}"#.into()
             }
         }
+        Command::RemoveUrlFromRuleSet { rule_set_id, url } => {
+            if state.remove_url_from_rule_set(rule_set_id, &url) {
+                ok_response()
+            } else {
+                r#"{"error": "rule set not found"}"#.into()
+            }
+        }
         Command::ListRuleSets => {
             let rule_sets: Vec<shared::ipc::RuleSetSummary> = state
                 .list_rule_sets()
