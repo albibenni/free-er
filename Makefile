@@ -1,4 +1,4 @@
-.PHONY: all build daemon ui extension test clean dev run help
+.PHONY: all build daemon ui extension test clean dev run stop help
 
 all: build extension
 
@@ -23,17 +23,21 @@ extension-watch:
 test:
 	cargo test
 
+stop:
+	@pkill -f "target/debug/free-er$$" 2>/dev/null || true
+	@pkill -f "target/release/free-er$$" 2>/dev/null || true
+	@rm -f /tmp/free-er.sock
+
 # Run daemon in background, then launch UI
-dev:
-	cargo build
+dev: build stop
 	@echo "Starting daemon..."
-	cargo run -p daemon &
+	@cargo run -p daemon &
 	@sleep 1
 	@echo "Starting UI..."
-	cargo run -p ui
+	@cargo run -p ui
 
 # Build everything (Rust + extension) and launch daemon + UI
-run: build extension
+run: build extension stop
 	@echo "Starting daemon..."
 	@cargo run -p daemon &
 	@sleep 1
@@ -54,6 +58,7 @@ help:
 	@echo "  ui                Run the GTK4 UI"
 	@echo "  extension         Build the browser extension"
 	@echo "  extension-watch   Watch and rebuild extension on changes"
+	@echo "  stop              Kill any running daemon"
 	@echo "  dev               Build + start daemon in background + launch UI"
 	@echo "  test              Run all tests"
 	@echo "  clean             Remove build artifacts and extension/dist"

@@ -8,6 +8,7 @@ use crate::sections::{
 use gtk4::prelude::*;
 use relm4::prelude::*;
 use shared::ipc::Command;
+use tracing::{error, warn};
 
 #[derive(Debug)]
 pub enum Page {
@@ -173,57 +174,68 @@ impl Component for App {
             }
 
             AppMsg::StartFocus => {
-                // TODO: pick rule_set_id from selection; use first available for now
                 tokio::spawn(async {
-                    let _ = ipc_client::send(&Command::StartFocus {
+                    if let Err(e) = ipc_client::send(&Command::StartFocus {
                         rule_set_id: uuid::Uuid::nil(),
-                    })
-                    .await;
+                    }).await {
+                        error!("StartFocus IPC failed: {e}");
+                    }
                 });
             }
             AppMsg::StopFocus => {
                 tokio::spawn(async {
-                    let _ = ipc_client::send(&Command::StopFocus).await;
+                    if let Err(e) = ipc_client::send(&Command::StopFocus).await {
+                        error!("StopFocus IPC failed: {e}");
+                    }
                 });
             }
             AppMsg::SkipBreak => {
                 tokio::spawn(async {
-                    let _ = ipc_client::send(&Command::SkipBreak).await;
+                    if let Err(e) = ipc_client::send(&Command::SkipBreak).await {
+                        error!("SkipBreak IPC failed: {e}");
+                    }
                 });
             }
             AppMsg::StartPomodoro { focus_secs, break_secs } => {
                 tokio::spawn(async move {
-                    let _ = ipc_client::send(&Command::StartPomodoro { focus_secs, break_secs })
-                        .await;
+                    if let Err(e) = ipc_client::send(&Command::StartPomodoro { focus_secs, break_secs }).await {
+                        error!("StartPomodoro IPC failed: {e}");
+                    }
                 });
             }
             AppMsg::StopPomodoro => {
                 tokio::spawn(async {
-                    let _ = ipc_client::send(&Command::StopPomodoro).await;
+                    if let Err(e) = ipc_client::send(&Command::StopPomodoro).await {
+                        error!("StopPomodoro IPC failed: {e}");
+                    }
                 });
             }
             AppMsg::AddUrl(url) => {
                 tokio::spawn(async move {
-                    let _ = ipc_client::send(&Command::AddRuleSet {
+                    if let Err(e) = ipc_client::send(&Command::AddRuleSet {
                         name: "Imported".into(),
                         allowed_urls: vec![url],
-                    })
-                    .await;
+                    }).await {
+                        error!("AddRuleSet IPC failed: {e}");
+                    }
                 });
             }
             AppMsg::StrictModeChanged(enabled) => {
                 tokio::spawn(async move {
-                    let _ = ipc_client::send(&Command::SetStrictMode { enabled }).await;
+                    if let Err(e) = ipc_client::send(&Command::SetStrictMode { enabled }).await {
+                        error!("SetStrictMode IPC failed: {e}");
+                    }
                 });
             }
             AppMsg::SaveCalDav { url, user, pass } => {
                 tokio::spawn(async move {
-                    let _ = ipc_client::send(&Command::SetCalDav {
+                    if let Err(e) = ipc_client::send(&Command::SetCalDav {
                         url,
                         username: user,
                         password: pass,
-                    })
-                    .await;
+                    }).await {
+                        error!("SetCalDav IPC failed: {e}");
+                    }
                 });
             }
 
@@ -231,15 +243,18 @@ impl Component for App {
                 let focus_sender = self.focus.sender().clone();
                 let pom_sender = self.pomodoro.sender().clone();
                 tokio::spawn(async move {
-                    if let Ok(status) = ipc_client::get_status().await {
-                        focus_sender.emit(FocusInput::StatusUpdated {
-                            active: status.focus_active,
-                            rule_set: status.active_rule_set_name,
-                        });
-                        pom_sender.emit(PomodoroInput::StatusUpdated {
-                            phase: status.pomodoro_phase.map(|p| format!("{p:?}")),
-                            seconds_remaining: status.seconds_remaining,
-                        });
+                    match ipc_client::get_status().await {
+                        Ok(status) => {
+                            focus_sender.emit(FocusInput::StatusUpdated {
+                                active: status.focus_active,
+                                rule_set: status.active_rule_set_name,
+                            });
+                            pom_sender.emit(PomodoroInput::StatusUpdated {
+                                phase: status.pomodoro_phase.map(|p| format!("{p:?}")),
+                                seconds_remaining: status.seconds_remaining,
+                            });
+                        }
+                        Err(e) => warn!("status poll failed: {e}"),
                     }
                 });
             }

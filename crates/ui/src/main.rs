@@ -13,6 +13,13 @@ fn main() {
         )
         .init();
 
+    // Start a tokio runtime so tokio::spawn works alongside relm4's glib loop.
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime");
+    let _guard = rt.enter();
+
     let app = RelmApp::new("dev.free-er.ui");
     app.run::<App>(());
 }
