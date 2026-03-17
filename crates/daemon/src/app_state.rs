@@ -107,6 +107,24 @@ impl AppState {
         self.0.lock().unwrap().config.schedules.clone()
     }
 
+    pub fn add_schedule(&self, schedule: shared::models::Schedule) {
+        self.0.lock().unwrap().config.schedules.push(schedule);
+    }
+
+    pub fn remove_schedule(&self, id: Uuid) {
+        self.0.lock().unwrap().config.schedules.retain(|s| s.id != id);
+    }
+
+    pub fn update_schedule(&self, id: Uuid, name: String, days: Vec<chrono::Weekday>, start: chrono::NaiveTime, end: chrono::NaiveTime) {
+        let mut inner = self.0.lock().unwrap();
+        if let Some(s) = inner.config.schedules.iter_mut().find(|s| s.id == id) {
+            s.name = name;
+            s.days = days;
+            s.start = start;
+            s.end = end;
+        }
+    }
+
     pub fn remove_url_from_rule_set(&self, rule_set_id: Uuid, url: &str) -> bool {
         let mut inner = self.0.lock().unwrap();
         if let Some(rs) = inner.config.rule_sets.iter_mut().find(|r| r.id == rule_set_id) {

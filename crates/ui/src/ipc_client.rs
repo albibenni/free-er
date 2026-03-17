@@ -54,6 +54,35 @@ pub async fn list_schedules() -> Result<Vec<ScheduleSummary>> {
     Ok(serde_json::from_str(&raw)?)
 }
 
+pub async fn add_schedule(name: &str, days: Vec<u8>, start_min: u32, end_min: u32) -> Result<Uuid> {
+    let raw = send(&Command::AddSchedule {
+        name: name.to_string(),
+        days,
+        start_min,
+        end_min,
+        rule_set_id: None,
+    }).await?;
+    let v: serde_json::Value = serde_json::from_str(&raw)?;
+    let id = v["id"].as_str().ok_or_else(|| anyhow::anyhow!("no id in response"))?;
+    Ok(id.parse()?)
+}
+
+pub async fn update_schedule(id: Uuid, name: &str, days: Vec<u8>, start_min: u32, end_min: u32) -> Result<()> {
+    send(&Command::UpdateSchedule {
+        id,
+        name: name.to_string(),
+        days,
+        start_min,
+        end_min,
+    }).await?;
+    Ok(())
+}
+
+pub async fn remove_schedule(id: Uuid) -> Result<()> {
+    send(&Command::RemoveSchedule { id }).await?;
+    Ok(())
+}
+
 /// Create a new rule set and return its assigned UUID.
 pub async fn add_rule_set(name: &str) -> Result<Uuid> {
     let raw = send(&Command::AddRuleSet {

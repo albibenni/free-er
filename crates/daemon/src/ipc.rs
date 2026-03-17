@@ -4,6 +4,7 @@ use shared::{
     ipc::{Command, PomodoroPhase, StatusResponse},
     models::RuleSet,
 };
+use uuid::Uuid;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
 use tracing::{error, info, warn};
@@ -134,8 +135,55 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 .collect();
             (serde_json::to_string(&rule_sets).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
         }
-        Command::AddSchedule { .. } | Command::RemoveSchedule { .. } => {
-            (r#"{"error": "not yet implemented"}"#.into(), false)
+        Command::AddSchedule { name, days, start_min, end_min, rule_set_id } => {
+            use chrono::NaiveTime;
+            fn wday(d: u8) -> Option<chrono::Weekday> {
+                match d {
+                    0 => Some(chrono::Weekday::Mon), 1 => Some(chrono::Weekday::Tue),
+                    2 => Some(chrono::Weekday::Wed), 3 => Some(chrono::Weekday::Thu),
+                    4 => Some(chrono::Weekday::Fri), 5 => Some(chrono::Weekday::Sat),
+                    6 => Some(chrono::Weekday::Sun), _ => None,
+                }
+            }
+            let start = NaiveTime::from_hms_opt(start_min / 60, start_min % 60, 0)
+                .unwrap_or_default();
+            let end = NaiveTime::from_hms_opt(end_min / 60, end_min % 60, 0)
+                .unwrap_or_default();
+            let weekdays = days.iter().filter_map(|&d| wday(d)).collect();
+            let schedule = shared::models::Schedule {
+                id: Uuid::new_v4(),
+                name,
+                days: weekdays,
+                start,
+                end,
+                rule_set_id: rule_set_id.unwrap_or_else(Uuid::nil),
+                enabled: true,
+                imported: false,
+                specific_date: None,
+            };
+            let id = schedule.id;
+            state.add_schedule(schedule);
+            (serde_json::json!({ "ok": true, "id": id }).to_string(), true)
+        }
+        Command::RemoveSchedule { id } => {
+            state.remove_schedule(id);
+            ok(true)
+        }
+        Command::UpdateSchedule { id, name, days, start_min, end_min } => {
+            use chrono::NaiveTime;
+            fn wday(d: u8) -> Option<chrono::Weekday> {
+                match d {
+                    0 => Some(chrono::Weekday::Mon), 1 => Some(chrono::Weekday::Tue),
+                    2 => Some(chrono::Weekday::Wed), 3 => Some(chrono::Weekday::Thu),
+                    4 => Some(chrono::Weekday::Fri), 5 => Some(chrono::Weekday::Sat),
+                    6 => Some(chrono::Weekday::Sun), _ => None,
+                }
+            }
+            let start = NaiveTime::from_hms_opt(start_min / 60, start_min % 60, 0).unwrap_or_default();
+            let end = NaiveTime::from_hms_opt(end_min / 60, end_min % 60, 0).unwrap_or_default();
+            let weekdays = days.iter().filter_map(|&d| wday(d)).collect();
+            state.update_schedule(id, name, weekdays, start, end);
+            ok(true)
         }
         Command::ListSchedules => {
             use chrono::Timelike;
@@ -149,6 +197,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                     start_min: s.start.hour() * 60 + s.start.minute(),
                     end_min: s.end.hour() * 60 + s.end.minute(),
                     enabled: s.enabled,
+                    imported: s.imported,
                     specific_date: s.specific_date.map(|d| d.format("%Y-%m-%d").to_string()),
                 })
                 .collect();

@@ -21,12 +21,20 @@ pub enum Command {
     ListRuleSets,
     AddSchedule {
         name: String,
-        days: Vec<String>,
-        start: String,
-        end: String,
-        rule_set_id: Uuid,
+        /// Weekday indices 0=Mon..6=Sun
+        days: Vec<u8>,
+        start_min: u32,
+        end_min: u32,
+        rule_set_id: Option<Uuid>,
     },
     RemoveSchedule { id: Uuid },
+    UpdateSchedule {
+        id: Uuid,
+        name: String,
+        days: Vec<u8>,
+        start_min: u32,
+        end_min: u32,
+    },
     ListSchedules,
     SetStrictMode { enabled: bool },
     SetCalDav { url: String, username: String, password: String },
@@ -45,6 +53,7 @@ pub struct ScheduleSummary {
     pub start_min: u32,
     pub end_min: u32,
     pub enabled: bool,
+    pub imported: bool,
     /// If set, this is a one-time event on this specific date (YYYY-MM-DD).
     /// If None, the event repeats weekly on the days in `days`.
     pub specific_date: Option<String>,

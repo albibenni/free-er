@@ -24,6 +24,8 @@ const COLORS: &[(f64, f64, f64)] = &[
 struct DrawData {
     schedules: Vec<ScheduleSummary>,
     week_offset: i32,
+    drag_start: Option<(f64, f64)>,
+    drag_preview: Option<(usize, u32, u32)>, // col, start_min, end_min
 }
 
 pub struct ScheduleSection {
@@ -37,10 +39,23 @@ pub enum ScheduleInput {
     NextWeek,
     Today,
     SchedulesUpdated(Vec<ScheduleSummary>),
+    DragBegin(f64, f64),
+    DragUpdate(f64, f64, f64, f64),
+    DragEnd(f64, f64, f64, f64),
+    ClickAt(f64, f64, f64, f64),
+    ShowCreateDialog { col: usize, start_min: u32, end_min: u32 },
+    ShowEditDialog { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32 },
+    CommitCreate { name: String, col: usize, start_min: u32, end_min: u32 },
+    CommitEdit { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32 },
+    CommitDelete(uuid::Uuid),
 }
 
 #[derive(Debug)]
-pub enum ScheduleOutput {}
+pub enum ScheduleOutput {
+    CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
+    UpdateSchedule { id: uuid::Uuid, name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
+    DeleteSchedule(uuid::Uuid),
+}
 
 #[relm4::component(pub)]
 impl Component for ScheduleSection {
@@ -116,6 +131,63 @@ impl Component for ScheduleSection {
                 draw_calendar(da, cr, width, height, &dd.borrow());
             });
 
+        // Drag gesture for creating new events
+        let drag = gtk4::GestureDrag::new();
+
+        {
+            let dd = draw_data.clone();
+            drag.connect_drag_begin(move |_, x, y| {
+                dd.borrow_mut().drag_start = Some((x, y));
+            });
+        }
+        {
+            let dd = draw_data.clone();
+            let da = widgets.drawing_area.clone();
+            drag.connect_drag_update(move |_, off_x, off_y| {
+                let mut data = dd.borrow_mut();
+                if let Some((sx, sy)) = data.drag_start {
+                    let w = da.width() as f64;
+                    let h = da.allocated_height() as f64;
+                    let cx = sx + off_x;
+                    let cy = sy + off_y;
+                    if let (Some((col, s_min)), Some((_, e_min))) = (
+                        pixel_to_day_time(sx, sy, w, h),
+                        pixel_to_day_time(cx, cy, w, h),
+                    ) {
+                        data.drag_preview = Some((col, s_min, e_min.max(s_min + 15)));
+                    }
+                }
+                drop(data);
+                da.queue_draw();
+            });
+        }
+        {
+            let dd = draw_data.clone();
+            let da = widgets.drawing_area.clone();
+            let s = sender.clone();
+            drag.connect_drag_end(move |_, off_x, off_y| {
+                let mut data = dd.borrow_mut();
+                let preview = data.drag_preview.take();
+                let start_pos = data.drag_start.take();
+                drop(data);
+                da.queue_draw();
+
+                let dist = (off_x * off_x + off_y * off_y).sqrt();
+                if dist > 10.0 {
+                    if let Some((col, start_min, end_min)) = preview {
+                        if end_min > start_min + 14 {
+                            s.input(ScheduleInput::ShowCreateDialog { col, start_min, end_min });
+                        }
+                    }
+                } else if let Some((x, y)) = start_pos {
+                    let w = da.width() as f64;
+                    let h = da.allocated_height() as f64;
+                    s.input(ScheduleInput::ClickAt(x, y, w, h));
+                }
+            });
+        }
+        widgets.drawing_area.add_controller(drag);
+
         ComponentParts { model, widgets }
     }
 
@@ -141,6 +213,60 @@ impl Component for ScheduleSection {
             }
             ScheduleInput::SchedulesUpdated(schedules) => {
                 self.draw_data.borrow_mut().schedules = schedules;
+            }
+            ScheduleInput::DragBegin(..) | ScheduleInput::DragUpdate(..) | ScheduleInput::DragEnd(..) => {
+                // handled by gesture closures directly
+                widgets.drawing_area.queue_draw();
+            }
+            ScheduleInput::ClickAt(x, y, w, h) => {
+                let hit = {
+                    let data = self.draw_data.borrow();
+                    hit_test_event(x, y, w, h, data.week_offset, &data.schedules)
+                };
+                if let Some((id, name, col, start_min, end_min, imported)) = hit {
+                    if !imported {
+                        sender.input(ScheduleInput::ShowEditDialog { id, name, col, start_min, end_min });
+                    }
+                }
+                self.update_view(widgets, sender);
+                return;
+            }
+            ScheduleInput::ShowCreateDialog { col, start_min, end_min } => {
+                let week_monday = {
+                    let data = self.draw_data.borrow();
+                    let today = chrono::Local::now().date_naive();
+                    let dfm = today.weekday().num_days_from_monday() as i64;
+                    let this_mon = today - chrono::Duration::days(dfm);
+                    this_mon + chrono::Duration::weeks(data.week_offset as i64)
+                };
+                show_create_dialog(col, start_min, end_min, week_monday, _root, sender.clone());
+                self.update_view(widgets, sender);
+                return;
+            }
+            ScheduleInput::ShowEditDialog { id, name, col, start_min, end_min } => {
+                show_edit_dialog(id, &name, col, start_min, end_min, _root, sender.clone());
+                self.update_view(widgets, sender);
+                return;
+            }
+            ScheduleInput::CommitCreate { name, col, start_min, end_min } => {
+                let _ = sender.output(ScheduleOutput::CreateSchedule {
+                    name,
+                    days: vec![col as u8],
+                    start_min,
+                    end_min,
+                });
+            }
+            ScheduleInput::CommitEdit { id, name, col, start_min, end_min } => {
+                let _ = sender.output(ScheduleOutput::UpdateSchedule {
+                    id,
+                    name,
+                    days: vec![col as u8],
+                    start_min,
+                    end_min,
+                });
+            }
+            ScheduleInput::CommitDelete(id) => {
+                let _ = sender.output(ScheduleOutput::DeleteSchedule(id));
             }
         }
         widgets.drawing_area.queue_draw();
@@ -348,19 +474,58 @@ fn draw_calendar(
             rounded_rect(cr, x, y_start, block_w, block_h, 4.0);
             let _ = cr.fill();
 
-            // Event name
+            // White outline for custom (non-imported) events
+            if !sched.imported {
+                cr.set_source_rgba(1.0, 1.0, 1.0, 0.5);
+                cr.set_line_width(1.5);
+                rounded_rect(cr, x, y_start, block_w, block_h, 4.0);
+                let _ = cr.stroke();
+            }
+
+            // Event name (+ calendar icon for imported events)
             if block_h > 14.0 {
                 cr.set_source_rgb(1.0, 1.0, 1.0);
                 cr.set_font_size(10.0);
+
+                const ICON_W: f64 = 10.0;
+                const ICON_GAP: f64 = 3.0;
+                let icon_total = if sched.imported { ICON_W + ICON_GAP } else { 0.0 };
+
                 let te = cr
                     .text_extents(&sched.name)
                     .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
-                let text_x = x + (block_w - te.width()) / 2.0;
+                let content_w = icon_total + te.width();
+                let text_x = (x + (block_w - content_w) / 2.0 + icon_total).max(x + 2.0 + icon_total);
                 let text_y = y_start + block_h / 2.0 + te.height() / 2.0;
-                cr.move_to(text_x.max(x + 2.0), text_y);
+
+                if sched.imported {
+                    let ix = text_x - icon_total;
+                    let iy = text_y - te.height() - 1.0;
+                    draw_calendar_icon(cr, ix, iy, ICON_W);
+                }
+
+                cr.move_to(text_x, text_y);
                 let _ = cr.show_text(&sched.name);
             }
         }
+    }
+
+    // ── Drag preview ──────────────────────────────────────────────────────
+    if let Some((col, s_min, e_min)) = data.drag_preview {
+        let x = MARGIN_LEFT + col as f64 * col_w + 2.0;
+        let bw = col_w - 4.0;
+        let sf = clamp_hour_frac(s_min as f64 / 60.0);
+        let ef = clamp_hour_frac(e_min as f64 / 60.0);
+        let ys = HEADER_H + sf * (h - HEADER_H);
+        let ye = HEADER_H + ef * (h - HEADER_H);
+        let bh = (ye - ys).max(4.0);
+        cr.set_source_rgba(0.26, 0.54, 0.96, 0.35);
+        rounded_rect(cr, x, ys, bw, bh, 4.0);
+        let _ = cr.fill();
+        cr.set_source_rgba(0.26, 0.54, 0.96, 0.85);
+        cr.set_line_width(1.5);
+        rounded_rect(cr, x, ys, bw, bh, 4.0);
+        let _ = cr.stroke();
     }
 
     // ── Current time indicator (only on current week) ─────────────────────
@@ -379,6 +544,34 @@ fn draw_calendar(
 
         // Small circle at left edge
         cr.arc(x, y, 4.0, 0.0, std::f64::consts::TAU);
+        let _ = cr.fill();
+    }
+}
+
+/// Draw a tiny calendar icon (outline + header bar + two dot-rows) at (x, y)
+/// fitting within a square of `size` pixels. Colour inherits the current source.
+fn draw_calendar_icon(cr: &gtk4::cairo::Context, x: f64, y: f64, size: f64) {
+    let s = size;
+    let lw = 1.0_f64;
+    cr.set_line_width(lw);
+
+    // Outer rounded rect
+    rounded_rect(cr, x, y, s, s, 1.5);
+    let _ = cr.stroke();
+
+    // Header band (top ~30 %)
+    let hh = (s * 0.30).max(2.0);
+    cr.rectangle(x + lw / 2.0, y + lw / 2.0, s - lw, hh);
+    let _ = cr.fill();
+
+    // Two rows of two dots in the body
+    let dot_r = (s * 0.08).max(0.8);
+    let col1 = x + s * 0.28;
+    let col2 = x + s * 0.68;
+    let row1 = y + hh + (s - hh) * 0.35;
+    let row2 = y + hh + (s - hh) * 0.70;
+    for &(dx, dy) in &[(col1, row1), (col2, row1), (col1, row2), (col2, row2)] {
+        cr.arc(dx, dy, dot_r, 0.0, std::f64::consts::TAU);
         let _ = cr.fill();
     }
 }
@@ -436,4 +629,234 @@ fn week_label_text(offset: i32) -> String {
             week_sunday.day()
         )
     }
+}
+
+fn pixel_to_day_time(x: f64, y: f64, w: f64, h: f64) -> Option<(usize, u32)> {
+    const MARGIN_LEFT: f64 = 52.0;
+    const HEADER_H: f64 = 40.0;
+    const MARGIN_RIGHT: f64 = 4.0;
+    if x < MARGIN_LEFT || y < HEADER_H { return None; }
+    let col_w = (w - MARGIN_LEFT - MARGIN_RIGHT) / 7.0;
+    let hour_h = (h - HEADER_H) / (END_HOUR - START_HOUR) as f64;
+    let col = ((x - MARGIN_LEFT) / col_w) as usize;
+    if col >= 7 { return None; }
+    let hour_frac = (y - HEADER_H) / hour_h;
+    let minutes = (START_HOUR as f64 * 60.0 + hour_frac * 60.0) as u32;
+    Some((col, minutes.clamp(START_HOUR * 60, END_HOUR * 60)))
+}
+
+fn hit_test_event(
+    x: f64, y: f64, w: f64, h: f64,
+    week_offset: i32,
+    schedules: &[ScheduleSummary],
+) -> Option<(uuid::Uuid, String, usize, u32, u32, bool)> {
+    const MARGIN_LEFT: f64 = 52.0;
+    const HEADER_H: f64 = 40.0;
+    const MARGIN_RIGHT: f64 = 4.0;
+    let col_w = (w - MARGIN_LEFT - MARGIN_RIGHT) / 7.0;
+
+    let today = chrono::Local::now().date_naive();
+    let dfm = today.weekday().num_days_from_monday() as i64;
+    let this_mon = today - chrono::Duration::days(dfm);
+    let week_monday = this_mon + chrono::Duration::weeks(week_offset as i64);
+
+    for sched in schedules {
+        let cols: Vec<usize> = if let Some(ds) = &sched.specific_date {
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(ds, "%Y-%m-%d") {
+                let off = (date - week_monday).num_days();
+                if off >= 0 && off < 7 { vec![off as usize] } else { vec![] }
+            } else { vec![] }
+        } else {
+            sched.days.iter().map(|&d| d as usize).collect()
+        };
+
+        for col in cols {
+            let ex = MARGIN_LEFT + col as f64 * col_w + 2.0;
+            let bw = col_w - 4.0;
+            let sf = clamp_hour_frac(sched.start_min as f64 / 60.0);
+            let ef = clamp_hour_frac(sched.end_min as f64 / 60.0);
+            let ys = HEADER_H + sf * (h - HEADER_H);
+            let ye = HEADER_H + ef * (h - HEADER_H);
+            let bh = (ye - ys).max(4.0);
+            if x >= ex && x <= ex + bw && y >= ys && y <= ys + bh {
+                return Some((sched.id, sched.name.clone(), col, sched.start_min, sched.end_min, sched.imported));
+            }
+        }
+    }
+    None
+}
+
+fn parse_hhmm(s: &str) -> Option<u32> {
+    let mut parts = s.splitn(2, ':');
+    let h: u32 = parts.next()?.trim().parse().ok()?;
+    let m: u32 = parts.next()?.trim().parse().ok()?;
+    if h > 23 || m > 59 { return None; }
+    Some(h * 60 + m)
+}
+
+fn show_create_dialog(
+    col: usize,
+    start_min: u32,
+    end_min: u32,
+    week_monday: chrono::NaiveDate,
+    root: &gtk4::Box,
+    sender: ComponentSender<ScheduleSection>,
+) {
+    use gtk4::prelude::*;
+    let dialog = gtk4::Window::builder()
+        .title("New Event")
+        .modal(true)
+        .default_width(320)
+        .resizable(false)
+        .build();
+    if let Some(top) = root.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+        dialog.set_transient_for(Some(&top));
+    }
+
+    let vbox = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
+    vbox.set_margin_all(16);
+
+    let date = week_monday + chrono::Duration::days(col as i64);
+    let day_lbl = gtk4::Label::new(Some(&date.format("%A, %B %-d").to_string()));
+    day_lbl.add_css_class("title-3");
+    day_lbl.set_halign(gtk4::Align::Start);
+    vbox.append(&day_lbl);
+
+    let name_entry = gtk4::Entry::new();
+    name_entry.set_placeholder_text(Some("Event name"));
+    name_entry.set_margin_top(4);
+    vbox.append(&name_entry);
+
+    let time_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    let start_entry = gtk4::Entry::new();
+    start_entry.set_text(&format!("{:02}:{:02}", start_min / 60, start_min % 60));
+    start_entry.set_width_chars(6);
+    let sep_lbl = gtk4::Label::new(Some("–"));
+    let end_entry = gtk4::Entry::new();
+    end_entry.set_text(&format!("{:02}:{:02}", end_min / 60, end_min % 60));
+    end_entry.set_width_chars(6);
+    time_row.append(&start_entry);
+    time_row.append(&sep_lbl);
+    time_row.append(&end_entry);
+    vbox.append(&time_row);
+
+    let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    btn_row.set_halign(gtk4::Align::End);
+    btn_row.set_margin_top(8);
+    let cancel_btn = gtk4::Button::with_label("Cancel");
+    let save_btn = gtk4::Button::with_label("Save");
+    save_btn.add_css_class("suggested-action");
+    btn_row.append(&cancel_btn);
+    btn_row.append(&save_btn);
+    vbox.append(&btn_row);
+
+    dialog.set_child(Some(&vbox));
+
+    let d = dialog.clone();
+    cancel_btn.connect_clicked(move |_| d.close());
+
+    let d = dialog.clone();
+    let ne = name_entry.clone();
+    let se = start_entry.clone();
+    let ee = end_entry.clone();
+    let day = col as u8;
+    save_btn.connect_clicked(move |_| {
+        let name = ne.text().to_string();
+        if name.is_empty() { return; }
+        let Some(s_min) = parse_hhmm(&se.text()) else { return };
+        let Some(e_min) = parse_hhmm(&ee.text()) else { return };
+        if e_min <= s_min { return; }
+        sender.input(ScheduleInput::CommitCreate { name, col: day as usize, start_min: s_min, end_min: e_min });
+        d.close();
+    });
+
+    dialog.present();
+}
+
+fn show_edit_dialog(
+    id: uuid::Uuid,
+    name: &str,
+    col: usize,
+    start_min: u32,
+    end_min: u32,
+    root: &gtk4::Box,
+    sender: ComponentSender<ScheduleSection>,
+) {
+    use gtk4::prelude::*;
+    let dialog = gtk4::Window::builder()
+        .title("Edit Event")
+        .modal(true)
+        .default_width(320)
+        .resizable(false)
+        .build();
+    if let Some(top) = root.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+        dialog.set_transient_for(Some(&top));
+    }
+
+    let vbox = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
+    vbox.set_margin_all(16);
+
+    let name_entry = gtk4::Entry::new();
+    name_entry.set_text(name);
+    name_entry.set_placeholder_text(Some("Event name"));
+    vbox.append(&name_entry);
+
+    let time_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    let start_entry = gtk4::Entry::new();
+    start_entry.set_text(&format!("{:02}:{:02}", start_min / 60, start_min % 60));
+    start_entry.set_width_chars(6);
+    let sep_lbl = gtk4::Label::new(Some("–"));
+    let end_entry = gtk4::Entry::new();
+    end_entry.set_text(&format!("{:02}:{:02}", end_min / 60, end_min % 60));
+    end_entry.set_width_chars(6);
+    time_row.append(&start_entry);
+    time_row.append(&sep_lbl);
+    time_row.append(&end_entry);
+    vbox.append(&time_row);
+
+    let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    btn_row.set_hexpand(true);
+    let del_btn = gtk4::Button::with_label("Delete");
+    del_btn.add_css_class("destructive-action");
+    let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+    spacer.set_hexpand(true);
+    let cancel_btn = gtk4::Button::with_label("Cancel");
+    let save_btn = gtk4::Button::with_label("Save");
+    save_btn.add_css_class("suggested-action");
+    btn_row.append(&del_btn);
+    btn_row.append(&spacer);
+    btn_row.append(&cancel_btn);
+    btn_row.append(&save_btn);
+    vbox.append(&btn_row);
+
+    dialog.set_child(Some(&vbox));
+
+    let d = dialog.clone();
+    cancel_btn.connect_clicked(move |_| d.close());
+
+    {
+        let d = dialog.clone();
+        let s = sender.clone();
+        del_btn.connect_clicked(move |_| {
+            s.input(ScheduleInput::CommitDelete(id));
+            d.close();
+        });
+    }
+
+    let d = dialog.clone();
+    let ne = name_entry.clone();
+    let se = start_entry.clone();
+    let ee = end_entry.clone();
+    let day = col as u8;
+    save_btn.connect_clicked(move |_| {
+        let name = ne.text().to_string();
+        if name.is_empty() { return; }
+        let Some(s_min) = parse_hhmm(&se.text()) else { return };
+        let Some(e_min) = parse_hhmm(&ee.text()) else { return };
+        if e_min <= s_min { return; }
+        sender.input(ScheduleInput::CommitEdit { id, name, col: day as usize, start_min: s_min, end_min: e_min });
+        d.close();
+    });
+
+    dialog.present();
 }

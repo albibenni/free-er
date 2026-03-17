@@ -79,6 +79,7 @@ fn event_to_schedule(
         end: end_time,
         rule_set_id,
         enabled: true,
+        imported: true,
         specific_date: Some(start_dt.date()),
     })
 }
@@ -231,6 +232,7 @@ fn google_event_to_schedule(
         end: end_dt.time(),
         rule_set_id,
         enabled: true,
+        imported: true,
         specific_date: Some(start_dt.date()),
     })
 }

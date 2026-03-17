@@ -3,7 +3,7 @@ use crate::sections::{
     allowed_lists::{AllowedListsInput, AllowedListsOutput, AllowedListsSection},
     focus::{FocusInput, FocusOutput, FocusSection},
     pomodoro::{PomodoroInput, PomodoroOutput, PomodoroSection},
-    schedule::{ScheduleInput, ScheduleSection},
+    schedule::{ScheduleInput, ScheduleOutput, ScheduleSection},
     settings::{SettingsInput, SettingsOutput, SettingsSection},
 };
 use gtk4::prelude::*;
@@ -56,6 +56,9 @@ pub enum AppMsg {
     RuleSetCreated(Uuid),
     // Internal: schedules fetched from daemon
     SchedulesUpdated(Vec<ScheduleSummary>),
+    CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
+    UpdateSchedule { id: Uuid, name: String, days: Vec<u8>, start_min: u32, end_min: u32 },
+    DeleteSchedule(Uuid),
 }
 
 #[relm4::component(pub)]
@@ -142,7 +145,15 @@ impl Component for App {
 
         let schedule = ScheduleSection::builder()
             .launch(())
-            .detach();
+            .forward(sender.input_sender(), |out| match out {
+                ScheduleOutput::CreateSchedule { name, days, start_min, end_min } => {
+                    AppMsg::CreateSchedule { name, days, start_min, end_min }
+                }
+                ScheduleOutput::UpdateSchedule { id, name, days, start_min, end_min } => {
+                    AppMsg::UpdateSchedule { id, name, days, start_min, end_min }
+                }
+                ScheduleOutput::DeleteSchedule(id) => AppMsg::DeleteSchedule(id),
+            });
 
         let settings = SettingsSection::builder()
             .launch(false)
@@ -328,6 +339,29 @@ impl Component for App {
             }
             AppMsg::SchedulesUpdated(schedules) => {
                 self.schedule.sender().emit(ScheduleInput::SchedulesUpdated(schedules));
+            }
+
+            AppMsg::CreateSchedule { name, days, start_min, end_min } => {
+                tokio::spawn(async move {
+                    match ipc_client::add_schedule(&name, days, start_min, end_min).await {
+                        Ok(_) => {}
+                        Err(e) => error!("add_schedule failed: {e}"),
+                    }
+                });
+            }
+            AppMsg::UpdateSchedule { id, name, days, start_min, end_min } => {
+                tokio::spawn(async move {
+                    if let Err(e) = ipc_client::update_schedule(id, &name, days, start_min, end_min).await {
+                        error!("update_schedule failed: {e}");
+                    }
+                });
+            }
+            AppMsg::DeleteSchedule(id) => {
+                tokio::spawn(async move {
+                    if let Err(e) = ipc_client::remove_schedule(id).await {
+                        error!("remove_schedule failed: {e}");
+                    }
+                });
             }
 
             AppMsg::StatusTick => {
