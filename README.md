@@ -82,12 +82,50 @@ make run
 
 ## Browser Extension
 
-Build output lands in `extension/dist/`. Load it as an unpacked extension:
+First, build it:
 
-- **Chrome**: `chrome://extensions` → Enable developer mode → Load unpacked → select `extension/`
-- **Firefox**: `about:debugging` → This Firefox → Load Temporary Add-on → select `extension/manifest.json`
+```bash
+make extension
+```
 
-The extension polls `http://127.0.0.1:10000/api/status` every 2 seconds. When a focus session is active, any navigation to a non-allowed URL is redirected to the block page.
+### Chrome / Chromium / Brave
+
+1. Go to `chrome://extensions`
+2. Enable **Developer mode** (top-right toggle)
+3. Click **Load unpacked**
+4. Select the `extension/` folder (the root folder containing `manifest.json`, not `extension/dist/`)
+5. The **free-er** extension appears in your toolbar
+
+### Firefox
+
+1. Go to `about:debugging`
+2. Click **This Firefox**
+3. Click **Load Temporary Add-on…**
+4. Select `extension/manifest.json`
+5. The extension stays loaded until Firefox is restarted (temporary install)
+
+For a permanent Firefox install you'd need to sign it via Mozilla — for personal use the temporary method is fine.
+
+### How it works
+
+1. Make sure the daemon is running (`make daemon` or `make run`)
+2. The extension polls `http://127.0.0.1:10000/api/status` every 2 seconds
+3. Start a focus session from the UI
+4. Any tab navigating to a non-allowed URL is redirected to the block page at `http://127.0.0.1:10000`
+5. Click the extension icon in the toolbar to see current status and active allowed URLs
+
+### Quick test without the UI
+
+```bash
+# Start daemon
+make daemon
+
+# Trigger a focus session manually
+echo '{"cmd":"StartFocus","rule_set_id":"00000000-0000-0000-0000-000000000000"}' | nc -U /tmp/free-er.sock
+
+# Check status
+echo '{"cmd":"GetStatus"}' | nc -U /tmp/free-er.sock
+```
 
 ## Configuration
 
