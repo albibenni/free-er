@@ -9,8 +9,9 @@
 - [ ] adding new task should overlay start time and end time while selecting
 - [ ] icon padding from title
 - [ ] two task in the same time - split the space
-- [ ] task should have selection for focus allowed list
-- [ ] task could be a break
+- [x] task should have selection for focus allowed list
+- [x] task could be a break
+- [ ] by default should take the default allowed list, not none
 
 ### POMODORO
 

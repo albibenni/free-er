@@ -41,12 +41,12 @@ pub enum ScheduleInput {
     Today,
     SchedulesUpdated(Vec<ScheduleSummary>),
     RuleSetsUpdated(Vec<RuleSetSummary>),
-    DragBegin(f64, f64),
-    DragUpdate(f64, f64, f64, f64),
-    DragEnd(f64, f64, f64, f64),
+    #[allow(dead_code)] DragBegin(f64, f64),
+    #[allow(dead_code)] DragUpdate(f64, f64, f64, f64),
+    #[allow(dead_code)] DragEnd(f64, f64, f64, f64),
     ClickAt(f64, f64, f64, f64),
     ShowCreateDialog { col: usize, start_min: u32, end_min: u32 },
-    ShowViewDialog { name: String, col: usize, start_min: u32, end_min: u32 },
+    ShowViewDialog { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: uuid::Uuid },
     ShowEditDialog { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: uuid::Uuid },
     CommitCreate { name: String, col: usize, start_min: u32, end_min: u32, specific_date: String, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
     CommitEdit { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
@@ -229,7 +229,7 @@ impl Component for ScheduleSection {
                 };
                 if let Some((id, name, col, start_min, end_min, imported, schedule_type, rule_set_id)) = hit {
                     if imported {
-                        sender.input(ScheduleInput::ShowViewDialog { name, col, start_min, end_min });
+                        sender.input(ScheduleInput::ShowViewDialog { id, name, col, start_min, end_min, schedule_type, rule_set_id });
                     } else {
                         sender.input(ScheduleInput::ShowEditDialog { id, name, col, start_min, end_min, schedule_type, rule_set_id });
                     }
@@ -237,7 +237,7 @@ impl Component for ScheduleSection {
                 self.update_view(widgets, sender);
                 return;
             }
-            ScheduleInput::ShowViewDialog { name, col, start_min, end_min } => {
+            ScheduleInput::ShowViewDialog { id, name, col, start_min, end_min, schedule_type, rule_set_id } => {
                 let week_monday = {
                     let data = self.draw_data.borrow();
                     let today = chrono::Local::now().date_naive();
@@ -245,7 +245,8 @@ impl Component for ScheduleSection {
                     let this_mon = today - chrono::Duration::days(dfm);
                     this_mon + chrono::Duration::weeks(data.week_offset as i64)
                 };
-                show_view_dialog(&name, col, start_min, end_min, week_monday, _root);
+                let rule_sets = self.rule_sets.clone();
+                show_view_dialog(id, &name, col, start_min, end_min, schedule_type, rule_set_id, week_monday, rule_sets, _root, sender.clone());
                 self.update_view(widgets, sender);
                 return;
             }
@@ -722,17 +723,22 @@ fn parse_hhmm(s: &str) -> Option<u32> {
 }
 
 fn show_view_dialog(
+    id: uuid::Uuid,
     name: &str,
     col: usize,
     start_min: u32,
     end_min: u32,
+    schedule_type: ScheduleType,
+    rule_set_id: uuid::Uuid,
     week_monday: chrono::NaiveDate,
+    rule_sets: Vec<RuleSetSummary>,
     root: &gtk4::Box,
+    sender: ComponentSender<ScheduleSection>,
 ) {
     let dialog = gtk4::Window::builder()
         .title("Calendar Event")
         .modal(true)
-        .default_width(320)
+        .default_width(340)
         .resizable(false)
         .build();
     if let Some(top) = root.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
@@ -742,53 +748,71 @@ fn show_view_dialog(
     let vbox = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
     vbox.set_margin_all(16);
 
-    // Badge: "Imported from calendar"
-    let badge = gtk4::Label::new(Some("Imported from calendar"));
+    // Badge
+    let badge = gtk4::Label::new(Some("Imported from calendar — name and time are read-only"));
     badge.add_css_class("caption");
     badge.set_halign(gtk4::Align::Start);
     badge.set_opacity(0.6);
+    badge.set_wrap(true);
     vbox.append(&badge);
 
+    // Read-only name
     let name_lbl = gtk4::Label::new(Some(name));
     name_lbl.add_css_class("title-3");
     name_lbl.set_halign(gtk4::Align::Start);
     name_lbl.set_wrap(true);
     vbox.append(&name_lbl);
 
+    // Read-only date + time
     let date = week_monday + chrono::Duration::days(col as i64);
-    let day_lbl = gtk4::Label::new(Some(&date.format("%A, %B %-d").to_string()));
-    day_lbl.set_halign(gtk4::Align::Start);
-    day_lbl.set_opacity(0.7);
-    vbox.append(&day_lbl);
-
-    let time_lbl = gtk4::Label::new(Some(&format!(
-        "{:02}:{:02} – {:02}:{:02}",
+    let meta_lbl = gtk4::Label::new(Some(&format!(
+        "{}   {:02}:{:02} – {:02}:{:02}",
+        date.format("%A, %B %-d"),
         start_min / 60, start_min % 60,
         end_min / 60,   end_min % 60,
     )));
-    time_lbl.set_halign(gtk4::Align::Start);
-    time_lbl.set_opacity(0.7);
-    vbox.append(&time_lbl);
+    meta_lbl.set_halign(gtk4::Align::Start);
+    meta_lbl.set_opacity(0.65);
+    meta_lbl.set_margin_bottom(4);
+    vbox.append(&meta_lbl);
 
-    let note = gtk4::Label::new(Some("This event is read-only. Edit it in your calendar app."));
-    note.add_css_class("caption");
-    note.set_halign(gtk4::Align::Start);
-    note.set_wrap(true);
-    note.set_margin_top(4);
-    note.set_opacity(0.55);
-    vbox.append(&note);
+    // Editable: focus/break + allowed list
+    let (focus_btn, _break_btn, list_combo) =
+        build_type_and_list_rows(&vbox, &schedule_type, rule_set_id, &rule_sets);
 
-    let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+    // Buttons
+    let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
     btn_row.set_halign(gtk4::Align::End);
     btn_row.set_margin_top(8);
-    let close_btn = gtk4::Button::with_label("Close");
-    btn_row.append(&close_btn);
+    let cancel_btn = gtk4::Button::with_label("Cancel");
+    let save_btn = gtk4::Button::with_label("Save");
+    save_btn.add_css_class("suggested-action");
+    btn_row.append(&cancel_btn);
+    btn_row.append(&save_btn);
     vbox.append(&btn_row);
 
     dialog.set_child(Some(&vbox));
 
     let d = dialog.clone();
-    close_btn.connect_clicked(move |_| d.close());
+    cancel_btn.connect_clicked(move |_| d.close());
+
+    let d = dialog.clone();
+    let day = col as u8;
+    let name_owned = name.to_string();
+    save_btn.connect_clicked(move |_| {
+        let stype = if focus_btn.is_active() { ScheduleType::Focus } else { ScheduleType::Break };
+        let new_rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
+        sender.input(ScheduleInput::CommitEdit {
+            id,
+            name: name_owned.clone(),
+            col: day as usize,
+            start_min,
+            end_min,
+            schedule_type: stype,
+            rule_set_id: new_rule_set_id,
+        });
+        d.close();
+    });
 
     dialog.present();
 }

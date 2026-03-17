@@ -8,7 +8,7 @@ use crate::sections::{
 };
 use gtk4::prelude::*;
 use relm4::prelude::*;
-use shared::ipc::{Command, RuleSetSummary, ScheduleSummary, ScheduleType};
+use shared::ipc::{Command, ScheduleSummary, ScheduleType};
 use tracing::{error, warn};
 use uuid::Uuid;
 
