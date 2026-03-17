@@ -110,9 +110,11 @@ impl Component for ScheduleSection {
         let widgets = view_output!();
 
         let dd = draw_data.clone();
-        widgets.drawing_area.set_draw_func(move |_da, cr, width, height| {
-            draw_calendar(cr, width, height, &dd.borrow());
-        });
+        widgets
+            .drawing_area
+            .set_draw_func(move |da, cr, width, height| {
+                draw_calendar(da, cr, width, height, &dd.borrow());
+            });
 
         ComponentParts { model, widgets }
     }
@@ -148,7 +150,51 @@ impl Component for ScheduleSection {
 
 // ── Drawing ───────────────────────────────────────────────────────────────────
 
-fn draw_calendar(cr: &gtk4::cairo::Context, width: i32, height: i32, data: &DrawData) {
+struct Theme {
+    bg: (f64, f64, f64),
+    text: (f64, f64, f64),
+    text_dim: (f64, f64, f64),
+    text_today: (f64, f64, f64),
+    grid: (f64, f64, f64),
+    today_highlight: (f64, f64, f64, f64), // rgba
+}
+
+impl Theme {
+    fn from_widget(da: &gtk4::DrawingArea) -> Self {
+        let fg = da.style_context().color();
+        // Perceived luminance of the foreground colour — high means light text → dark theme
+        let lum = 0.299 * fg.red() as f64 + 0.587 * fg.green() as f64 + 0.114 * fg.blue() as f64;
+        let dark = lum > 0.5;
+        if dark {
+            Theme {
+                bg: (0.16, 0.16, 0.16),
+                text: (0.90, 0.90, 0.90),
+                text_dim: (0.55, 0.55, 0.55),
+                text_today: (0.50, 0.78, 1.00),
+                grid: (0.30, 0.30, 0.30),
+                today_highlight: (0.15, 0.27, 0.45, 0.45),
+            }
+        } else {
+            Theme {
+                bg: (1.00, 1.00, 1.00),
+                text: (0.15, 0.15, 0.15),
+                text_dim: (0.50, 0.50, 0.50),
+                text_today: (0.20, 0.45, 0.90),
+                grid: (0.82, 0.82, 0.82),
+                today_highlight: (0.88, 0.94, 1.00, 0.60),
+            }
+        }
+    }
+}
+
+fn draw_calendar(
+    da: &gtk4::DrawingArea,
+    cr: &gtk4::cairo::Context,
+    width: i32,
+    height: i32,
+    data: &DrawData,
+) {
+    let t = Theme::from_widget(da);
     let w = width as f64;
     let h = height as f64;
 
@@ -161,14 +207,13 @@ fn draw_calendar(cr: &gtk4::cairo::Context, width: i32, height: i32, data: &Draw
     let hour_h = (h - HEADER_H) / total_hours;
 
     let now = Local::now();
-    // Monday of the displayed week (week_offset * 7 days from this Monday)
     let today = now.date_naive();
     let days_from_mon = today.weekday().num_days_from_monday() as i64;
     let this_monday = today - Duration::days(days_from_mon);
     let week_monday = this_monday + Duration::weeks(data.week_offset as i64);
 
     // ── Background ────────────────────────────────────────────────────────
-    cr.set_source_rgb(1.0, 1.0, 1.0);
+    cr.set_source_rgb(t.bg.0, t.bg.1, t.bg.2);
     let _ = cr.paint();
 
     // ── Today column highlight ────────────────────────────────────────────
@@ -180,27 +225,32 @@ fn draw_calendar(cr: &gtk4::cairo::Context, width: i32, height: i32, data: &Draw
 
     if let Some(col) = today_col {
         let x = MARGIN_LEFT + col as f64 * col_w;
-        cr.set_source_rgb(0.90, 0.95, 1.0);
+        let (r, g, b, a) = t.today_highlight;
+        cr.set_source_rgba(r, g, b, a);
         cr.rectangle(x, 0.0, col_w, h);
         let _ = cr.fill();
     }
 
     // ── Hour grid lines + labels ──────────────────────────────────────────
-    cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
+    cr.select_font_face(
+        "Sans",
+        gtk4::cairo::FontSlant::Normal,
+        gtk4::cairo::FontWeight::Normal,
+    );
     cr.set_font_size(11.0);
 
     for h_idx in 0..=(END_HOUR - START_HOUR) {
         let hour = START_HOUR + h_idx;
         let y = HEADER_H + h_idx as f64 * hour_h;
 
-        cr.set_source_rgba(0.82, 0.82, 0.82, 1.0);
+        cr.set_source_rgb(t.grid.0, t.grid.1, t.grid.2);
         cr.set_line_width(0.5);
         cr.move_to(MARGIN_LEFT, y);
         cr.line_to(w - MARGIN_RIGHT, y);
         let _ = cr.stroke();
 
         let label = format!("{hour:02}:00");
-        cr.set_source_rgb(0.5, 0.5, 0.5);
+        cr.set_source_rgb(t.text_dim.0, t.text_dim.1, t.text_dim.2);
         cr.move_to(2.0, y + 4.0);
         let _ = cr.show_text(&label);
     }
@@ -211,33 +261,44 @@ fn draw_calendar(cr: &gtk4::cairo::Context, width: i32, height: i32, data: &Draw
     for col in 0..7usize {
         let x = MARGIN_LEFT + col as f64 * col_w;
 
-        // Vertical line
-        cr.set_source_rgba(0.82, 0.82, 0.82, 1.0);
+        cr.set_source_rgb(t.grid.0, t.grid.1, t.grid.2);
         cr.set_line_width(0.5);
         cr.move_to(x, 0.0);
         cr.line_to(x, h);
         let _ = cr.stroke();
 
-        // Day date for the displayed week
         let date = week_monday + Duration::days(col as i64);
         let header = format!("{} {}", DAY_NAMES[col], date.day());
 
-        // Today: bold blue, otherwise dark gray
         if Some(col) == today_col {
-            cr.set_source_rgb(0.20, 0.45, 0.90);
-            cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Bold);
+            cr.set_source_rgb(t.text_today.0, t.text_today.1, t.text_today.2);
+            cr.select_font_face(
+                "Sans",
+                gtk4::cairo::FontSlant::Normal,
+                gtk4::cairo::FontWeight::Bold,
+            );
         } else {
-            cr.set_source_rgb(0.25, 0.25, 0.25);
-            cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
+            cr.set_source_rgb(t.text.0, t.text.1, t.text.2);
+            cr.select_font_face(
+                "Sans",
+                gtk4::cairo::FontSlant::Normal,
+                gtk4::cairo::FontWeight::Normal,
+            );
         }
         cr.set_font_size(12.0);
-        let te = cr.text_extents(&header).unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+        let te = cr
+            .text_extents(&header)
+            .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
         cr.move_to(x + (col_w - te.width()) / 2.0, HEADER_H - 10.0);
         let _ = cr.show_text(&header);
     }
 
     // Reset font
-    cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
+    cr.select_font_face(
+        "Sans",
+        gtk4::cairo::FontSlant::Normal,
+        gtk4::cairo::FontWeight::Normal,
+    );
 
     // ── Event blocks ──────────────────────────────────────────────────────
     for sched in &data.schedules {
@@ -247,7 +308,10 @@ fn draw_calendar(cr: &gtk4::cairo::Context, width: i32, height: i32, data: &Draw
 
         // Stable color derived from the event name so all instances of the same
         // event (e.g. each day's "Study") share the same color.
-        let color_idx = sched.name.bytes().fold(0usize, |acc, b| acc.wrapping_add(b as usize));
+        let color_idx = sched
+            .name
+            .bytes()
+            .fold(0usize, |acc, b| acc.wrapping_add(b as usize));
         let (r, g, b) = COLORS[color_idx % COLORS.len()];
 
         // Determine which columns to draw in for this week.
@@ -288,7 +352,9 @@ fn draw_calendar(cr: &gtk4::cairo::Context, width: i32, height: i32, data: &Draw
             if block_h > 14.0 {
                 cr.set_source_rgb(1.0, 1.0, 1.0);
                 cr.set_font_size(10.0);
-                let te = cr.text_extents(&sched.name).unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+                let te = cr
+                    .text_extents(&sched.name)
+                    .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
                 let text_x = x + (block_w - te.width()) / 2.0;
                 let text_y = y_start + block_h / 2.0 + te.height() / 2.0;
                 cr.move_to(text_x.max(x + 2.0), text_y);
@@ -328,10 +394,22 @@ fn clamp_hour_frac(hour_frac: f64) -> f64 {
 fn rounded_rect(cr: &gtk4::cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
     let r = r.min(w / 2.0).min(h / 2.0);
     cr.new_sub_path();
-    cr.arc(x + r, y + r, r, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
+    cr.arc(
+        x + r,
+        y + r,
+        r,
+        std::f64::consts::PI,
+        3.0 * std::f64::consts::PI / 2.0,
+    );
     cr.arc(x + w - r, y + r, r, 3.0 * std::f64::consts::PI / 2.0, 0.0);
     cr.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::PI / 2.0);
-    cr.arc(x + r, y + h - r, r, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+    cr.arc(
+        x + r,
+        y + h - r,
+        r,
+        std::f64::consts::PI / 2.0,
+        std::f64::consts::PI,
+    );
     cr.close_path();
 }
 
