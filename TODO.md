@@ -25,4 +25,5 @@
 - [x] focus button not responding - responsivness issue
 - [x] allowed list doesn't show the list of allowed sites
 - [ ] why clone on sender in app.rs
-- [ ] save schedule doesn't save the schedule on the calendar
+- [x] save schedule doesn't save the schedule on the calendar
+- [ ] break isn't actual break - it is still in focus
