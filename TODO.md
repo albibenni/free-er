@@ -13,6 +13,7 @@
 ### CALENDAR
 
 - [x] allow modify existing schedules from calendar ui
+- [ ] snap 15 min also when creating new task (not only when modifying)
 - [ ] task should show start and end time
 - [ ] adding new task should overlay start time and end time while selecting
 - [ ] two task in the same time - split the space
