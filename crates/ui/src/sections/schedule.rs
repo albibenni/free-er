@@ -513,9 +513,9 @@ fn draw_calendar(
             // Event name (+ calendar icon for imported events)
             if block_h > 14.0 {
                 cr.set_source_rgb(1.0, 1.0, 1.0);
-                cr.set_font_size(10.0);
+                cr.set_font_size(13.0);
 
-                const ICON_W: f64 = 10.0;
+                const ICON_W: f64 = 13.0;
                 const ICON_GAP: f64 = 3.0;
                 let icon_total = if sched.imported { ICON_W + ICON_GAP } else { 0.0 };
 
