@@ -20,12 +20,37 @@ const COLORS: &[(f64, f64, f64)] = &[
     (0.95, 0.26, 0.45), // pink
 ];
 
+#[derive(Debug, Clone, Default)]
+enum DragMode {
+    #[default]
+    None,
+    Create {
+        col: usize,
+        start_min: u32,
+        end_min: u32,
+    },
+    Move {
+        id: uuid::Uuid,
+        col: usize,
+        start_min: u32,
+        end_min: u32,
+        duration_min: u32,
+        click_offset_min: i32,
+    },
+    Resize {
+        id: uuid::Uuid,
+        col: usize,
+        start_min: u32,
+        end_min: u32,
+    },
+}
+
 #[derive(Debug, Default)]
 struct DrawData {
     schedules: Vec<ScheduleSummary>,
     week_offset: i32,
     drag_start: Option<(f64, f64)>,
-    drag_preview: Option<(usize, u32, u32)>, // col, start_min, end_min
+    drag_mode: DragMode,
 }
 
 pub struct ScheduleSection {
@@ -51,6 +76,8 @@ pub enum ScheduleInput {
     CommitCreate { name: String, col: usize, start_min: u32, end_min: u32, specific_date: String, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
     CommitEdit { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
     CommitDelete(uuid::Uuid),
+    CommitDragMove { id: uuid::Uuid, col: usize, start_min: u32, end_min: u32 },
+    CommitDragResize { id: uuid::Uuid, col: usize, end_min: u32 },
 }
 
 #[derive(Debug)]
@@ -135,13 +162,42 @@ impl Component for ScheduleSection {
                 draw_calendar(da, cr, width, height, &dd.borrow());
             });
 
-        // Drag gesture for creating new events
+        // Drag gesture — creates, moves, or resizes events
         let drag = gtk4::GestureDrag::new();
 
         {
             let dd = draw_data.clone();
+            let da = widgets.drawing_area.clone();
             drag.connect_drag_begin(move |_, x, y| {
-                dd.borrow_mut().drag_start = Some((x, y));
+                let mut data = dd.borrow_mut();
+                data.drag_start = Some((x, y));
+                let w = da.width() as f64;
+                let h = da.allocated_height() as f64;
+                let week_offset = data.week_offset;
+                let hit = hit_test_event(x, y, w, h, week_offset, &data.schedules);
+                data.drag_mode = if let Some((id, _name, col, start_min, end_min, imported, _stype, _rs)) = hit {
+                    if imported {
+                        DragMode::None // imported events open a view dialog on click
+                    } else {
+                        const HEADER_H: f64 = 40.0;
+                        let ef = clamp_hour_frac(end_min as f64 / 60.0);
+                        let y_end = HEADER_H + ef * (h - HEADER_H);
+                        if y >= y_end - 10.0 {
+                            // Bottom-edge zone → resize
+                            DragMode::Resize { id, col, start_min, end_min }
+                        } else {
+                            // Body → move; record where inside the block the user clicked
+                            let sf = clamp_hour_frac(start_min as f64 / 60.0);
+                            let y_start = HEADER_H + sf * (h - HEADER_H);
+                            let hour_h = (h - HEADER_H) / (END_HOUR - START_HOUR) as f64;
+                            let click_offset_min = ((y - y_start) / hour_h * 60.0) as i32;
+                            let duration_min = end_min.saturating_sub(start_min);
+                            DragMode::Move { id, col, start_min, end_min, duration_min, click_offset_min }
+                        }
+                    }
+                } else {
+                    DragMode::Create { col: 0, start_min: 0, end_min: 0 }
+                };
             });
         }
         {
@@ -149,17 +205,74 @@ impl Component for ScheduleSection {
             let da = widgets.drawing_area.clone();
             drag.connect_drag_update(move |_, off_x, off_y| {
                 let mut data = dd.borrow_mut();
-                if let Some((sx, sy)) = data.drag_start {
-                    let w = da.width() as f64;
-                    let h = da.allocated_height() as f64;
-                    let cx = sx + off_x;
-                    let cy = sy + off_y;
-                    if let (Some((col, s_min)), Some((_, e_min))) = (
-                        pixel_to_day_time(sx, sy, w, h),
-                        pixel_to_day_time(cx, cy, w, h),
-                    ) {
-                        data.drag_preview = Some((col, s_min, e_min.max(s_min + 15)));
+                let w = da.width() as f64;
+                let h = da.allocated_height() as f64;
+                const HEADER_H: f64 = 40.0;
+                const MARGIN_LEFT: f64 = 52.0;
+                const MARGIN_RIGHT: f64 = 4.0;
+                let hour_h = (h - HEADER_H) / (END_HOUR - START_HOUR) as f64;
+
+                match data.drag_mode.clone() {
+                    DragMode::Create { .. } => {
+                        if let Some((sx, sy)) = data.drag_start {
+                            let cx = sx + off_x;
+                            let cy = sy + off_y;
+                            if let (Some((col, s_min)), Some((_, e_min_raw))) = (
+                                pixel_to_day_time(sx, sy, w, h),
+                                pixel_to_day_time(cx, cy, w, h),
+                            ) {
+                                let (s, e) = if e_min_raw >= s_min {
+                                    (s_min, e_min_raw.max(s_min + 15))
+                                } else {
+                                    (e_min_raw, s_min)
+                                };
+                                data.drag_mode = DragMode::Create {
+                                    col,
+                                    start_min: snap15(s),
+                                    end_min: snap15(e),
+                                };
+                            }
+                        }
                     }
+                    DragMode::Move { id, duration_min, click_offset_min, .. } => {
+                        if let Some((sx, sy)) = data.drag_start {
+                            let cx = sx + off_x;
+                            let cy = sy + off_y;
+                            // Compute new column from current x
+                            let col_w = (w - MARGIN_LEFT - MARGIN_RIGHT) / 7.0;
+                            let new_col = if cx >= MARGIN_LEFT {
+                                (((cx - MARGIN_LEFT) / col_w) as usize).min(6)
+                            } else { 0 };
+                            // Compute new start from current y adjusted by click offset
+                            let top_y = cy - click_offset_min as f64 / 60.0 * hour_h;
+                            let new_start_raw = if top_y >= HEADER_H {
+                                let hour_frac = (top_y - HEADER_H) / hour_h;
+                                snap15((START_HOUR as f64 * 60.0 + hour_frac * 60.0) as u32)
+                            } else {
+                                START_HOUR * 60
+                            };
+                            let new_start = new_start_raw.clamp(START_HOUR * 60, END_HOUR * 60);
+                            let new_end = (new_start + duration_min).min(END_HOUR * 60);
+                            let new_start = new_end.saturating_sub(duration_min);
+                            data.drag_mode = DragMode::Move {
+                                id, col: new_col,
+                                start_min: new_start, end_min: new_end,
+                                duration_min, click_offset_min,
+                            };
+                        }
+                    }
+                    DragMode::Resize { id, col, start_min, .. } => {
+                        if let Some((sx, sy)) = data.drag_start {
+                            let cy = sy + off_y;
+                            if let Some((_, raw_end)) = pixel_to_day_time(sx, cy, w, h) {
+                                let new_end = snap15(raw_end)
+                                    .max(start_min + 15)
+                                    .min(END_HOUR * 60);
+                                data.drag_mode = DragMode::Resize { id, col, start_min, end_min: new_end };
+                            }
+                        }
+                    }
+                    DragMode::None => {}
                 }
                 drop(data);
                 da.queue_draw();
@@ -171,22 +284,36 @@ impl Component for ScheduleSection {
             let s = sender.clone();
             drag.connect_drag_end(move |_, off_x, off_y| {
                 let mut data = dd.borrow_mut();
-                let preview = data.drag_preview.take();
+                let mode = std::mem::replace(&mut data.drag_mode, DragMode::None);
                 let start_pos = data.drag_start.take();
                 drop(data);
                 da.queue_draw();
 
                 let dist = (off_x * off_x + off_y * off_y).sqrt();
-                if dist > 10.0 {
-                    if let Some((col, start_min, end_min)) = preview {
+
+                if dist <= 10.0 {
+                    // Treat as click regardless of mode
+                    if let Some((x, y)) = start_pos {
+                        let w = da.width() as f64;
+                        let h = da.allocated_height() as f64;
+                        s.input(ScheduleInput::ClickAt(x, y, w, h));
+                    }
+                    return;
+                }
+
+                match mode {
+                    DragMode::Create { col, start_min, end_min } => {
                         if end_min > start_min + 14 {
                             s.input(ScheduleInput::ShowCreateDialog { col, start_min, end_min });
                         }
                     }
-                } else if let Some((x, y)) = start_pos {
-                    let w = da.width() as f64;
-                    let h = da.allocated_height() as f64;
-                    s.input(ScheduleInput::ClickAt(x, y, w, h));
+                    DragMode::Move { id, col, start_min, end_min, .. } => {
+                        s.input(ScheduleInput::CommitDragMove { id, col, start_min, end_min });
+                    }
+                    DragMode::Resize { id, col, end_min, .. } => {
+                        s.input(ScheduleInput::CommitDragResize { id, col, end_min });
+                    }
+                    DragMode::None => {}
                 }
             });
         }
@@ -295,6 +422,36 @@ impl Component for ScheduleSection {
             }
             ScheduleInput::CommitDelete(id) => {
                 let _ = sender.output(ScheduleOutput::DeleteSchedule(id));
+            }
+            ScheduleInput::CommitDragMove { id, col, start_min, end_min } => {
+                let sched = self.draw_data.borrow().schedules.iter().find(|s| s.id == id).cloned();
+                if let Some(sched) = sched {
+                    let rule_set_id = if sched.rule_set_id.is_nil() { None } else { Some(sched.rule_set_id) };
+                    let _ = sender.output(ScheduleOutput::UpdateSchedule {
+                        id,
+                        name: sched.name,
+                        days: vec![col as u8],
+                        start_min,
+                        end_min,
+                        schedule_type: sched.schedule_type,
+                        rule_set_id,
+                    });
+                }
+            }
+            ScheduleInput::CommitDragResize { id, col, end_min } => {
+                let sched = self.draw_data.borrow().schedules.iter().find(|s| s.id == id).cloned();
+                if let Some(sched) = sched {
+                    let rule_set_id = if sched.rule_set_id.is_nil() { None } else { Some(sched.rule_set_id) };
+                    let _ = sender.output(ScheduleOutput::UpdateSchedule {
+                        id,
+                        name: sched.name,
+                        days: vec![col as u8],
+                        start_min: sched.start_min,
+                        end_min,
+                        schedule_type: sched.schedule_type,
+                        rule_set_id,
+                    });
+                }
             }
         }
         widgets.drawing_area.queue_draw();
@@ -460,6 +617,12 @@ fn draw_calendar(
             continue;
         }
 
+        // Skip blocks that are being resized — the drag preview renders them.
+        let is_resizing = matches!(&data.drag_mode, DragMode::Resize { id, .. } if *id == sched.id);
+        if is_resizing { continue; }
+
+        let is_moving = matches!(&data.drag_mode, DragMode::Move { id, .. } if *id == sched.id);
+
         // Stable color derived from the event name so all instances of the same
         // event (e.g. each day's "Study") share the same color.
         let color_idx = sched
@@ -467,6 +630,9 @@ fn draw_calendar(
             .bytes()
             .fold(0usize, |acc, b| acc.wrapping_add(b as usize));
         let (r, g, b) = COLORS[color_idx % COLORS.len()];
+
+        // Dim the original block while moving.
+        let fill_alpha = if is_moving { 0.25 } else { 0.80 };
 
         // Determine which columns to draw in for this week.
         let cols: Vec<usize> = if let Some(date_str) = &sched.specific_date {
@@ -498,48 +664,67 @@ fn draw_calendar(
             let block_h = (y_end - y_start).max(4.0);
 
             // Filled rounded rect
-            cr.set_source_rgba(r, g, b, 0.80);
+            cr.set_source_rgba(r, g, b, fill_alpha);
             rounded_rect(cr, x, y_start, block_w, block_h, 4.0);
             let _ = cr.fill();
 
             // White outline for custom (non-imported) events
             if !sched.imported {
-                cr.set_source_rgba(1.0, 1.0, 1.0, 0.5);
+                cr.set_source_rgba(1.0, 1.0, 1.0, 0.5 * fill_alpha);
                 cr.set_line_width(1.5);
                 rounded_rect(cr, x, y_start, block_w, block_h, 4.0);
                 let _ = cr.stroke();
             }
 
-            // Event name (+ calendar icon for imported events)
-            if block_h > 14.0 {
-                cr.set_source_rgb(1.0, 1.0, 1.0);
-                cr.set_font_size(13.0);
+            if !is_moving {
+                // Event name (+ calendar icon for imported events)
+                if block_h > 14.0 {
+                    cr.set_source_rgb(1.0, 1.0, 1.0);
+                    cr.set_font_size(13.0);
 
-                const ICON_W: f64 = 13.0;
-                const ICON_GAP: f64 = 6.0;
-                let icon_total = if sched.imported { ICON_W + ICON_GAP } else { 0.0 };
+                    const ICON_W: f64 = 13.0;
+                    const ICON_GAP: f64 = 6.0;
+                    let icon_total = if sched.imported { ICON_W + ICON_GAP } else { 0.0 };
 
-                let te = cr
-                    .text_extents(&sched.name)
-                    .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
-                let content_w = icon_total + te.width();
-                let text_x = (x + (block_w - content_w) / 2.0 + icon_total).max(x + 2.0 + icon_total);
-                let text_y = y_start + block_h / 2.0 + te.height() / 2.0;
+                    let te = cr
+                        .text_extents(&sched.name)
+                        .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+                    let content_w = icon_total + te.width();
+                    let text_x = (x + (block_w - content_w) / 2.0 + icon_total).max(x + 2.0 + icon_total);
+                    let text_y = y_start + block_h / 2.0 + te.height() / 2.0;
 
-                if sched.imported {
-                    let ix = text_x - icon_total;
-                    let iy = text_y - te.height() - 1.0;
-                    draw_calendar_icon(cr, ix, iy, ICON_W);
+                    if sched.imported {
+                        let ix = text_x - icon_total;
+                        let iy = text_y - te.height() - 1.0;
+                        draw_calendar_icon(cr, ix, iy, ICON_W);
+                    }
+
+                    cr.move_to(text_x, text_y);
+                    let _ = cr.show_text(&sched.name);
                 }
 
-                cr.move_to(text_x, text_y);
-                let _ = cr.show_text(&sched.name);
+                // Resize handle — small pill at the bottom of draggable events
+                if !sched.imported && block_h > 18.0 {
+                    let handle_w = (block_w * 0.35).min(28.0);
+                    let handle_h = 3.0;
+                    let handle_x = x + (block_w - handle_w) / 2.0;
+                    let handle_y = y_start + block_h - handle_h - 3.0;
+                    cr.set_source_rgba(1.0, 1.0, 1.0, 0.55);
+                    rounded_rect(cr, handle_x, handle_y, handle_w, handle_h, 1.5);
+                    let _ = cr.fill();
+                }
             }
         }
     }
 
     // ── Drag preview ──────────────────────────────────────────────────────
-    if let Some((col, s_min, e_min)) = data.drag_preview {
+    let preview_geom: Option<(usize, u32, u32)> = match &data.drag_mode {
+        DragMode::Create { col, start_min, end_min } => Some((*col, *start_min, *end_min)),
+        DragMode::Move { col, start_min, end_min, .. } => Some((*col, *start_min, *end_min)),
+        DragMode::Resize { col, start_min, end_min, .. } => Some((*col, *start_min, *end_min)),
+        DragMode::None => None,
+    };
+    if let Some((col, s_min, e_min)) = preview_geom {
         let x = MARGIN_LEFT + col as f64 * col_w + 2.0;
         let bw = col_w - 4.0;
         let sf = clamp_hour_frac(s_min as f64 / 60.0);
@@ -547,11 +732,15 @@ fn draw_calendar(
         let ys = HEADER_H + sf * (h - HEADER_H);
         let ye = HEADER_H + ef * (h - HEADER_H);
         let bh = (ye - ys).max(4.0);
-        cr.set_source_rgba(0.26, 0.54, 0.96, 0.35);
+        let (fill_a, stroke_a) = match &data.drag_mode {
+            DragMode::Create { .. } => (0.35, 0.85),
+            _ => (0.55, 0.95),
+        };
+        cr.set_source_rgba(0.26, 0.54, 0.96, fill_a);
         rounded_rect(cr, x, ys, bw, bh, 4.0);
         let _ = cr.fill();
-        cr.set_source_rgba(0.26, 0.54, 0.96, 0.85);
-        cr.set_line_width(1.5);
+        cr.set_source_rgba(0.26, 0.54, 0.96, stroke_a);
+        cr.set_line_width(2.0);
         rounded_rect(cr, x, ys, bw, bh, 4.0);
         let _ = cr.stroke();
     }
@@ -657,6 +846,11 @@ fn week_label_text(offset: i32) -> String {
             week_sunday.day()
         )
     }
+}
+
+/// Round minutes to the nearest 15-minute boundary.
+fn snap15(m: u32) -> u32 {
+    ((m + 7) / 15) * 15
 }
 
 fn pixel_to_day_time(x: f64, y: f64, w: f64, h: f64) -> Option<(usize, u32)> {
