@@ -107,20 +107,19 @@ impl Component for App {
                 set_orientation: gtk4::Orientation::Horizontal,
 
                 // ── Sidebar ──────────────────────────────────────────────
+                #[name = "sidebar"]
                 gtk4::Box {
                     set_orientation: gtk4::Orientation::Vertical,
                     add_css_class: "sidebar",
                     set_spacing: 4,
                     set_margin_all: 8,
-                    #[watch]
-                    set_width_request: if model.sidebar_open { 160 } else { 48 },
 
                     // Toggle button
+                    #[name = "btn_toggle"]
                     gtk4::Button {
                         add_css_class: "flat",
                         set_halign: gtk4::Align::End,
-                        #[watch]
-                        set_icon_name: if model.sidebar_open { "pan-start-symbolic" } else { "pan-end-symbolic" },
+                        set_icon_name: "pan-start-symbolic",
                         connect_clicked => AppMsg::ToggleSidebar,
                     },
 
@@ -131,11 +130,8 @@ impl Component for App {
                             set_orientation: gtk4::Orientation::Horizontal,
                             set_spacing: 8,
                             gtk4::Image { set_icon_name: Some("media-playback-start-symbolic") },
-                            gtk4::Label {
-                                set_label: "Focus",
-                                #[watch]
-                                set_visible: model.sidebar_open,
-                            },
+                            #[name = "lbl_focus"]
+                            gtk4::Label { set_label: "Focus" },
                         },
                     },
                     gtk4::Button {
@@ -145,11 +141,8 @@ impl Component for App {
                             set_orientation: gtk4::Orientation::Horizontal,
                             set_spacing: 8,
                             gtk4::Image { set_icon_name: Some("security-high-symbolic") },
-                            gtk4::Label {
-                                set_label: "Allowed Lists",
-                                #[watch]
-                                set_visible: model.sidebar_open,
-                            },
+                            #[name = "lbl_allowed"]
+                            gtk4::Label { set_label: "Allowed Lists" },
                         },
                     },
                     gtk4::Button {
@@ -159,11 +152,8 @@ impl Component for App {
                             set_orientation: gtk4::Orientation::Horizontal,
                             set_spacing: 8,
                             gtk4::Image { set_icon_name: Some("alarm-symbolic") },
-                            gtk4::Label {
-                                set_label: "Pomodoro",
-                                #[watch]
-                                set_visible: model.sidebar_open,
-                            },
+                            #[name = "lbl_pomodoro"]
+                            gtk4::Label { set_label: "Pomodoro" },
                         },
                     },
                     gtk4::Button {
@@ -173,11 +163,8 @@ impl Component for App {
                             set_orientation: gtk4::Orientation::Horizontal,
                             set_spacing: 8,
                             gtk4::Image { set_icon_name: Some("x-office-calendar-symbolic") },
-                            gtk4::Label {
-                                set_label: "Schedule",
-                                #[watch]
-                                set_visible: model.sidebar_open,
-                            },
+                            #[name = "lbl_schedule"]
+                            gtk4::Label { set_label: "Schedule" },
                         },
                     },
 
@@ -191,11 +178,8 @@ impl Component for App {
                             set_orientation: gtk4::Orientation::Horizontal,
                             set_spacing: 8,
                             gtk4::Image { set_icon_name: Some("preferences-system-symbolic") },
-                            gtk4::Label {
-                                set_label: "Settings",
-                                #[watch]
-                                set_visible: model.sidebar_open,
-                            },
+                            #[name = "lbl_settings"]
+                            gtk4::Label { set_label: "Settings" },
                         },
                     },
                 },
@@ -298,6 +282,20 @@ impl Component for App {
             gtk4::glib::ControlFlow::Continue
         });
 
+        // CSS: enforce max-width on the collapsed sidebar so it actually shrinks
+        let css = gtk4::CssProvider::new();
+        css.load_from_data(
+            ".sidebar { min-width: 160px; } \
+             .sidebar.collapsed { min-width: 48px; max-width: 48px; }",
+        );
+        if let Some(display) = gtk4::gdk::Display::default() {
+            gtk4::style_context_add_provider_for_display(
+                &display,
+                &css,
+                gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+        }
+
         ComponentParts { model, widgets }
     }
 
@@ -311,6 +309,22 @@ impl Component for App {
         match msg {
             AppMsg::ToggleSidebar => {
                 self.sidebar_open = !self.sidebar_open;
+                let open = self.sidebar_open;
+                // Toggle CSS class to enforce max-width via stylesheet
+                if open {
+                    widgets.sidebar.remove_css_class("collapsed");
+                } else {
+                    widgets.sidebar.add_css_class("collapsed");
+                }
+                // Show/hide labels directly — no reliance on #[watch]
+                widgets.lbl_focus.set_visible(open);
+                widgets.lbl_allowed.set_visible(open);
+                widgets.lbl_pomodoro.set_visible(open);
+                widgets.lbl_schedule.set_visible(open);
+                widgets.lbl_settings.set_visible(open);
+                widgets.btn_toggle.set_icon_name(
+                    if open { "pan-start-symbolic" } else { "pan-end-symbolic" },
+                );
             }
             AppMsg::Navigate(page) => {
                 let name = match page {
