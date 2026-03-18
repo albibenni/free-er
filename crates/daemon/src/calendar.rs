@@ -54,16 +54,20 @@ fn event_to_schedule(
     }
 
     // Find a matching import rule; fall back to the default rule set
-    let rule_set_id = cfg.import_rules.iter().find_map(|rule| {
-        if summary
-            .to_lowercase()
-            .contains(&rule.keyword.to_lowercase())
-        {
-            Some(rule.rule_set_id)
-        } else {
-            None
-        }
-    }).unwrap_or(default_rule_set_id);
+    let rule_set_id = cfg
+        .import_rules
+        .iter()
+        .find_map(|rule| {
+            if summary
+                .to_lowercase()
+                .contains(&rule.keyword.to_lowercase())
+            {
+                Some(rule.rule_set_id)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(default_rule_set_id);
 
     // Map the event's weekday to a Schedule.
     // For recurring events this is a simplification — full RRULE expansion
@@ -157,10 +161,13 @@ pub async fn fetch_google_calendar_schedules(
     let today_local = chrono::Local::now();
     let days_from_mon = today_local.weekday().num_days_from_monday() as i64;
     let week_monday_local = today_local - chrono::Duration::days(days_from_mon);
-    let time_min = week_monday_local.date_naive()
-        .and_hms_opt(0, 0, 0).unwrap()
+    let time_min = week_monday_local
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
         .and_utc()
-        .format(fmt).to_string();
+        .format(fmt)
+        .to_string();
     let time_max = (now + chrono::Duration::days(35)).format(fmt).to_string();
     let url = format!(
         "https://www.googleapis.com/calendar/v3/calendars/primary/events\
@@ -198,7 +205,10 @@ fn google_event_to_schedule(
     let rule_set_id = import_rules
         .iter()
         .find_map(|rule| {
-            if summary.to_lowercase().contains(&rule.keyword.to_lowercase()) {
+            if summary
+                .to_lowercase()
+                .contains(&rule.keyword.to_lowercase())
+            {
                 Some(rule.rule_set_id)
             } else {
                 None

@@ -46,13 +46,23 @@ pub enum AppMsg {
     StartFocus,
     StopFocus,
     SkipBreak,
-    StartPomodoro { focus_secs: u64, break_secs: u64, rule_set_id: Option<Uuid> },
+    StartPomodoro {
+        focus_secs: u64,
+        break_secs: u64,
+        rule_set_id: Option<Uuid>,
+    },
     StopPomodoro,
     // URL / rule-set management
     AddUrl(String),
     RemoveUrl(String),
-    AddUrlToList { rule_set_id: Uuid, url: String },
-    RemoveUrlFromList { rule_set_id: Uuid, url: String },
+    AddUrlToList {
+        rule_set_id: Uuid,
+        url: String,
+    },
+    RemoveUrlFromList {
+        rule_set_id: Uuid,
+        url: String,
+    },
     CreateRuleSet(String),
     DeleteRuleSet(Uuid),
     AiSitesToggled(bool),
@@ -62,7 +72,11 @@ pub enum AppMsg {
     DisconnectGoogle,
     StrictModeChanged(bool),
     AllowNewTabChanged(bool),
-    SaveCalDav { url: String, user: String, pass: String },
+    SaveCalDav {
+        url: String,
+        user: String,
+        pass: String,
+    },
     // Schedule CRUD
     SchedulesUpdated(Vec<ScheduleSummary>),
     CreateSchedule {
@@ -206,18 +220,25 @@ impl Component for App {
                 FocusOutput::SkipBreak => AppMsg::SkipBreak,
             });
 
-        let pomodoro = PomodoroSection::builder()
-            .launch(())
-            .forward(sender.input_sender(), |out| match out {
-                PomodoroOutput::Start { focus_secs, break_secs, rule_set_id } => {
-                    AppMsg::StartPomodoro { focus_secs, break_secs, rule_set_id }
-                }
-                PomodoroOutput::Stop => AppMsg::StopPomodoro,
-            });
+        let pomodoro =
+            PomodoroSection::builder()
+                .launch(())
+                .forward(sender.input_sender(), |out| match out {
+                    PomodoroOutput::Start {
+                        focus_secs,
+                        break_secs,
+                        rule_set_id,
+                    } => AppMsg::StartPomodoro {
+                        focus_secs,
+                        break_secs,
+                        rule_set_id,
+                    },
+                    PomodoroOutput::Stop => AppMsg::StopPomodoro,
+                });
 
-        let allowed_lists = AllowedListsSection::builder()
-            .launch(())
-            .forward(sender.input_sender(), |out| match out {
+        let allowed_lists = AllowedListsSection::builder().launch(()).forward(
+            sender.input_sender(),
+            |out| match out {
                 AllowedListsOutput::AddUrl { rule_set_id, url } => {
                     AppMsg::AddUrlToList { rule_set_id, url }
                 }
@@ -226,53 +247,55 @@ impl Component for App {
                 }
                 AllowedListsOutput::CreateRuleSet(name) => AppMsg::CreateRuleSet(name),
                 AllowedListsOutput::DeleteRuleSet(id) => AppMsg::DeleteRuleSet(id),
-            });
+            },
+        );
 
-        let schedule = ScheduleSection::builder()
-            .launch(())
-            .forward(sender.input_sender(), |out| match out {
-                ScheduleOutput::CreateSchedule {
-                    name,
-                    days,
-                    start_min,
-                    end_min,
-                    specific_date,
-                    rule_set_id,
-                    schedule_type,
-                } => AppMsg::CreateSchedule {
-                    name,
-                    days,
-                    start_min,
-                    end_min,
-                    specific_date,
-                    rule_set_id,
-                    schedule_type,
-                },
-                ScheduleOutput::UpdateSchedule {
-                    id,
-                    name,
-                    days,
-                    start_min,
-                    end_min,
-                    rule_set_id,
-                    specific_date,
-                    schedule_type,
-                } => AppMsg::UpdateSchedule {
-                    id,
-                    name,
-                    days,
-                    start_min,
-                    end_min,
-                    rule_set_id,
-                    specific_date,
-                    schedule_type,
-                },
-                ScheduleOutput::DeleteSchedule(id) => AppMsg::DeleteSchedule(id),
-            });
+        let schedule =
+            ScheduleSection::builder()
+                .launch(())
+                .forward(sender.input_sender(), |out| match out {
+                    ScheduleOutput::CreateSchedule {
+                        name,
+                        days,
+                        start_min,
+                        end_min,
+                        specific_date,
+                        rule_set_id,
+                        schedule_type,
+                    } => AppMsg::CreateSchedule {
+                        name,
+                        days,
+                        start_min,
+                        end_min,
+                        specific_date,
+                        rule_set_id,
+                        schedule_type,
+                    },
+                    ScheduleOutput::UpdateSchedule {
+                        id,
+                        name,
+                        days,
+                        start_min,
+                        end_min,
+                        rule_set_id,
+                        specific_date,
+                        schedule_type,
+                    } => AppMsg::UpdateSchedule {
+                        id,
+                        name,
+                        days,
+                        start_min,
+                        end_min,
+                        rule_set_id,
+                        specific_date,
+                        schedule_type,
+                    },
+                    ScheduleOutput::DeleteSchedule(id) => AppMsg::DeleteSchedule(id),
+                });
 
-        let settings = SettingsSection::builder()
-            .launch(false)
-            .forward(sender.input_sender(), |out| match out {
+        let settings = SettingsSection::builder().launch(false).forward(
+            sender.input_sender(),
+            |out| match out {
                 SettingsOutput::StrictModeChanged(v) => AppMsg::StrictModeChanged(v),
                 SettingsOutput::AllowNewTabChanged(v) => AppMsg::AllowNewTabChanged(v),
                 SettingsOutput::AiSitesToggled(v) => AppMsg::AiSitesToggled(v),
@@ -289,7 +312,8 @@ impl Component for App {
                 }
                 SettingsOutput::ConnectGoogleRequested => AppMsg::ConnectGoogle,
                 SettingsOutput::DisconnectGoogleRequested => AppMsg::DisconnectGoogle,
-            });
+            },
+        );
 
         let model = App {
             current_page: Page::Focus,
@@ -305,10 +329,18 @@ impl Component for App {
         let widgets = view_output!();
 
         widgets.stack.add_named(model.focus.widget(), Some("focus"));
-        widgets.stack.add_named(model.allowed_lists.widget(), Some("allowed_lists"));
-        widgets.stack.add_named(model.pomodoro.widget(), Some("pomodoro"));
-        widgets.stack.add_named(model.schedule.widget(), Some("schedule"));
-        widgets.stack.add_named(model.settings.widget(), Some("settings"));
+        widgets
+            .stack
+            .add_named(model.allowed_lists.widget(), Some("allowed_lists"));
+        widgets
+            .stack
+            .add_named(model.pomodoro.widget(), Some("pomodoro"));
+        widgets
+            .stack
+            .add_named(model.schedule.widget(), Some("schedule"));
+        widgets
+            .stack
+            .add_named(model.settings.widget(), Some("settings"));
 
         // Poll daemon status every 2 seconds
         let tick_sender = sender.clone();
@@ -317,19 +349,8 @@ impl Component for App {
             gtk4::glib::ControlFlow::Continue
         });
 
-        // CSS: enforce max-width on the collapsed sidebar so it actually shrinks
-        let css = gtk4::CssProvider::new();
-        css.load_from_data(
-            ".sidebar { min-width: 160px; } \
-             .sidebar.collapsed { min-width: 48px; max-width: 48px; }",
-        );
-        if let Some(display) = gtk4::gdk::Display::default() {
-            gtk4::style_context_add_provider_for_display(
-                &display,
-                &css,
-                gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-            );
-        }
+        // Set initial sidebar minimum width
+        widgets.sidebar.set_width_request(160);
 
         ComponentParts { model, widgets }
     }
@@ -346,11 +367,11 @@ impl Component for App {
             AppMsg::ToggleSidebar => {
                 self.sidebar_open = !self.sidebar_open;
                 let open = self.sidebar_open;
-                if open {
-                    widgets.sidebar.remove_css_class("collapsed");
-                } else {
-                    widgets.sidebar.add_css_class("collapsed");
-                }
+                // set_width_request controls the minimum width; when labels are
+                // hidden the box naturally shrinks to icon width (~40px).
+                widgets
+                    .sidebar
+                    .set_width_request(if open { 160 } else { 48 });
                 widgets.lbl_focus.set_visible(open);
                 widgets.lbl_allowed.set_visible(open);
                 widgets.lbl_pomodoro.set_visible(open);
@@ -378,7 +399,11 @@ impl Component for App {
             AppMsg::StartFocus => focus_handlers::start_focus(self.default_rule_set_id),
             AppMsg::StopFocus => focus_handlers::stop_focus(),
             AppMsg::SkipBreak => focus_handlers::skip_break(),
-            AppMsg::StartPomodoro { focus_secs, break_secs, rule_set_id } => {
+            AppMsg::StartPomodoro {
+                focus_secs,
+                break_secs,
+                rule_set_id,
+            } => {
                 focus_handlers::start_pomodoro(focus_secs, break_secs, rule_set_id);
             }
             AppMsg::StopPomodoro => focus_handlers::stop_pomodoro(),
