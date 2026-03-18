@@ -4,7 +4,7 @@ use crate::sections::{
     focus::{FocusInput, FocusOutput, FocusSection},
     pomodoro::{PomodoroInput, PomodoroOutput, PomodoroSection},
     schedule::{ScheduleInput, ScheduleOutput, ScheduleSection},
-    settings::{SettingsInput, SettingsOutput, SettingsSection},
+    settings::{SettingsInput, SettingsOutput, SettingsSection, AI_SITES},
 };
 use gtk4::prelude::*;
 use relm4::prelude::*;
@@ -57,6 +57,7 @@ pub enum AppMsg {
     DisconnectGoogle,
     StrictModeChanged(bool),
     AllowNewTabChanged(bool),
+    AiSitesToggled(bool),
     SaveCalDav { url: String, user: String, pass: String },
     // Periodic status poll result
     StatusTick,
@@ -192,6 +193,7 @@ impl Component for App {
             .forward(sender.input_sender(), |out| match out {
                 SettingsOutput::StrictModeChanged(v) => AppMsg::StrictModeChanged(v),
                 SettingsOutput::AllowNewTabChanged(v) => AppMsg::AllowNewTabChanged(v),
+                SettingsOutput::AiSitesToggled(v) => AppMsg::AiSitesToggled(v),
                 SettingsOutput::QuickUrlToggled { url, enabled } => {
                     if enabled { AppMsg::AddUrl(url.to_string()) } else { AppMsg::RemoveUrl(url.to_string()) }
                 }
@@ -400,6 +402,30 @@ impl Component for App {
                 tokio::spawn(async move {
                     if let Err(e) = ipc_client::send(&Command::SetAllowNewTab { enabled }).await {
                         error!("SetAllowNewTab IPC failed: {e}");
+                    }
+                });
+            }
+            AppMsg::AiSitesToggled(enabled) => {
+                let rule_set_id = self.default_rule_set_id;
+                let inner_sender = _sender.clone();
+                tokio::spawn(async move {
+                    let id = if let Some(id) = rule_set_id {
+                        id
+                    } else {
+                        match ipc_client::add_rule_set("Default").await {
+                            Ok(id) => { inner_sender.input(AppMsg::RefreshRuleSets); id }
+                            Err(e) => { error!("AddRuleSet IPC failed: {e}"); return; }
+                        }
+                    };
+                    for url in AI_SITES {
+                        let cmd = if enabled {
+                            Command::AddUrlToRuleSet { rule_set_id: id, url: url.to_string() }
+                        } else {
+                            Command::RemoveUrlFromRuleSet { rule_set_id: id, url: url.to_string() }
+                        };
+                        if let Err(e) = ipc_client::send(&cmd).await {
+                            error!("AI sites toggle IPC failed: {e}");
+                        }
                     }
                 });
             }
