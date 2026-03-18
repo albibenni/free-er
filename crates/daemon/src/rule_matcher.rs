@@ -100,10 +100,30 @@ mod tests {
 
     #[test]
     fn path_prefix() {
-        assert!(matches("github.com/torvalds/linux", "github.com", "/torvalds/linux", ""));
-        assert!(matches("github.com/torvalds/linux", "github.com", "/torvalds/linux/commits", ""));
-        assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds", ""));
-        assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds/linux-next", ""));
+        assert!(matches(
+            "github.com/torvalds/linux",
+            "github.com",
+            "/torvalds/linux",
+            ""
+        ));
+        assert!(matches(
+            "github.com/torvalds/linux",
+            "github.com",
+            "/torvalds/linux/commits",
+            ""
+        ));
+        assert!(!matches(
+            "github.com/torvalds/linux",
+            "github.com",
+            "/torvalds",
+            ""
+        ));
+        assert!(!matches(
+            "github.com/torvalds/linux",
+            "github.com",
+            "/torvalds/linux-next",
+            ""
+        ));
     }
 
     #[test]
@@ -112,7 +132,12 @@ mod tests {
         assert!(matches("netflix.com", "www.netflix.com", "/watch", ""));
         assert!(matches("netflix.com", "netflix.com", "/watch", ""));
         // path glob works through www.
-        assert!(matches("netflix.com/*", "www.netflix.com", "/watch/81522188", "trackId=x"));
+        assert!(matches(
+            "netflix.com/*",
+            "www.netflix.com",
+            "/watch/81522188",
+            "trackId=x"
+        ));
         // subdomain wildcard still works
         assert!(matches("*.netflix.com", "api.netflix.com", "/", ""));
         // www. on a non-www host is not fabricated
@@ -131,33 +156,115 @@ mod tests {
     #[test]
     fn wildcard_trailing_tld() {
         // calendar.google.* matches any TLD
-        assert!(matches("calendar.google.*", "calendar.google.com", "/calendar/u/1/r/week", ""));
-        assert!(matches("calendar.google.*", "calendar.google.co.uk", "/", ""));
+        assert!(matches(
+            "calendar.google.*",
+            "calendar.google.com",
+            "/calendar/u/1/r/week",
+            ""
+        ));
+        assert!(matches(
+            "calendar.google.*",
+            "calendar.google.co.uk",
+            "/",
+            ""
+        ));
         assert!(!matches("calendar.google.*", "mail.google.com", "/", ""));
     }
 
     #[test]
+    fn wildcard_edge_cases() {
+        // calendar.google.* matches any TLD
+        assert!(matches(
+            "app.todoist.com/app*",
+            "app.todoist.com/app/upcoming?cdn_fallback=1",
+            "/",
+            ""
+        ));
+        assert!(matches(
+            "app.todoist.com/app/upcoming?*",
+            "app.todoist.com/app/upcoming?cdn_fallback=1",
+            "/",
+            ""
+        ));
+        assert!(!matches(
+            "app.todoist.com/app*",
+            "app.todoist.com/dashboard",
+            "/",
+            ""
+        ));
+    }
+    #[test]
     fn path_glob() {
         // youtube.com/watch* matches /watch, /watches, /watch/anything, /watch?v=x
         assert!(matches("youtube.com/watch*", "youtube.com", "/watch", ""));
-        assert!(matches("youtube.com/watch*", "youtube.com", "/watch", "v=abc"));
+        assert!(matches(
+            "youtube.com/watch*",
+            "youtube.com",
+            "/watch",
+            "v=abc"
+        ));
         assert!(matches("youtube.com/watch*", "youtube.com", "/watches", ""));
-        assert!(matches("youtube.com/watch*", "youtube.com", "/watch/later", ""));
-        assert!(!matches("youtube.com/watch*", "youtube.com", "/channel", ""));
+        assert!(matches(
+            "youtube.com/watch*",
+            "youtube.com",
+            "/watch/later",
+            ""
+        ));
+        assert!(!matches(
+            "youtube.com/watch*",
+            "youtube.com",
+            "/channel",
+            ""
+        ));
         // plain prefix (no *) still requires exact segment boundary
-        assert!(matches("github.com/torvalds", "github.com", "/torvalds", ""));
-        assert!(matches("github.com/torvalds", "github.com", "/torvalds/linux", ""));
-        assert!(!matches("github.com/torvalds", "github.com", "/torvalds-fork", ""));
+        assert!(matches(
+            "github.com/torvalds",
+            "github.com",
+            "/torvalds",
+            ""
+        ));
+        assert!(matches(
+            "github.com/torvalds",
+            "github.com",
+            "/torvalds/linux",
+            ""
+        ));
+        assert!(!matches(
+            "github.com/torvalds",
+            "github.com",
+            "/torvalds-fork",
+            ""
+        ));
     }
 
     #[test]
     fn query_params() {
-        assert!(matches("www.youtube.com/watch?v=abc", "www.youtube.com", "/watch", "v=abc"));
+        assert!(matches(
+            "www.youtube.com/watch?v=abc",
+            "www.youtube.com",
+            "/watch",
+            "v=abc"
+        ));
         // extra params in URL are fine
-        assert!(matches("www.youtube.com/watch?v=abc", "www.youtube.com", "/watch", "v=abc&feature=share"));
+        assert!(matches(
+            "www.youtube.com/watch?v=abc",
+            "www.youtube.com",
+            "/watch",
+            "v=abc&feature=share"
+        ));
         // wrong video id
-        assert!(!matches("www.youtube.com/watch?v=abc", "www.youtube.com", "/watch", "v=xyz"));
+        assert!(!matches(
+            "www.youtube.com/watch?v=abc",
+            "www.youtube.com",
+            "/watch",
+            "v=xyz"
+        ));
         // no query at all
-        assert!(!matches("www.youtube.com/watch?v=abc", "www.youtube.com", "/watch", ""));
+        assert!(!matches(
+            "www.youtube.com/watch?v=abc",
+            "www.youtube.com",
+            "/watch",
+            ""
+        ));
     }
 }
