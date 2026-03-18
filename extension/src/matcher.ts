@@ -20,6 +20,9 @@ export function patternMatches(
 ): boolean {
   if (pattern === "*") return true;
 
+  // Normalize: strip leading "www." so "netflix.com" matches "www.netflix.com"
+  host = host.replace(/^www\./, "");
+
   // Split off query string from pattern
   const qIdx = pattern.indexOf("?");
   const hostPath = qIdx === -1 ? pattern : pattern.slice(0, qIdx);
@@ -27,7 +30,8 @@ export function patternMatches(
 
   // Split host+path
   const slashIdx = hostPath.indexOf("/");
-  const hostPat = slashIdx === -1 ? hostPath : hostPath.slice(0, slashIdx);
+  const rawHostPat = slashIdx === -1 ? hostPath : hostPath.slice(0, slashIdx);
+  const hostPat = rawHostPat.replace(/^www\./, "");
   const pathPrefix = slashIdx === -1 ? null : hostPath.slice(slashIdx + 1);
 
   // Match host

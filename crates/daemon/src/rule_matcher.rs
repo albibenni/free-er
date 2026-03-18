@@ -17,6 +17,9 @@ pub fn matches(pattern: &str, host: &str, path: &str, query: &str) -> bool {
         return true;
     }
 
+    // Normalize: strip leading "www." from both sides so "netflix.com" matches "www.netflix.com"
+    let host = host.strip_prefix("www.").unwrap_or(host);
+
     // Split pattern into host+path part and optional query string
     let (host_path, pattern_query) = match pattern.split_once('?') {
         Some((hp, q)) => (hp, Some(q)),
@@ -24,10 +27,11 @@ pub fn matches(pattern: &str, host: &str, path: &str, query: &str) -> bool {
     };
 
     // Split host+path into host part and optional path prefix
-    let (host_pat, path_prefix) = match host_path.split_once('/') {
+    let (raw_host_pat, path_prefix) = match host_path.split_once('/') {
         Some((h, p)) => (h, Some(p)),
         None => (host_path, None),
     };
+    let host_pat = raw_host_pat.strip_prefix("www.").unwrap_or(raw_host_pat);
 
     // Match host
     let host_ok = if let Some(suffix) = host_pat.strip_prefix("*.") {
@@ -95,6 +99,19 @@ mod tests {
         assert!(matches("github.com/torvalds/linux", "github.com", "/torvalds/linux/commits", ""));
         assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds", ""));
         assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds/linux-next", ""));
+    }
+
+    #[test]
+    fn www_normalization() {
+        // bare host matches with or without www.
+        assert!(matches("netflix.com", "www.netflix.com", "/watch", ""));
+        assert!(matches("netflix.com", "netflix.com", "/watch", ""));
+        // path glob works through www.
+        assert!(matches("netflix.com/*", "www.netflix.com", "/watch/81522188", "trackId=x"));
+        // subdomain wildcard still works
+        assert!(matches("*.netflix.com", "api.netflix.com", "/", ""));
+        // www. on a non-www host is not fabricated
+        assert!(!matches("api.netflix.com", "www.netflix.com", "/", ""));
     }
 
     #[test]
