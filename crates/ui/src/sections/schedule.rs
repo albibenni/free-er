@@ -330,6 +330,62 @@ impl Component for ScheduleSection {
         }
         widgets.drawing_area.add_controller(drag);
 
+        // Motion controller — update cursor based on what's under the pointer
+        let motion = gtk4::EventControllerMotion::new();
+        {
+            let dd = draw_data.clone();
+            let da = widgets.drawing_area.clone();
+            motion.connect_motion(move |_, x, y| {
+                let data = dd.borrow();
+                let w = da.width() as f64;
+                let h = da.allocated_height() as f64;
+                const HEADER_H: f64 = 40.0;
+                const MARGIN_LEFT: f64 = 52.0;
+                const MARGIN_RIGHT: f64 = 4.0;
+                let col_w = (w - MARGIN_LEFT - MARGIN_RIGHT) / 7.0;
+
+                let cursor = 'cursor: {
+                    for sched in &data.schedules {
+                        if !sched.enabled || sched.imported { continue; }
+
+                        let cols: Vec<usize> = if let Some(ds) = &sched.specific_date {
+                            if let Ok(date) = chrono::NaiveDate::parse_from_str(ds, "%Y-%m-%d") {
+                                let today = chrono::Local::now().date_naive();
+                                let dfm = today.weekday().num_days_from_monday() as i64;
+                                let this_mon = today - chrono::Duration::days(dfm);
+                                let week_mon = this_mon + chrono::Duration::weeks(data.week_offset as i64);
+                                let off = (date - week_mon).num_days();
+                                if off >= 0 && off < 7 { vec![off as usize] } else { vec![] }
+                            } else { vec![] }
+                        } else {
+                            sched.days.iter().map(|&d| d as usize).collect()
+                        };
+
+                        for col in cols {
+                            let bx = MARGIN_LEFT + col as f64 * col_w + 2.0;
+                            let bw = col_w - 4.0;
+                            let sf = clamp_hour_frac(sched.start_min as f64 / 60.0);
+                            let ef = clamp_hour_frac(sched.end_min as f64 / 60.0);
+                            let ys = HEADER_H + sf * (h - HEADER_H);
+                            let ye = HEADER_H + ef * (h - HEADER_H);
+                            let bh = (ye - ys).max(4.0);
+
+                            if x >= bx && x <= bx + bw && y >= ys && y <= ys + bh {
+                                if y <= ys + 10.0 || y >= ye - 10.0 {
+                                    break 'cursor "ns-resize";
+                                } else {
+                                    break 'cursor "grab";
+                                }
+                            }
+                        }
+                    }
+                    "default"
+                };
+                da.set_cursor_from_name(Some(cursor));
+            });
+        }
+        widgets.drawing_area.add_controller(motion);
+
         ComponentParts { model, widgets }
     }
 
