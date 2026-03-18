@@ -115,7 +115,9 @@ async fn oauth_google_callback(
     tokio::spawn(async move {
         if let Some(cfg) = sync_state.google_calendar_config() {
             let import_rules = cfg.import_rules.clone();
-            match crate::calendar::fetch_google_calendar_schedules(&cfg, &import_rules).await {
+            let default_id = sync_state.list_rule_sets().first()
+                .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
+            match crate::calendar::fetch_google_calendar_schedules(&cfg, &import_rules, default_id).await {
                 Ok(schedules) => {
                     info!("Google Calendar initial sync: imported {} schedules", schedules.len());
                     sync_state.apply_calendar_schedules(schedules);

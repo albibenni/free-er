@@ -20,14 +20,14 @@ pub async fn fetch_ics(cfg: &CalDavConfig) -> Result<String> {
 /// Only future / ongoing events are included; past events are skipped.
 /// Title-based matching: if any `import_rule.keyword` is a case-insensitive
 /// substring of the event SUMMARY, that rule's `rule_set_id` is used.
-pub fn parse_schedules(ics: &str, cfg: &CalDavConfig) -> Vec<Schedule> {
+pub fn parse_schedules(ics: &str, cfg: &CalDavConfig, default_rule_set_id: Uuid) -> Vec<Schedule> {
     let now = chrono::Local::now().naive_local();
     let reader = ical::IcalParser::new(ics.as_bytes());
     let mut schedules = Vec::new();
 
     for calendar in reader.flatten() {
         for event in calendar.events {
-            if let Some(schedule) = event_to_schedule(&event, cfg, now) {
+            if let Some(schedule) = event_to_schedule(&event, cfg, now, default_rule_set_id) {
                 schedules.push(schedule);
             }
         }
@@ -39,6 +39,7 @@ fn event_to_schedule(
     event: &IcalEvent,
     cfg: &CalDavConfig,
     now: chrono::NaiveDateTime,
+    default_rule_set_id: Uuid,
 ) -> Option<Schedule> {
     let summary = prop_value(event, "SUMMARY")?;
     let dtstart = prop_value(event, "DTSTART")?;
@@ -52,7 +53,7 @@ fn event_to_schedule(
         return None;
     }
 
-    // Find a matching import rule
+    // Find a matching import rule; fall back to the default rule set
     let rule_set_id = cfg.import_rules.iter().find_map(|rule| {
         if summary
             .to_lowercase()
@@ -62,7 +63,7 @@ fn event_to_schedule(
         } else {
             None
         }
-    })?;
+    }).unwrap_or(default_rule_set_id);
 
     // Map the event's weekday to a Schedule.
     // For recurring events this is a simplification — full RRULE expansion
@@ -141,6 +142,7 @@ pub async fn refresh_google_token(cfg: &GoogleCalendarConfig) -> Result<(String,
 pub async fn fetch_google_calendar_schedules(
     cfg: &GoogleCalendarConfig,
     import_rules: &[CalendarImportRule],
+    default_rule_set_id: Uuid,
 ) -> Result<Vec<Schedule>> {
     let access_token = cfg
         .access_token
@@ -180,13 +182,14 @@ pub async fn fetch_google_calendar_schedules(
     // appear on every week within the fetched window; one-time events appear once.
     Ok(items
         .iter()
-        .filter_map(|item| google_event_to_schedule(item, import_rules))
+        .filter_map(|item| google_event_to_schedule(item, import_rules, default_rule_set_id))
         .collect())
 }
 
 fn google_event_to_schedule(
     event: &serde_json::Value,
     import_rules: &[CalendarImportRule],
+    default_rule_set_id: Uuid,
 ) -> Option<Schedule> {
     let summary = event["summary"].as_str()?;
 
@@ -201,7 +204,7 @@ fn google_event_to_schedule(
                 None
             }
         })
-        .unwrap_or_else(Uuid::nil);
+        .unwrap_or(default_rule_set_id);
 
     let start_str = event["start"]["dateTime"]
         .as_str()

@@ -922,8 +922,9 @@ fn show_create_dialog(
     time_row.append(&end_entry);
     vbox.append(&time_row);
 
+    let default_rule_set_id = rule_sets.first().map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
     let (focus_btn, _break_btn, list_combo) = build_type_and_list_rows(
-        &vbox, &ScheduleType::Focus, uuid::Uuid::nil(), &rule_sets,
+        &vbox, &ScheduleType::Focus, default_rule_set_id, &rule_sets,
     );
 
     let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);

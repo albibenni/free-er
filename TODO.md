@@ -10,7 +10,7 @@
 - [ ] two task in the same time - split the space
 - [x] task should have selection for focus allowed list
 - [x] task could be a break
-- [ ] by default should take the default allowed list, not none
+- [x] by default should take the default allowed list, not none
 - [ ] icon and text style:
   - [ ] icon padding from title
   - [ ] icon and text bigger
