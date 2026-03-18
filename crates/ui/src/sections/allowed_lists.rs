@@ -17,11 +17,11 @@ pub enum AllowedListsInput {
     AddUrl,
     RemoveUrl { rule_set_id: Uuid, url: String },
     RuleSetsUpdated(Vec<RuleSetSummary>),
-    SelectRuleSet(Uuid),
+    ComboChanged,
     ShowNewListEntry,
     ConfirmNewList,
     CancelNewList,
-    DeleteRuleSet(Uuid),
+    DeleteSelectedList,
 }
 
 #[derive(Debug)]
@@ -56,18 +56,24 @@ impl Component for AllowedListsSection {
                 set_orientation: gtk4::Orientation::Horizontal,
                 set_spacing: 8,
 
-                gtk4::ScrolledWindow {
+                #[name = "list_combo"]
+                gtk4::ComboBoxText {
                     set_hexpand: true,
-                    set_policy: (gtk4::PolicyType::Automatic, gtk4::PolicyType::Never),
-                    set_min_content_height: 36,
+                    connect_changed => AllowedListsInput::ComboChanged,
+                },
 
-                    #[name = "tabs_box"]
-                    gtk4::Box {
-                        set_orientation: gtk4::Orientation::Horizontal,
-                        set_spacing: 4,
-                        set_margin_top: 2,
-                        set_margin_bottom: 2,
-                    },
+                // Delete button for selected list (hidden when only one list)
+                gtk4::Button {
+                    set_icon_name: "user-trash-symbolic",
+                    add_css_class: "flat",
+                    set_tooltip_text: Some("Delete this list"),
+                    #[watch]
+                    set_visible: model.rule_sets.len() > 1,
+                    #[watch]
+                    set_sensitive: model.selected_id
+                        .map(|id| model.rule_sets.iter().position(|s| s.id == id).unwrap_or(0) > 0)
+                        .unwrap_or(false),
+                    connect_clicked => AllowedListsInput::DeleteSelectedList,
                 },
 
                 // New list inline entry (shown while creating)
@@ -202,17 +208,19 @@ impl Component for AllowedListsSection {
                 let _ = sender.output(AllowedListsOutput::RemoveUrl { rule_set_id, url });
             }
             AllowedListsInput::RuleSetsUpdated(sets) => {
-                // Keep selected_id if it still exists, otherwise pick the first
+                // Keep selected_id valid; fall back to first entry
                 if self.selected_id.map_or(true, |id| !sets.iter().any(|s| s.id == id)) {
                     self.selected_id = sets.first().map(|s| s.id);
                 }
                 self.rule_sets = sets;
-                self.rebuild_tabs(widgets, &sender);
+                self.rebuild_combo(widgets);
                 self.rebuild_url_list(widgets, &sender);
             }
-            AllowedListsInput::SelectRuleSet(id) => {
-                self.selected_id = Some(id);
-                self.rebuild_tabs(widgets, &sender);
+            AllowedListsInput::ComboChanged => {
+                let new_id = widgets.list_combo
+                    .active_id()
+                    .and_then(|id| id.parse::<Uuid>().ok());
+                self.selected_id = new_id;
                 self.rebuild_url_list(widgets, &sender);
             }
             AllowedListsInput::ShowNewListEntry => {
@@ -231,8 +239,10 @@ impl Component for AllowedListsSection {
                 self.creating_new = false;
                 self.new_list_name.set_text("");
             }
-            AllowedListsInput::DeleteRuleSet(id) => {
-                let _ = sender.output(AllowedListsOutput::DeleteRuleSet(id));
+            AllowedListsInput::DeleteSelectedList => {
+                if let Some(id) = self.selected_id {
+                    let _ = sender.output(AllowedListsOutput::DeleteRuleSet(id));
+                }
             }
         }
         self.update_view(widgets, sender);
@@ -247,45 +257,19 @@ impl AllowedListsSection {
             .unwrap_or_default()
     }
 
-    fn rebuild_tabs(&self, widgets: &mut AllowedListsSectionWidgets, sender: &ComponentSender<Self>) {
-        while let Some(child) = widgets.tabs_box.first_child() {
-            widgets.tabs_box.remove(&child);
-        }
+    fn rebuild_combo(&self, widgets: &mut AllowedListsSectionWidgets) {
+        // Block the signal temporarily by rebuilding without triggering ComboChanged logic
+        widgets.list_combo.remove_all();
         for (i, rs) in self.rule_sets.iter().enumerate() {
-            let btn_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
-
             let label = if i == 0 {
                 format!("{} (default)", rs.name)
             } else {
                 rs.name.clone()
             };
-
-            let tab_btn = gtk4::ToggleButton::new();
-            tab_btn.set_label(&label);
-            tab_btn.set_active(self.selected_id == Some(rs.id));
-            let id = rs.id;
-            let s = sender.clone();
-            tab_btn.connect_toggled(move |btn| {
-                if btn.is_active() {
-                    s.input(AllowedListsInput::SelectRuleSet(id));
-                }
-            });
-            btn_box.append(&tab_btn);
-
-            // Delete button (hidden for the default/first list if it's the only one)
-            if self.rule_sets.len() > 1 || i > 0 {
-                let del_btn = gtk4::Button::new();
-                del_btn.set_icon_name("window-close-symbolic");
-                del_btn.add_css_class("flat");
-                del_btn.set_valign(gtk4::Align::Center);
-                let s = sender.clone();
-                del_btn.connect_clicked(move |_| {
-                    s.input(AllowedListsInput::DeleteRuleSet(id));
-                });
-                btn_box.append(&del_btn);
-            }
-
-            widgets.tabs_box.append(&btn_box);
+            widgets.list_combo.append(Some(&rs.id.to_string()), &label);
+        }
+        if let Some(id) = self.selected_id {
+            widgets.list_combo.set_active_id(Some(&id.to_string()));
         }
     }
 
