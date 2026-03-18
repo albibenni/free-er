@@ -10,7 +10,7 @@ pub enum Command {
     StartFocus { rule_set_id: Uuid },
     StopFocus,
     TakeBreak { duration_secs: u64 },
-    StartPomodoro { focus_secs: u64, break_secs: u64 },
+    StartPomodoro { focus_secs: u64, break_secs: u64, rule_set_id: Option<Uuid> },
     StopPomodoro,
     /// Skip the current break and go straight to the next focus phase.
     /// Rejected by the daemon if strict_breaks is enabled.

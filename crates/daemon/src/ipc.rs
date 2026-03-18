@@ -64,11 +64,11 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             ok(false)
         }
         Command::TakeBreak { duration_secs } => {
-            state.start_pomodoro(duration_secs, 0);
+            state.start_pomodoro(duration_secs, 0, None);
             ok(false)
         }
-        Command::StartPomodoro { focus_secs, break_secs } => {
-            state.start_pomodoro(focus_secs, break_secs);
+        Command::StartPomodoro { focus_secs, break_secs, rule_set_id } => {
+            state.start_pomodoro(focus_secs, break_secs, rule_set_id);
             ok(false)
         }
         Command::StopPomodoro => {

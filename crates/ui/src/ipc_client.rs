@@ -103,6 +103,12 @@ pub async fn remove_schedule(id: Uuid) -> Result<()> {
     Ok(())
 }
 
+/// Delete a rule set by ID.
+pub async fn remove_rule_set(id: Uuid) -> Result<()> {
+    send(&Command::RemoveRuleSet { id }).await?;
+    Ok(())
+}
+
 /// Create a new rule set and return its assigned UUID.
 pub async fn add_rule_set(name: &str) -> Result<Uuid> {
     let raw = send(&Command::AddRuleSet {

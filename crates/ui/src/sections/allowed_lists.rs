@@ -1,23 +1,35 @@
 use gtk4::prelude::*;
 use relm4::prelude::*;
+use shared::ipc::RuleSetSummary;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct AllowedListsSection {
     url_entry: gtk4::EntryBuffer,
-    urls: Vec<String>,
+    new_list_name: gtk4::EntryBuffer,
+    rule_sets: Vec<RuleSetSummary>,
+    selected_id: Option<Uuid>,
+    creating_new: bool,
 }
 
 #[derive(Debug)]
 pub enum AllowedListsInput {
     AddUrl,
-    RemoveUrl(String),
-    UrlsUpdated(Vec<String>),
+    RemoveUrl { rule_set_id: Uuid, url: String },
+    RuleSetsUpdated(Vec<RuleSetSummary>),
+    SelectRuleSet(Uuid),
+    ShowNewListEntry,
+    ConfirmNewList,
+    CancelNewList,
+    DeleteRuleSet(Uuid),
 }
 
 #[derive(Debug)]
 pub enum AllowedListsOutput {
-    AddUrl(String),
-    RemoveUrl(String),
+    AddUrl { rule_set_id: Uuid, url: String },
+    RemoveUrl { rule_set_id: Uuid, url: String },
+    CreateRuleSet(String),
+    DeleteRuleSet(Uuid),
 }
 
 #[relm4::component(pub)]
@@ -39,47 +51,116 @@ impl Component for AllowedListsSection {
                 set_halign: gtk4::Align::Start,
             },
 
+            // ── List selector row ─────────────────────────────────────────
             gtk4::Box {
                 set_orientation: gtk4::Orientation::Horizontal,
                 set_spacing: 8,
 
-                gtk4::Entry {
-                    set_buffer: &model.url_entry,
-                    set_placeholder_text: Some("github.com/user/repo, *.domain.com, or full URL"),
+                gtk4::ScrolledWindow {
                     set_hexpand: true,
-                    connect_activate => AllowedListsInput::AddUrl,
+                    set_policy: (gtk4::PolicyType::Automatic, gtk4::PolicyType::Never),
+                    set_min_content_height: 36,
+
+                    #[name = "tabs_box"]
+                    gtk4::Box {
+                        set_orientation: gtk4::Orientation::Horizontal,
+                        set_spacing: 4,
+                        set_margin_top: 2,
+                        set_margin_bottom: 2,
+                    },
+                },
+
+                // New list inline entry (shown while creating)
+                #[name = "new_list_box"]
+                gtk4::Box {
+                    set_orientation: gtk4::Orientation::Horizontal,
+                    set_spacing: 4,
+                    #[watch]
+                    set_visible: model.creating_new,
+
+                    gtk4::Entry {
+                        set_buffer: &model.new_list_name,
+                        set_placeholder_text: Some("List name"),
+                        set_width_chars: 14,
+                        connect_activate => AllowedListsInput::ConfirmNewList,
+                    },
+                    gtk4::Button {
+                        set_icon_name: "object-select-symbolic",
+                        add_css_class: "flat",
+                        connect_clicked => AllowedListsInput::ConfirmNewList,
+                    },
+                    gtk4::Button {
+                        set_icon_name: "window-close-symbolic",
+                        add_css_class: "flat",
+                        connect_clicked => AllowedListsInput::CancelNewList,
+                    },
                 },
 
                 gtk4::Button {
-                    set_label: "Add",
-                    set_css_classes: &["suggested-action"],
-                    connect_clicked => AllowedListsInput::AddUrl,
+                    set_icon_name: "list-add-symbolic",
+                    add_css_class: "flat",
+                    set_tooltip_text: Some("New list"),
+                    #[watch]
+                    set_visible: !model.creating_new,
+                    connect_clicked => AllowedListsInput::ShowNewListEntry,
                 },
             },
 
-            gtk4::Label {
-                set_label: "Active allowed URLs:",
-                set_halign: gtk4::Align::Start,
-                add_css_class: "dim-label",
-            },
+            // ── URL section (only shown when a list is selected) ──────────
+            #[name = "url_section"]
+            gtk4::Box {
+                set_orientation: gtk4::Orientation::Vertical,
+                set_spacing: 8,
+                #[watch]
+                set_visible: model.selected_id.is_some(),
 
-            gtk4::ScrolledWindow {
-                set_vexpand: true,
-                set_min_content_height: 200,
+                gtk4::Box {
+                    set_orientation: gtk4::Orientation::Horizontal,
+                    set_spacing: 8,
 
-                #[name = "list_box"]
-                gtk4::ListBox {
-                    set_selection_mode: gtk4::SelectionMode::None,
-                    add_css_class: "boxed-list",
+                    gtk4::Entry {
+                        set_buffer: &model.url_entry,
+                        set_placeholder_text: Some("github.com/user/repo, *.domain.com, or full URL"),
+                        set_hexpand: true,
+                        connect_activate => AllowedListsInput::AddUrl,
+                    },
+
+                    gtk4::Button {
+                        set_label: "Add",
+                        set_css_classes: &["suggested-action"],
+                        connect_clicked => AllowedListsInput::AddUrl,
+                    },
+                },
+
+                gtk4::ScrolledWindow {
+                    set_vexpand: true,
+                    set_min_content_height: 200,
+
+                    #[name = "list_box"]
+                    gtk4::ListBox {
+                        set_selection_mode: gtk4::SelectionMode::None,
+                        add_css_class: "boxed-list",
+                        #[watch]
+                        set_visible: !model.selected_urls().is_empty(),
+                    },
+                },
+
+                gtk4::Label {
                     #[watch]
-                    set_visible: !model.urls.is_empty(),
+                    set_label: if model.selected_urls().is_empty() {
+                        "No URLs added yet."
+                    } else {
+                        ""
+                    },
+                    set_halign: gtk4::Align::Start,
+                    add_css_class: "dim-label",
                 },
             },
 
             gtk4::Label {
                 #[watch]
-                set_label: if model.urls.is_empty() {
-                    "No URLs added yet."
+                set_label: if model.rule_sets.is_empty() {
+                    "Create a list to get started."
                 } else {
                     ""
                 },
@@ -92,7 +173,10 @@ impl Component for AllowedListsSection {
     fn init(_: (), root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
         let model = AllowedListsSection {
             url_entry: gtk4::EntryBuffer::default(),
-            urls: vec![],
+            new_list_name: gtk4::EntryBuffer::default(),
+            rule_sets: vec![],
+            selected_id: None,
+            creating_new: false,
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -108,72 +192,150 @@ impl Component for AllowedListsSection {
         match msg {
             AllowedListsInput::AddUrl => {
                 let raw = self.url_entry.text().to_string();
-                if !raw.is_empty() {
+                if let (Some(id), false) = (self.selected_id, raw.is_empty()) {
                     let pattern = extract_pattern(&raw);
-                    let _ = sender.output(AllowedListsOutput::AddUrl(pattern));
+                    let _ = sender.output(AllowedListsOutput::AddUrl { rule_set_id: id, url: pattern });
                     self.url_entry.set_text("");
                 }
             }
-            AllowedListsInput::RemoveUrl(url) => {
-                let _ = sender.output(AllowedListsOutput::RemoveUrl(url));
+            AllowedListsInput::RemoveUrl { rule_set_id, url } => {
+                let _ = sender.output(AllowedListsOutput::RemoveUrl { rule_set_id, url });
             }
-            AllowedListsInput::UrlsUpdated(urls) => {
-                self.urls = urls;
-                // Rebuild the list box
-                while let Some(child) = widgets.list_box.first_child() {
-                    widgets.list_box.remove(&child);
+            AllowedListsInput::RuleSetsUpdated(sets) => {
+                // Keep selected_id if it still exists, otherwise pick the first
+                if self.selected_id.map_or(true, |id| !sets.iter().any(|s| s.id == id)) {
+                    self.selected_id = sets.first().map(|s| s.id);
                 }
-                for url in &self.urls {
-                    let row = gtk4::ListBoxRow::new();
-
-                    let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
-
-                    let label = gtk4::Label::new(Some(url.as_str()));
-                    label.set_halign(gtk4::Align::Start);
-                    label.set_hexpand(true);
-                    label.set_margin_start(8);
-                    label.set_margin_end(8);
-                    label.set_margin_top(6);
-                    label.set_margin_bottom(6);
-
-                    let delete_btn = gtk4::Button::new();
-                    delete_btn.set_icon_name("user-trash-symbolic");
-                    delete_btn.add_css_class("flat");
-                    delete_btn.set_margin_end(4);
-                    delete_btn.set_valign(gtk4::Align::Center);
-                    let url_clone = url.clone();
-                    let s = sender.clone();
-                    delete_btn.connect_clicked(move |_| {
-                        s.input(AllowedListsInput::RemoveUrl(url_clone.clone()));
-                    });
-
-                    row_box.append(&label);
-                    row_box.append(&delete_btn);
-                    row.set_child(Some(&row_box));
-                    widgets.list_box.append(&row);
+                self.rule_sets = sets;
+                self.rebuild_tabs(widgets, &sender);
+                self.rebuild_url_list(widgets, &sender);
+            }
+            AllowedListsInput::SelectRuleSet(id) => {
+                self.selected_id = Some(id);
+                self.rebuild_tabs(widgets, &sender);
+                self.rebuild_url_list(widgets, &sender);
+            }
+            AllowedListsInput::ShowNewListEntry => {
+                self.creating_new = true;
+                self.new_list_name.set_text("");
+            }
+            AllowedListsInput::ConfirmNewList => {
+                let name = self.new_list_name.text().to_string();
+                if !name.is_empty() {
+                    let _ = sender.output(AllowedListsOutput::CreateRuleSet(name));
                 }
+                self.creating_new = false;
+                self.new_list_name.set_text("");
+            }
+            AllowedListsInput::CancelNewList => {
+                self.creating_new = false;
+                self.new_list_name.set_text("");
+            }
+            AllowedListsInput::DeleteRuleSet(id) => {
+                let _ = sender.output(AllowedListsOutput::DeleteRuleSet(id));
             }
         }
-        // Re-evaluate all #[watch] bindings (list_box visibility, empty label, etc.)
         self.update_view(widgets, sender);
     }
 }
 
+impl AllowedListsSection {
+    fn selected_urls(&self) -> Vec<String> {
+        self.selected_id
+            .and_then(|id| self.rule_sets.iter().find(|s| s.id == id))
+            .map(|s| s.allowed_urls.clone())
+            .unwrap_or_default()
+    }
+
+    fn rebuild_tabs(&self, widgets: &mut AllowedListsSectionWidgets, sender: &ComponentSender<Self>) {
+        while let Some(child) = widgets.tabs_box.first_child() {
+            widgets.tabs_box.remove(&child);
+        }
+        for (i, rs) in self.rule_sets.iter().enumerate() {
+            let btn_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+
+            let label = if i == 0 {
+                format!("{} (default)", rs.name)
+            } else {
+                rs.name.clone()
+            };
+
+            let tab_btn = gtk4::ToggleButton::new();
+            tab_btn.set_label(&label);
+            tab_btn.set_active(self.selected_id == Some(rs.id));
+            let id = rs.id;
+            let s = sender.clone();
+            tab_btn.connect_toggled(move |btn| {
+                if btn.is_active() {
+                    s.input(AllowedListsInput::SelectRuleSet(id));
+                }
+            });
+            btn_box.append(&tab_btn);
+
+            // Delete button (hidden for the default/first list if it's the only one)
+            if self.rule_sets.len() > 1 || i > 0 {
+                let del_btn = gtk4::Button::new();
+                del_btn.set_icon_name("window-close-symbolic");
+                del_btn.add_css_class("flat");
+                del_btn.set_valign(gtk4::Align::Center);
+                let s = sender.clone();
+                del_btn.connect_clicked(move |_| {
+                    s.input(AllowedListsInput::DeleteRuleSet(id));
+                });
+                btn_box.append(&del_btn);
+            }
+
+            widgets.tabs_box.append(&btn_box);
+        }
+    }
+
+    fn rebuild_url_list(&self, widgets: &mut AllowedListsSectionWidgets, sender: &ComponentSender<Self>) {
+        while let Some(child) = widgets.list_box.first_child() {
+            widgets.list_box.remove(&child);
+        }
+        let Some(id) = self.selected_id else { return };
+        let Some(rs) = self.rule_sets.iter().find(|s| s.id == id) else { return };
+
+        for url in &rs.allowed_urls {
+            let row = gtk4::ListBoxRow::new();
+            let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+
+            let lbl = gtk4::Label::new(Some(url.as_str()));
+            lbl.set_halign(gtk4::Align::Start);
+            lbl.set_hexpand(true);
+            lbl.set_margin_start(8);
+            lbl.set_margin_end(8);
+            lbl.set_margin_top(6);
+            lbl.set_margin_bottom(6);
+
+            let del_btn = gtk4::Button::new();
+            del_btn.set_icon_name("user-trash-symbolic");
+            del_btn.add_css_class("flat");
+            del_btn.set_margin_end(4);
+            del_btn.set_valign(gtk4::Align::Center);
+            let url_clone = url.clone();
+            let s = sender.clone();
+            del_btn.connect_clicked(move |_| {
+                s.input(AllowedListsInput::RemoveUrl {
+                    rule_set_id: id,
+                    url: url_clone.clone(),
+                });
+            });
+
+            row_box.append(&lbl);
+            row_box.append(&del_btn);
+            row.set_child(Some(&row_box));
+            widgets.list_box.append(&row);
+        }
+    }
+}
+
 /// Normalise user input into a `host[/path]` pattern.
-///
-/// Full URLs have their scheme stripped and query/fragment removed so the
-/// path prefix is preserved:
-///   `https://www.youtube.com/watch?v=abc` → `www.youtube.com/watch`
-///   `https://github.com/torvalds/linux`   → `github.com/torvalds/linux`
-///
-/// Plain patterns are returned unchanged:
-///   `*.rust-lang.org`, `github.com`, `github.com/torvalds`
 fn extract_pattern(input: &str) -> String {
     if input.starts_with("http://") || input.starts_with("https://") {
         let without_scheme = input
             .trim_start_matches("https://")
             .trim_start_matches("http://");
-        // Drop fragment only (#...) — keep path and query string
         let s = without_scheme.split('#').next().unwrap_or(without_scheme);
         return s.trim_end_matches('/').to_string();
     }

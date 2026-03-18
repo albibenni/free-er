@@ -23,9 +23,8 @@ pub enum Page {
 
 pub struct App {
     current_page: Page,
-    /// ID of the rule set used when starting a focus session.
-    /// Populated from ListRuleSets; defaults to nil until the first poll.
-    active_rule_set_id: Option<Uuid>,
+    /// ID of the first (default) rule set; used by Settings quick-toggles.
+    default_rule_set_id: Option<Uuid>,
     focus: Controller<FocusSection>,
     pomodoro: Controller<PomodoroSection>,
     allowed_lists: Controller<AllowedListsSection>,
@@ -40,20 +39,26 @@ pub enum AppMsg {
     StartFocus,
     StopFocus,
     SkipBreak,
-    StartPomodoro { focus_secs: u64, break_secs: u64 },
+    StartPomodoro { focus_secs: u64, break_secs: u64, rule_set_id: Option<Uuid> },
     StopPomodoro,
+    /// Add URL to the default rule set (used by Settings quick-toggles).
     AddUrl(String),
+    /// Remove URL from the default rule set (used by Settings quick-toggles).
     RemoveUrl(String),
+    /// Add a URL to a specific rule set (from AllowedLists section).
+    AddUrlToList { rule_set_id: Uuid, url: String },
+    /// Remove a URL from a specific rule set (from AllowedLists section).
+    RemoveUrlFromList { rule_set_id: Uuid, url: String },
+    /// Create a new rule set with the given name.
+    CreateRuleSet(String),
+    /// Delete an existing rule set.
+    DeleteRuleSet(Uuid),
     ConnectGoogle,
     DisconnectGoogle,
     StrictModeChanged(bool),
     SaveCalDav { url: String, user: String, pass: String },
     // Periodic status poll result
     StatusTick,
-    // Internal: rule sets fetched from daemon
-    RuleSetsUpdated(Vec<Uuid>),
-    // Internal: a new rule set was created, store its ID
-    RuleSetCreated(Uuid),
     // Internal: schedules fetched from daemon
     SchedulesUpdated(Vec<ScheduleSummary>),
     CreateSchedule {
@@ -76,6 +81,8 @@ pub enum AppMsg {
     },
     DeleteSchedule(Uuid),
     RefreshSchedules,
+    RefreshRuleSets,
+    SetDefaultRuleSet(Uuid),
 }
 
 #[relm4::component(pub)]
@@ -147,8 +154,8 @@ impl Component for App {
         let pomodoro = PomodoroSection::builder()
             .launch(())
             .forward(sender.input_sender(), |out| match out {
-                PomodoroOutput::Start { focus_secs, break_secs } => {
-                    AppMsg::StartPomodoro { focus_secs, break_secs }
+                PomodoroOutput::Start { focus_secs, break_secs, rule_set_id } => {
+                    AppMsg::StartPomodoro { focus_secs, break_secs, rule_set_id }
                 }
                 PomodoroOutput::Stop => AppMsg::StopPomodoro,
             });
@@ -156,8 +163,14 @@ impl Component for App {
         let allowed_lists = AllowedListsSection::builder()
             .launch(())
             .forward(sender.input_sender(), |out| match out {
-                AllowedListsOutput::AddUrl(url) => AppMsg::AddUrl(url),
-                AllowedListsOutput::RemoveUrl(url) => AppMsg::RemoveUrl(url),
+                AllowedListsOutput::AddUrl { rule_set_id, url } => {
+                    AppMsg::AddUrlToList { rule_set_id, url }
+                }
+                AllowedListsOutput::RemoveUrl { rule_set_id, url } => {
+                    AppMsg::RemoveUrlFromList { rule_set_id, url }
+                }
+                AllowedListsOutput::CreateRuleSet(name) => AppMsg::CreateRuleSet(name),
+                AllowedListsOutput::DeleteRuleSet(id) => AppMsg::DeleteRuleSet(id),
             });
 
         let schedule = ScheduleSection::builder()
@@ -188,7 +201,7 @@ impl Component for App {
 
         let model = App {
             current_page: Page::Focus,
-            active_rule_set_id: None,
+            default_rule_set_id: None,
             focus,
             pomodoro,
             allowed_lists,
@@ -198,7 +211,6 @@ impl Component for App {
 
         let widgets = view_output!();
 
-        // Add child pages to the Stack now that we have both widgets and model
         widgets.stack.add_named(model.focus.widget(), Some("focus"));
         widgets.stack.add_named(model.allowed_lists.widget(), Some("allowed_lists"));
         widgets.stack.add_named(model.pomodoro.widget(), Some("pomodoro"));
@@ -236,7 +248,7 @@ impl Component for App {
             }
 
             AppMsg::StartFocus => {
-                let rule_set_id = self.active_rule_set_id.unwrap_or_else(Uuid::nil);
+                let rule_set_id = self.default_rule_set_id.unwrap_or_else(Uuid::nil);
                 tokio::spawn(async move {
                     if let Err(e) = ipc_client::send(&Command::StartFocus { rule_set_id }).await {
                         error!("StartFocus IPC failed: {e}");
@@ -257,9 +269,13 @@ impl Component for App {
                     }
                 });
             }
-            AppMsg::StartPomodoro { focus_secs, break_secs } => {
+            AppMsg::StartPomodoro { focus_secs, break_secs, rule_set_id } => {
                 tokio::spawn(async move {
-                    if let Err(e) = ipc_client::send(&Command::StartPomodoro { focus_secs, break_secs }).await {
+                    if let Err(e) = ipc_client::send(&Command::StartPomodoro {
+                        focus_secs,
+                        break_secs,
+                        rule_set_id,
+                    }).await {
                         error!("StartPomodoro IPC failed: {e}");
                     }
                 });
@@ -271,8 +287,10 @@ impl Component for App {
                     }
                 });
             }
+
+            // Quick-toggle from Settings: target the default rule set
             AppMsg::AddUrl(url) => {
-                let existing_id = self.active_rule_set_id;
+                let existing_id = self.default_rule_set_id;
                 let inner_sender = _sender.clone();
                 tokio::spawn(async move {
                     if let Some(id) = existing_id {
@@ -283,9 +301,9 @@ impl Component for App {
                             error!("AddUrlToRuleSet IPC failed: {e}");
                         }
                     } else {
-                        match ipc_client::add_rule_set("My List").await {
+                        match ipc_client::add_rule_set("Default").await {
                             Ok(id) => {
-                                inner_sender.input(AppMsg::RuleSetCreated(id));
+                                inner_sender.input(AppMsg::RefreshRuleSets);
                                 if let Err(e) = ipc_client::send(&Command::AddUrlToRuleSet {
                                     rule_set_id: id,
                                     url,
@@ -299,7 +317,7 @@ impl Component for App {
                 });
             }
             AppMsg::RemoveUrl(url) => {
-                if let Some(id) = self.active_rule_set_id {
+                if let Some(id) = self.default_rule_set_id {
                     tokio::spawn(async move {
                         if let Err(e) = ipc_client::send(&Command::RemoveUrlFromRuleSet {
                             rule_set_id: id,
@@ -310,6 +328,47 @@ impl Component for App {
                     });
                 }
             }
+
+            AppMsg::AddUrlToList { rule_set_id, url } => {
+                tokio::spawn(async move {
+                    if let Err(e) = ipc_client::send(&Command::AddUrlToRuleSet {
+                        rule_set_id,
+                        url,
+                    }).await {
+                        error!("AddUrlToRuleSet IPC failed: {e}");
+                    }
+                });
+            }
+            AppMsg::RemoveUrlFromList { rule_set_id, url } => {
+                tokio::spawn(async move {
+                    if let Err(e) = ipc_client::send(&Command::RemoveUrlFromRuleSet {
+                        rule_set_id,
+                        url,
+                    }).await {
+                        error!("RemoveUrlFromRuleSet IPC failed: {e}");
+                    }
+                });
+            }
+
+            AppMsg::CreateRuleSet(name) => {
+                let refresh = _sender.clone();
+                tokio::spawn(async move {
+                    match ipc_client::add_rule_set(&name).await {
+                        Ok(_) => refresh.input(AppMsg::RefreshRuleSets),
+                        Err(e) => error!("AddRuleSet IPC failed: {e}"),
+                    }
+                });
+            }
+            AppMsg::DeleteRuleSet(id) => {
+                let refresh = _sender.clone();
+                tokio::spawn(async move {
+                    match ipc_client::remove_rule_set(id).await {
+                        Ok(_) => refresh.input(AppMsg::RefreshRuleSets),
+                        Err(e) => error!("RemoveRuleSet IPC failed: {e}"),
+                    }
+                });
+            }
+
             AppMsg::ConnectGoogle => {
                 tokio::spawn(async {
                     match ipc_client::start_google_oauth().await {
@@ -346,14 +405,6 @@ impl Component for App {
                 });
             }
 
-            AppMsg::RuleSetsUpdated(ids) => {
-                if self.active_rule_set_id.is_none() {
-                    self.active_rule_set_id = ids.into_iter().next();
-                }
-            }
-            AppMsg::RuleSetCreated(id) => {
-                self.active_rule_set_id = Some(id);
-            }
             AppMsg::SchedulesUpdated(schedules) => {
                 self.schedule.sender().emit(ScheduleInput::SchedulesUpdated(schedules));
             }
@@ -394,6 +445,33 @@ impl Component for App {
                     }
                 });
             }
+            AppMsg::RefreshRuleSets => {
+                let lists_sender = self.allowed_lists.sender().clone();
+                let pom_sender = self.pomodoro.sender().clone();
+                let sched_sender = self.schedule.sender().clone();
+                let settings_sender = self.settings.sender().clone();
+                let tick_sender = _sender.clone();
+                tokio::spawn(async move {
+                    match ipc_client::list_rule_sets().await {
+                        Ok(sets) => {
+                            lists_sender.emit(AllowedListsInput::RuleSetsUpdated(sets.clone()));
+                            pom_sender.emit(PomodoroInput::RuleSetsUpdated(sets.clone()));
+                            sched_sender.emit(ScheduleInput::RuleSetsUpdated(sets.clone()));
+                            let all_urls: Vec<String> = sets.iter()
+                                .flat_map(|s| s.allowed_urls.clone())
+                                .collect();
+                            settings_sender.emit(SettingsInput::QuickUrlsUpdated(all_urls));
+                            if let Some(first_id) = sets.first().map(|s| s.id) {
+                                tick_sender.input(AppMsg::SetDefaultRuleSet(first_id));
+                            }
+                        }
+                        Err(e) => warn!("list_rule_sets failed: {e}"),
+                    }
+                });
+            }
+            AppMsg::SetDefaultRuleSet(id) => {
+                self.default_rule_set_id = Some(id);
+            }
 
             AppMsg::StatusTick => {
                 let focus_sender = self.focus.sender().clone();
@@ -421,17 +499,16 @@ impl Component for App {
                     }
                     match ipc_client::list_rule_sets().await {
                         Ok(sets) => {
-                            // Flatten all URLs from all rule sets into the display list
-                            let all_urls: Vec<String> = sets
-                                .iter()
+                            lists_sender.emit(AllowedListsInput::RuleSetsUpdated(sets.clone()));
+                            pom_sender.emit(PomodoroInput::RuleSetsUpdated(sets.clone()));
+                            schedule_sender.emit(ScheduleInput::RuleSetsUpdated(sets.clone()));
+                            let all_urls: Vec<String> = sets.iter()
                                 .flat_map(|s| s.allowed_urls.clone())
                                 .collect();
-                            lists_sender.emit(AllowedListsInput::UrlsUpdated(all_urls.clone()));
                             settings_sender.emit(SettingsInput::QuickUrlsUpdated(all_urls));
-                            schedule_sender.emit(ScheduleInput::RuleSetsUpdated(sets.clone()));
-                            tick_sender.input(AppMsg::RuleSetsUpdated(
-                                sets.into_iter().map(|s| s.id).collect(),
-                            ));
+                            if let Some(first_id) = sets.first().map(|s| s.id) {
+                                tick_sender.input(AppMsg::SetDefaultRuleSet(first_id));
+                            }
                         }
                         Err(e) => warn!("list_rule_sets failed: {e}"),
                     }

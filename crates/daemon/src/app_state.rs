@@ -43,9 +43,10 @@ impl AppState {
         inner.schedule_activated = false;
     }
 
-    pub fn start_pomodoro(&self, focus_secs: u64, break_secs: u64) {
+    pub fn start_pomodoro(&self, focus_secs: u64, break_secs: u64, rule_set_id: Option<Uuid>) {
         let mut inner = self.0.lock().unwrap();
         inner.focus_active = true;
+        inner.active_rule_set_id = rule_set_id;
         inner.pomodoro = Some(PomodoroTimer::new(focus_secs, break_secs));
     }
 
