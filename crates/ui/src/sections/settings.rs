@@ -6,6 +6,18 @@ const TELEGRAM: &str = "web.telegram.org";
 const DISCORD: &str = "discord.com";
 const SPOTIFY: &str = "open.spotify.com";
 
+pub const SEARCH_ENGINES: &[&str] = &[
+    "google.com",           // Google
+    "bing.com",             // Bing
+    "duckduckgo.com",       // DuckDuckGo
+    "search.yahoo.com",     // Yahoo Search
+    "ecosia.org",           // Ecosia
+    "startpage.com",        // Startpage
+    "search.brave.com",     // Brave Search
+    "kagi.com",             // Kagi
+    "yandex.com",           // Yandex
+];
+
 pub const AI_SITES: &[&str] = &[
     "chat.openai.com",      // ChatGPT
     "claude.ai",            // Claude
@@ -24,6 +36,7 @@ pub struct SettingsSection {
     strict_mode: bool,
     allow_new_tab: bool,
     allow_ai_sites: bool,
+    allow_search_engines: bool,
     whatsapp: bool,
     telegram: bool,
     discord: bool,
@@ -40,6 +53,7 @@ pub enum SettingsInput {
     SetAllowNewTab(bool),
     AllowNewTabUpdated(bool),
     SetAiSites(bool),
+    SetSearchEngines(bool),
     SetQuick(&'static str, bool),
     QuickUrlsUpdated(Vec<String>),
     SaveCalDav,
@@ -53,6 +67,7 @@ pub enum SettingsOutput {
     StrictModeChanged(bool),
     AllowNewTabChanged(bool),
     AiSitesToggled(bool),
+    SearchEnginesToggled(bool),
     QuickUrlToggled { url: &'static str, enabled: bool },
     CalDavSaved {
         url: String,
@@ -115,6 +130,20 @@ impl SimpleComponent for SettingsSection {
                 set_label: "Quick Allow",
                 add_css_class: "title-2",
                 set_halign: gtk4::Align::Start,
+            },
+
+            gtk4::Box {
+                set_orientation: gtk4::Orientation::Horizontal,
+                set_spacing: 12,
+                gtk4::Label { set_label: "Search engines", set_hexpand: true, set_halign: gtk4::Align::Start },
+                gtk4::Switch {
+                    #[watch]
+                    set_active: model.allow_search_engines,
+                    connect_state_set[sender] => move |_, state| {
+                        sender.input(SettingsInput::SetSearchEngines(state));
+                        gtk4::glib::Propagation::Proceed
+                    },
+                },
             },
 
             gtk4::Box {
@@ -262,6 +291,7 @@ impl SimpleComponent for SettingsSection {
             strict_mode,
             allow_new_tab: true,
             allow_ai_sites: false,
+            allow_search_engines: false,
             whatsapp: false,
             telegram: false,
             discord: false,
@@ -295,6 +325,11 @@ impl SimpleComponent for SettingsSection {
                 self.allow_ai_sites = enabled;
                 let _ = sender.output(SettingsOutput::AiSitesToggled(enabled));
             }
+            SettingsInput::SetSearchEngines(enabled) => {
+                if self.allow_search_engines == enabled { return; }
+                self.allow_search_engines = enabled;
+                let _ = sender.output(SettingsOutput::SearchEnginesToggled(enabled));
+            }
             SettingsInput::SetQuick(url, enabled) => {
                 let changed = match url {
                     WHATSAPP => { if self.whatsapp == enabled { return; } self.whatsapp = enabled; true }
@@ -312,7 +347,8 @@ impl SimpleComponent for SettingsSection {
                 self.telegram      = urls.iter().any(|u| u == TELEGRAM);
                 self.discord       = urls.iter().any(|u| u == DISCORD);
                 self.spotify       = urls.iter().any(|u| u == SPOTIFY);
-                self.allow_ai_sites = AI_SITES.iter().any(|s| urls.iter().any(|u| u == s));
+                self.allow_ai_sites       = AI_SITES.iter().any(|s| urls.iter().any(|u| u == s));
+                self.allow_search_engines = SEARCH_ENGINES.iter().any(|s| urls.iter().any(|u| u == s));
             }
             SettingsInput::SaveCalDav => {
                 let _ = sender.output(SettingsOutput::CalDavSaved {
