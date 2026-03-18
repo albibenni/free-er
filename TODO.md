@@ -8,6 +8,7 @@
 - [ ] task should show start and end time
 - [ ] adding new task should overlay start time and end time while selecting
 - [ ] two task in the same time - split the space
+- [ ] allow drag and drop to change the time of the task
 - [x] task should have selection for focus allowed list
 - [x] task could be a break
 - [x] by default should take the default allowed list, not none

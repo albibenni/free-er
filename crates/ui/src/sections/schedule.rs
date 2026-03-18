@@ -905,7 +905,7 @@ fn show_create_dialog(
     vbox.append(&day_lbl);
 
     let name_entry = gtk4::Entry::new();
-    name_entry.set_placeholder_text(Some("Event name"));
+    name_entry.set_text("Focus Session");
     name_entry.set_margin_top(4);
     vbox.append(&name_entry);
 
@@ -923,9 +923,30 @@ fn show_create_dialog(
     vbox.append(&time_row);
 
     let default_rule_set_id = rule_sets.first().map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
-    let (focus_btn, _break_btn, list_combo) = build_type_and_list_rows(
+    let (focus_btn, break_btn, list_combo) = build_type_and_list_rows(
         &vbox, &ScheduleType::Focus, default_rule_set_id, &rule_sets,
     );
+
+    // Update the name when the type toggle changes, but only if the user
+    // hasn't edited it away from the default.
+    let ne = name_entry.clone();
+    focus_btn.connect_toggled(move |btn| {
+        if btn.is_active() {
+            let current = ne.text();
+            if current == "Break Session" || current.is_empty() {
+                ne.set_text("Focus Session");
+            }
+        }
+    });
+    let ne = name_entry.clone();
+    break_btn.connect_toggled(move |btn| {
+        if btn.is_active() {
+            let current = ne.text();
+            if current == "Focus Session" || current.is_empty() {
+                ne.set_text("Break Session");
+            }
+        }
+    });
 
     let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
     btn_row.set_halign(gtk4::Align::End);
