@@ -42,6 +42,7 @@ enum DragMode {
         col: usize,
         start_min: u32,
         end_min: u32,
+        from_top: bool,
     },
 }
 
@@ -77,7 +78,7 @@ pub enum ScheduleInput {
     CommitEdit { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
     CommitDelete(uuid::Uuid),
     CommitDragMove { id: uuid::Uuid, col: usize, start_min: u32, end_min: u32 },
-    CommitDragResize { id: uuid::Uuid, col: usize, end_min: u32 },
+    CommitDragResize { id: uuid::Uuid, col: usize, start_min: u32, end_min: u32 },
 }
 
 #[derive(Debug)]
@@ -181,10 +182,15 @@ impl Component for ScheduleSection {
                     } else {
                         const HEADER_H: f64 = 40.0;
                         let ef = clamp_hour_frac(end_min as f64 / 60.0);
+                        let sf = clamp_hour_frac(start_min as f64 / 60.0);
+                        let y_start = HEADER_H + sf * (h - HEADER_H);
                         let y_end = HEADER_H + ef * (h - HEADER_H);
                         if y >= y_end - 10.0 {
-                            // Bottom-edge zone → resize
-                            DragMode::Resize { id, col, start_min, end_min }
+                            // Bottom-edge zone → resize end time
+                            DragMode::Resize { id, col, start_min, end_min, from_top: false }
+                        } else if y <= y_start + 10.0 {
+                            // Top-edge zone → resize start time
+                            DragMode::Resize { id, col, start_min, end_min, from_top: true }
                         } else {
                             // Body → move; record where inside the block the user clicked
                             let sf = clamp_hour_frac(start_min as f64 / 60.0);
@@ -261,14 +267,19 @@ impl Component for ScheduleSection {
                             };
                         }
                     }
-                    DragMode::Resize { id, col, start_min, .. } => {
+                    DragMode::Resize { id, col, start_min, end_min, from_top } => {
                         if let Some((sx, sy)) = data.drag_start {
                             let cy = sy + off_y;
-                            if let Some((_, raw_end)) = pixel_to_day_time(sx, cy, w, h) {
-                                let new_end = snap15(raw_end)
-                                    .max(start_min + 15)
-                                    .min(END_HOUR * 60);
-                                data.drag_mode = DragMode::Resize { id, col, start_min, end_min: new_end };
+                            if let Some((_, raw_min)) = pixel_to_day_time(sx, cy, w, h) {
+                                let snapped = snap15(raw_min);
+                                let (new_start, new_end) = if from_top {
+                                    let s = snapped.min(end_min.saturating_sub(15)).max(START_HOUR * 60);
+                                    (s, end_min)
+                                } else {
+                                    let e = snapped.max(start_min + 15).min(END_HOUR * 60);
+                                    (start_min, e)
+                                };
+                                data.drag_mode = DragMode::Resize { id, col, start_min: new_start, end_min: new_end, from_top };
                             }
                         }
                     }
@@ -310,8 +321,8 @@ impl Component for ScheduleSection {
                     DragMode::Move { id, col, start_min, end_min, .. } => {
                         s.input(ScheduleInput::CommitDragMove { id, col, start_min, end_min });
                     }
-                    DragMode::Resize { id, col, end_min, .. } => {
-                        s.input(ScheduleInput::CommitDragResize { id, col, end_min });
+                    DragMode::Resize { id, col, start_min, end_min, .. } => {
+                        s.input(ScheduleInput::CommitDragResize { id, col, start_min, end_min });
                     }
                     DragMode::None => {}
                 }
@@ -438,7 +449,7 @@ impl Component for ScheduleSection {
                     });
                 }
             }
-            ScheduleInput::CommitDragResize { id, col, end_min } => {
+            ScheduleInput::CommitDragResize { id, col, start_min, end_min } => {
                 let sched = self.draw_data.borrow().schedules.iter().find(|s| s.id == id).cloned();
                 if let Some(sched) = sched {
                     let rule_set_id = if sched.rule_set_id.is_nil() { None } else { Some(sched.rule_set_id) };
@@ -446,7 +457,7 @@ impl Component for ScheduleSection {
                         id,
                         name: sched.name,
                         days: vec![col as u8],
-                        start_min: sched.start_min,
+                        start_min,
                         end_min,
                         schedule_type: sched.schedule_type,
                         rule_set_id,
@@ -703,14 +714,19 @@ fn draw_calendar(
                     let _ = cr.show_text(&sched.name);
                 }
 
-                // Resize handle — small pill at the bottom of draggable events
+                // Resize handles — small pills at top and bottom of draggable events
                 if !sched.imported && block_h > 18.0 {
                     let handle_w = (block_w * 0.35).min(28.0);
                     let handle_h = 3.0;
                     let handle_x = x + (block_w - handle_w) / 2.0;
-                    let handle_y = y_start + block_h - handle_h - 3.0;
                     cr.set_source_rgba(1.0, 1.0, 1.0, 0.55);
-                    rounded_rect(cr, handle_x, handle_y, handle_w, handle_h, 1.5);
+                    // Bottom handle
+                    let bottom_y = y_start + block_h - handle_h - 3.0;
+                    rounded_rect(cr, handle_x, bottom_y, handle_w, handle_h, 1.5);
+                    let _ = cr.fill();
+                    // Top handle
+                    let top_y = y_start + 3.0;
+                    rounded_rect(cr, handle_x, top_y, handle_w, handle_h, 1.5);
                     let _ = cr.fill();
                 }
             }
