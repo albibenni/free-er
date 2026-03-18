@@ -7,11 +7,13 @@
 - [x] allow modify existing schedules from calendar ui
 - [ ] task should show start and end time
 - [ ] adding new task should overlay start time and end time while selecting
-- [ ] icon padding from title
 - [ ] two task in the same time - split the space
 - [x] task should have selection for focus allowed list
 - [x] task could be a break
 - [ ] by default should take the default allowed list, not none
+- [ ] icon and text style:
+  - [ ] icon padding from title
+  - [ ] icon and text bigger
 
 ### POMODORO
 
