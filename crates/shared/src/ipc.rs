@@ -46,6 +46,7 @@ pub enum Command {
     },
     ListSchedules,
     SetStrictMode { enabled: bool },
+    SetAllowNewTab { enabled: bool },
     SetCalDav { url: String, username: String, password: String },
     StartGoogleOAuth,
     RevokeGoogleCalendar,
@@ -96,4 +97,5 @@ pub struct StatusResponse {
     pub pomodoro_phase: Option<PomodoroPhase>,
     pub seconds_remaining: Option<u64>,
     pub google_calendar_connected: bool,
+    pub allow_new_tab: bool,
 }

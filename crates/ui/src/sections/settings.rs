@@ -9,6 +9,7 @@ const SPOTIFY: &str = "open.spotify.com";
 #[derive(Debug)]
 pub struct SettingsSection {
     strict_mode: bool,
+    allow_new_tab: bool,
     whatsapp: bool,
     telegram: bool,
     discord: bool,
@@ -22,6 +23,8 @@ pub struct SettingsSection {
 #[derive(Debug)]
 pub enum SettingsInput {
     SetStrictMode(bool),
+    SetAllowNewTab(bool),
+    AllowNewTabUpdated(bool),
     SetQuick(&'static str, bool),
     QuickUrlsUpdated(Vec<String>),
     SaveCalDav,
@@ -33,6 +36,7 @@ pub enum SettingsInput {
 #[derive(Debug)]
 pub enum SettingsOutput {
     StrictModeChanged(bool),
+    AllowNewTabChanged(bool),
     QuickUrlToggled { url: &'static str, enabled: bool },
     CalDavSaved {
         url: String,
@@ -70,6 +74,20 @@ impl SimpleComponent for SettingsSection {
                     set_active: model.strict_mode,
                     connect_state_set[sender] => move |_, state| {
                         sender.input(SettingsInput::SetStrictMode(state));
+                        gtk4::glib::Propagation::Proceed
+                    },
+                },
+            },
+
+            gtk4::Box {
+                set_orientation: gtk4::Orientation::Horizontal,
+                set_spacing: 12,
+                gtk4::Label { set_label: "Allow new tab page", set_hexpand: true, set_halign: gtk4::Align::Start },
+                gtk4::Switch {
+                    #[watch]
+                    set_active: model.allow_new_tab,
+                    connect_state_set[sender] => move |_, state| {
+                        sender.input(SettingsInput::SetAllowNewTab(state));
                         gtk4::glib::Propagation::Proceed
                     },
                 },
@@ -212,6 +230,7 @@ impl SimpleComponent for SettingsSection {
     ) -> ComponentParts<Self> {
         let model = SettingsSection {
             strict_mode,
+            allow_new_tab: true,
             whatsapp: false,
             telegram: false,
             discord: false,
@@ -231,6 +250,14 @@ impl SimpleComponent for SettingsSection {
                 if self.strict_mode == enabled { return; }
                 self.strict_mode = enabled;
                 let _ = sender.output(SettingsOutput::StrictModeChanged(self.strict_mode));
+            }
+            SettingsInput::SetAllowNewTab(enabled) => {
+                if self.allow_new_tab == enabled { return; }
+                self.allow_new_tab = enabled;
+                let _ = sender.output(SettingsOutput::AllowNewTabChanged(self.allow_new_tab));
+            }
+            SettingsInput::AllowNewTabUpdated(enabled) => {
+                self.allow_new_tab = enabled;
             }
             SettingsInput::SetQuick(url, enabled) => {
                 let changed = match url {

@@ -123,6 +123,8 @@ pub struct GoogleCalendarConfig {
     pub import_rules: Vec<CalendarImportRule>,
 }
 
+fn default_true() -> bool { true }
+
 /// Top-level persisted config written to ~/.config/free-er/config.json
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -133,4 +135,7 @@ pub struct Config {
     pub google_calendar: Option<GoogleCalendarConfig>,
     /// If true, focus cannot be stopped manually while a schedule is active.
     pub strict_mode: bool,
+    /// If false, new tab pages (chrome://newtab, about:newtab) are blocked during focus.
+    #[serde(default = "default_true")]
+    pub allow_new_tab: bool,
 }

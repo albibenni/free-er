@@ -226,6 +226,10 @@ impl AppState {
         self.0.lock().unwrap().config.strict_mode = enabled;
     }
 
+    pub fn set_allow_new_tab(&self, enabled: bool) {
+        self.0.lock().unwrap().config.allow_new_tab = enabled;
+    }
+
     // ── Google Calendar OAuth2 ────────────────────────────────────────────────
 
     pub fn set_pending_oauth_state(&self, state_token: String, client_id: String, client_secret: String) {
@@ -324,6 +328,7 @@ impl AppState {
         StateSnapshot {
             focus_active: inner.focus_active,
             strict_mode: inner.config.strict_mode,
+            allow_new_tab: inner.config.allow_new_tab,
             active_rule_set_name,
             pomodoro_active,
             pomodoro_phase,
@@ -336,6 +341,7 @@ impl AppState {
 pub struct StateSnapshot {
     pub focus_active: bool,
     pub strict_mode: bool,
+    pub allow_new_tab: bool,
     pub active_rule_set_name: Option<String>,
     pub pomodoro_active: bool,
     pub pomodoro_phase: Option<crate::pomodoro::Phase>,

@@ -87,6 +87,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             let resp = StatusResponse {
                 focus_active: snap.focus_active,
                 strict_mode: snap.strict_mode,
+                allow_new_tab: snap.allow_new_tab,
                 active_rule_set_name: snap.active_rule_set_name,
                 pomodoro_active: snap.pomodoro_active,
                 pomodoro_phase: snap.pomodoro_phase.map(|p| match p {
@@ -213,6 +214,10 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
         }
         Command::SetStrictMode { enabled } => {
             state.set_strict_mode(enabled);
+            ok(true)
+        }
+        Command::SetAllowNewTab { enabled } => {
+            state.set_allow_new_tab(enabled);
             ok(true)
         }
         Command::SetCalDav { url, username, password } => {

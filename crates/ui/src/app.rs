@@ -56,6 +56,7 @@ pub enum AppMsg {
     ConnectGoogle,
     DisconnectGoogle,
     StrictModeChanged(bool),
+    AllowNewTabChanged(bool),
     SaveCalDav { url: String, user: String, pass: String },
     // Periodic status poll result
     StatusTick,
@@ -190,6 +191,7 @@ impl Component for App {
             .launch(false)
             .forward(sender.input_sender(), |out| match out {
                 SettingsOutput::StrictModeChanged(v) => AppMsg::StrictModeChanged(v),
+                SettingsOutput::AllowNewTabChanged(v) => AppMsg::AllowNewTabChanged(v),
                 SettingsOutput::QuickUrlToggled { url, enabled } => {
                     if enabled { AppMsg::AddUrl(url.to_string()) } else { AppMsg::RemoveUrl(url.to_string()) }
                 }
@@ -394,6 +396,13 @@ impl Component for App {
                     }
                 });
             }
+            AppMsg::AllowNewTabChanged(enabled) => {
+                tokio::spawn(async move {
+                    if let Err(e) = ipc_client::send(&Command::SetAllowNewTab { enabled }).await {
+                        error!("SetAllowNewTab IPC failed: {e}");
+                    }
+                });
+            }
             AppMsg::SaveCalDav { url, user, pass } => {
                 tokio::spawn(async move {
                     if let Err(e) = ipc_client::send(&Command::SetCalDav {
@@ -494,6 +503,9 @@ impl Component for App {
                             });
                             settings_sender.emit(SettingsInput::GoogleStatusUpdated(
                                 status.google_calendar_connected,
+                            ));
+                            settings_sender.emit(SettingsInput::AllowNewTabUpdated(
+                                status.allow_new_tab,
                             ));
                         }
                         Err(e) => warn!("status poll failed: {e}"),

@@ -23,6 +23,8 @@ struct ApiStatus {
     focus_active: bool,
     /// Allowed URL patterns. Empty = block everything except nothing (i.e. all blocked).
     allowed_urls: Vec<String>,
+    /// If false, new tab pages (chrome://newtab, about:newtab) are blocked during focus.
+    allow_new_tab: bool,
 }
 
 async fn api_status(State(state): State<AppState>) -> Json<ApiStatus> {
@@ -38,6 +40,7 @@ async fn api_status(State(state): State<AppState>) -> Json<ApiStatus> {
     Json(ApiStatus {
         focus_active: snap.focus_active,
         allowed_urls,
+        allow_new_tab: snap.allow_new_tab,
     })
 }
 
