@@ -274,7 +274,13 @@ fn draw_event_label(
     if block_h <= 14.0 {
         return;
     }
-    cr.set_source_rgb(1.0, 1.0, 1.0);
+
+    const PAD_L: f64 = 6.0;
+    const PAD_R: f64 = 6.0;
+
+    cr.save().unwrap();
+    cr.rectangle(x, y_start, block_w - PAD_R, block_h);
+    let _ = cr.clip();
 
     const ICON_W: f64 = 13.0;
     const ICON_GAP: f64 = 6.0;
@@ -294,24 +300,22 @@ fn draw_event_label(
         cr.set_font_size(10.0);
         cr.set_source_rgba(1.0, 1.0, 1.0, 0.75);
 
-        // Start time — top-left
-        cr.move_to(x + 4.0, y_start + 10.0);
+        cr.move_to(x + PAD_L, y_start + 10.0);
         let _ = cr.show_text(&start_label);
 
-        // End time — bottom-left
-        cr.move_to(x + 4.0, y_start + block_h - 4.0);
+        cr.move_to(x + PAD_L, y_start + block_h - 4.0);
         let _ = cr.show_text(&end_label);
-
-        cr.set_source_rgb(1.0, 1.0, 1.0);
     }
 
-    // Name — centered
+    // Name — centered within the padded area
     cr.set_font_size(13.0);
+    cr.set_source_rgb(1.0, 1.0, 1.0);
     let te = cr
         .text_extents(&sched.name)
         .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+    let inner_w = block_w - PAD_L - PAD_R;
     let content_w = icon_total + te.width();
-    let text_x = (x + (block_w - content_w) / 2.0 + icon_total).max(x + 2.0 + icon_total);
+    let text_x = (x + PAD_L + (inner_w - content_w) / 2.0 + icon_total).max(x + PAD_L + icon_total);
     let text_y = y_start + block_h / 2.0 + te.height() / 2.0;
 
     if sched.imported {
@@ -320,6 +324,8 @@ fn draw_event_label(
 
     cr.move_to(text_x, text_y);
     let _ = cr.show_text(&sched.name);
+
+    cr.restore().unwrap();
 }
 
 /// Draw a small "+N" badge in the top-right corner of a merged focus block.
@@ -330,14 +336,20 @@ fn draw_merged_badge(
     y_start: f64,
     merged_count: usize,
 ) {
+    cr.save().unwrap();
+    cr.rectangle(x, y_start, block_w, 14.0);
+    let _ = cr.clip();
+
     let label = format!("+{merged_count}");
     cr.set_font_size(9.0);
     cr.set_source_rgba(1.0, 1.0, 1.0, 0.80);
     let te = cr
         .text_extents(&label)
         .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
-    cr.move_to(x + block_w - te.width() - 4.0, y_start + 10.0);
+    cr.move_to(x + block_w - te.width() - 6.0, y_start + 10.0);
     let _ = cr.show_text(&label);
+
+    cr.restore().unwrap();
 }
 
 // ── Drag preview ──────────────────────────────────────────────────────────────
