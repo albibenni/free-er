@@ -90,6 +90,7 @@ pub fn matches(pattern: &str, host: &str, path: &str, query: &str) -> bool {
 /// assert!(matches_url("app.todoist.com/app/upcoming?*",   "app.todoist.com/app/upcoming?cdn_fallback=1"));
 /// assert!(matches_url("calendar.google.*",                "calendar.google.com/calendar/r/week"));
 /// ```
+#[allow(dead_code)]
 pub fn matches_url(pattern: &str, url: &str) -> bool {
     // Strip scheme
     let url = url

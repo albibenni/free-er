@@ -1,88 +1,65 @@
 /**
- * Matches a URL against an allowed pattern (mirrors rule_matcher.rs).
+ * Matches a URL against an allowed pattern (mirrors rule_matcher.rs :: matches_url).
  *
  * Pattern syntax:
  *   "github.com"                  → exact host, any path
- *   "*.rust-lang.org"             → any subdomain, any path
+ *   "*.rust-lang.org"             → any subdomain, any path (also matches root)
  *   "*.com"                       → any .com host (not .com.br)
- *   "github.com/torvalds"         → host + exact path-prefix (sub-paths also match)
- *   "youtube.com/watch*"          → host + path glob (matches /watch, /watches, /watch?v=x)
- *   "www.youtube.com/watch?v=abc" → host + path-prefix + required query param
+ *   "calendar.google.*"           → any TLD
+ *   "youtube.com/watch*"          → host + path glob
+ *   "www.youtube.com/watch?v=abc" → host + exact query string
  *   "*"                           → matches everything
  *
- * Query params in the pattern are required subsets of the URL's query string.
+ * "*" is a glob wildcard: matches any sequence of characters (including none),
+ * just like the "*" wildcard in bash. Query matching is string-glob based.
  */
-export function patternMatches(
-  pattern: string,
-  host: string,
-  pathname: string,
-  search: string, // e.g. "?v=abc&feature=share" or ""
-): boolean {
-  if (pattern === "*") return true;
+export function matchesUrl(pattern: string, url: string): boolean {
+  // Strip scheme
+  url = url.replace(/^https?:\/\//, "");
+  // Normalize www.
+  url = url.replace(/^www\./, "");
+  pattern = pattern.replace(/^www\./, "");
 
-  // Normalize: strip leading "www." so "netflix.com" matches "www.netflix.com"
-  host = host.replace(/^www\./, "");
-
-  // Split off query string from pattern
-  const qIdx = pattern.indexOf("?");
-  const hostPath = qIdx === -1 ? pattern : pattern.slice(0, qIdx);
-  const patternQuery = qIdx === -1 ? null : pattern.slice(qIdx + 1);
-
-  // Split host+path
-  const slashIdx = hostPath.indexOf("/");
-  const rawHostPat = slashIdx === -1 ? hostPath : hostPath.slice(0, slashIdx);
-  const hostPat = rawHostPat.replace(/^www\./, "");
-  const pathPrefix = slashIdx === -1 ? null : hostPath.slice(slashIdx + 1);
-
-  // Match host
-  let hostOk: boolean;
-  if (hostPat.startsWith("*.")) {
-    // "*.netflix.com" → matches "netflix.com", "www.netflix.com", "api.netflix.com"
-    const suffix = hostPat.slice(2);
-    hostOk = host === suffix || host.endsWith("." + suffix);
-  } else if (hostPat.endsWith(".*")) {
-    // "calendar.google.*" → matches "calendar.google.com", "calendar.google.co.uk"
-    const prefix = hostPat.slice(0, -2);
-    hostOk = host === prefix || host.startsWith(prefix + ".");
-  } else {
-    hostOk = hostPat === host;
+  // Host-only pattern (no "/" and no "*"): implicitly match any path
+  if (!pattern.includes("/") && !pattern.includes("*")) {
+    pattern = pattern + "*";
   }
-  if (!hostOk) return false;
 
-  // Match path prefix
-  if (pathPrefix !== null) {
-    if (pathPrefix.endsWith("*")) {
-      // Glob: path must start with the prefix (e.g. "watch*" matches "/watch", "/watches", "/watch?v=x")
-      const prefix = "/" + pathPrefix.slice(0, -1);
-      if (!pathname.startsWith(prefix)) return false;
-    } else {
-      // Exact prefix: "/torvalds" or "/torvalds/anything" — but NOT "/torvalds-fork"
-      const full = "/" + pathPrefix;
-      if (pathname !== full && !pathname.startsWith(full + "/")) return false;
+  // Special: "*.domain" matches the root domain AND any subdomain.
+  // Pure glob fails for the root-domain case ("*" won't match empty prefix before ".").
+  if (pattern.startsWith("*.")) {
+    const rest = pattern.slice(2);
+    return globMatch(rest, url) || globMatch(pattern, url);
+  }
+
+  return globMatch(pattern, url);
+}
+
+/** Returns true if pattern (which may contain "*" wildcards) matches s. */
+function globMatch(pattern: string, s: string): boolean {
+  const starIdx = pattern.indexOf("*");
+  if (starIdx === -1) {
+    return pattern === s;
+  }
+  const before = pattern.slice(0, starIdx);
+  const after = pattern.slice(starIdx + 1);
+  if (!s.startsWith(before)) {
+    return false;
+  }
+  const rest = s.slice(before.length);
+  if (after === "") {
+    return true; // trailing * matches everything remaining
+  }
+  for (let i = 0; i <= rest.length; i++) {
+    if (globMatch(after, rest.slice(i))) {
+      return true;
     }
   }
-
-  // Match query params (all pattern params must appear in the URL)
-  if (patternQuery !== null) {
-    const urlParams = new URLSearchParams(search);
-    const patParams = new URLSearchParams(patternQuery);
-    for (const [key, val] of patParams.entries()) {
-      if (urlParams.get(key) !== val) return false;
-    }
-  }
-
-  return true;
+  return false;
 }
 
 export function isAllowed(url: string, patterns: string[]): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  const { hostname, pathname, search } = parsed;
-  return patterns.some((p) => patternMatches(p, hostname, pathname, search));
+  return patterns.some((p) => matchesUrl(p, url));
 }
 
 export function isInternalUrl(url: string): boolean {
