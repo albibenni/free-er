@@ -173,7 +173,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             state.remove_schedule(id);
             ok(true)
         }
-        Command::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, schedule_type } => {
+        Command::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, specific_date, schedule_type } => {
             use chrono::NaiveTime;
             fn wday(d: u8) -> Option<chrono::Weekday> {
                 match d {
@@ -186,7 +186,9 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             let start = NaiveTime::from_hms_opt(start_min / 60, start_min % 60, 0).unwrap_or_default();
             let end = NaiveTime::from_hms_opt(end_min / 60, end_min % 60, 0).unwrap_or_default();
             let weekdays = days.iter().filter_map(|&d| wday(d)).collect();
-            state.update_schedule(id, name, weekdays, start, end, rule_set_id, schedule_type);
+            let new_specific_date = specific_date
+                .and_then(|s| chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok());
+            state.update_schedule(id, name, weekdays, start, end, rule_set_id, new_specific_date, schedule_type);
             ok(true)
         }
         Command::ListSchedules => {

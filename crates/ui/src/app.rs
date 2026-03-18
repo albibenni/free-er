@@ -77,6 +77,7 @@ pub enum AppMsg {
         start_min: u32,
         end_min: u32,
         rule_set_id: Option<Uuid>,
+        specific_date: Option<String>,
         schedule_type: ScheduleType,
     },
     DeleteSchedule(Uuid),
@@ -179,8 +180,8 @@ impl Component for App {
                 ScheduleOutput::CreateSchedule { name, days, start_min, end_min, specific_date, rule_set_id, schedule_type } => {
                     AppMsg::CreateSchedule { name, days, start_min, end_min, specific_date, rule_set_id, schedule_type }
                 }
-                ScheduleOutput::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, schedule_type } => {
-                    AppMsg::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, schedule_type }
+                ScheduleOutput::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, specific_date, schedule_type } => {
+                    AppMsg::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, specific_date, schedule_type }
                 }
                 ScheduleOutput::DeleteSchedule(id) => AppMsg::DeleteSchedule(id),
             });
@@ -418,10 +419,10 @@ impl Component for App {
                     }
                 });
             }
-            AppMsg::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, schedule_type } => {
+            AppMsg::UpdateSchedule { id, name, days, start_min, end_min, rule_set_id, specific_date, schedule_type } => {
                 let refresh = _sender.clone();
                 tokio::spawn(async move {
-                    match ipc_client::update_schedule(id, &name, days, start_min, end_min, rule_set_id, schedule_type).await {
+                    match ipc_client::update_schedule(id, &name, days, start_min, end_min, rule_set_id, specific_date, schedule_type).await {
                         Ok(_) => refresh.input(AppMsg::RefreshSchedules),
                         Err(e) => error!("update_schedule failed: {e}"),
                     }

@@ -77,14 +77,14 @@ pub enum ScheduleInput {
     CommitCreate { name: String, col: usize, start_min: u32, end_min: u32, specific_date: String, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
     CommitEdit { id: uuid::Uuid, name: String, col: usize, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
     CommitDelete(uuid::Uuid),
-    CommitDragMove { id: uuid::Uuid, col: usize, start_min: u32, end_min: u32 },
+    CommitDragMove { id: uuid::Uuid, col: usize, start_min: u32, end_min: u32, specific_date: Option<String> },
     CommitDragResize { id: uuid::Uuid, col: usize, start_min: u32, end_min: u32 },
 }
 
 #[derive(Debug)]
 pub enum ScheduleOutput {
     CreateSchedule { name: String, days: Vec<u8>, start_min: u32, end_min: u32, specific_date: String, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
-    UpdateSchedule { id: uuid::Uuid, name: String, days: Vec<u8>, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid> },
+    UpdateSchedule { id: uuid::Uuid, name: String, days: Vec<u8>, start_min: u32, end_min: u32, schedule_type: ScheduleType, rule_set_id: Option<uuid::Uuid>, specific_date: Option<String> },
     DeleteSchedule(uuid::Uuid),
 }
 
@@ -294,16 +294,50 @@ impl Component for ScheduleSection {
             let da = widgets.drawing_area.clone();
             let s = sender.clone();
             drag.connect_drag_end(move |_, off_x, off_y| {
+                let dist = (off_x * off_x + off_y * off_y).sqrt();
+
                 let mut data = dd.borrow_mut();
                 let mode = std::mem::replace(&mut data.drag_mode, DragMode::None);
                 let start_pos = data.drag_start.take();
+
+                // Optimistically apply the final position BEFORE queue_draw so
+                // the canvas never shows the old position after release.
+                let mut new_specific_date: Option<String> = None;
+                let week_offset = data.week_offset;
+                if dist > 10.0 {
+                    match &mode {
+                        DragMode::Move { id, col, start_min, end_min, .. } => {
+                            if let Some(s) = data.schedules.iter_mut().find(|s| s.id == *id) {
+                                if s.specific_date.is_some() {
+                                    let today = chrono::Local::now().date_naive();
+                                    let dfm = today.weekday().num_days_from_monday() as i64;
+                                    let this_mon = today - chrono::Duration::days(dfm);
+                                    let week_mon = this_mon + chrono::Duration::weeks(week_offset as i64);
+                                    let new_date = week_mon + chrono::Duration::days(*col as i64);
+                                    let date_str = new_date.format("%Y-%m-%d").to_string();
+                                    s.specific_date = Some(date_str.clone());
+                                    new_specific_date = Some(date_str);
+                                }
+                                s.days = vec![*col as u8];
+                                s.start_min = *start_min;
+                                s.end_min = *end_min;
+                            }
+                        }
+                        DragMode::Resize { id, col, start_min, end_min, .. } => {
+                            if let Some(s) = data.schedules.iter_mut().find(|s| s.id == *id) {
+                                s.days = vec![*col as u8];
+                                s.start_min = *start_min;
+                                s.end_min = *end_min;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
                 drop(data);
                 da.queue_draw();
 
-                let dist = (off_x * off_x + off_y * off_y).sqrt();
-
                 if dist <= 10.0 {
-                    // Treat as click regardless of mode
                     if let Some((x, y)) = start_pos {
                         let w = da.width() as f64;
                         let h = da.allocated_height() as f64;
@@ -319,7 +353,7 @@ impl Component for ScheduleSection {
                         }
                     }
                     DragMode::Move { id, col, start_min, end_min, .. } => {
-                        s.input(ScheduleInput::CommitDragMove { id, col, start_min, end_min });
+                        s.input(ScheduleInput::CommitDragMove { id, col, start_min, end_min, specific_date: new_specific_date });
                     }
                     DragMode::Resize { id, col, start_min, end_min, .. } => {
                         s.input(ScheduleInput::CommitDragResize { id, col, start_min, end_min });
@@ -485,12 +519,13 @@ impl Component for ScheduleSection {
                     end_min,
                     schedule_type,
                     rule_set_id,
+                    specific_date: None, // edit dialog doesn't change the date
                 });
             }
             ScheduleInput::CommitDelete(id) => {
                 let _ = sender.output(ScheduleOutput::DeleteSchedule(id));
             }
-            ScheduleInput::CommitDragMove { id, col, start_min, end_min } => {
+            ScheduleInput::CommitDragMove { id, col, start_min, end_min, specific_date } => {
                 let sched = self.draw_data.borrow().schedules.iter().find(|s| s.id == id).cloned();
                 if let Some(sched) = sched {
                     let rule_set_id = if sched.rule_set_id.is_nil() { None } else { Some(sched.rule_set_id) };
@@ -502,6 +537,7 @@ impl Component for ScheduleSection {
                         end_min,
                         schedule_type: sched.schedule_type,
                         rule_set_id,
+                        specific_date, // new date computed in drag_end closure
                     });
                 }
             }
@@ -517,6 +553,7 @@ impl Component for ScheduleSection {
                         end_min,
                         schedule_type: sched.schedule_type,
                         rule_set_id,
+                        specific_date: None, // resize keeps same date
                     });
                 }
             }

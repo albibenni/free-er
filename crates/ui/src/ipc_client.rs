@@ -84,6 +84,7 @@ pub async fn update_schedule(
     start_min: u32,
     end_min: u32,
     rule_set_id: Option<Uuid>,
+    specific_date: Option<String>,
     schedule_type: ScheduleType,
 ) -> Result<()> {
     send(&Command::UpdateSchedule {
@@ -93,6 +94,7 @@ pub async fn update_schedule(
         start_min,
         end_min,
         rule_set_id,
+        specific_date,
         schedule_type,
     }).await?;
     Ok(())

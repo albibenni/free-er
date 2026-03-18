@@ -128,6 +128,8 @@ impl AppState {
         start: chrono::NaiveTime,
         end: chrono::NaiveTime,
         rule_set_id: Option<Uuid>,
+        new_specific_date: Option<chrono::NaiveDate>, // Some → overwrite; None → leave unchanged
+
         schedule_type: shared::models::ScheduleType,
     ) {
         let mut inner = self.0.lock().unwrap();
@@ -138,6 +140,9 @@ impl AppState {
             s.end = end;
             if let Some(rsid) = rule_set_id {
                 s.rule_set_id = rsid;
+            }
+            if let Some(date) = new_specific_date {
+                s.specific_date = Some(date);
             }
             s.schedule_type = schedule_type;
         }
