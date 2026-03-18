@@ -278,12 +278,34 @@ fn draw_event_label(
         return;
     }
     cr.set_source_rgb(1.0, 1.0, 1.0);
-    cr.set_font_size(13.0);
 
     const ICON_W: f64 = 13.0;
     const ICON_GAP: f64 = 6.0;
     let icon_total = if sched.imported { ICON_W + ICON_GAP } else { 0.0 };
 
+    // Show start/end times when there's enough room
+    let show_times = block_h > 36.0;
+
+    if show_times {
+        let start_label = format!("{:02}:{:02}", sched.start_min / 60, sched.start_min % 60);
+        let end_label = format!("{:02}:{:02}", sched.end_min / 60, sched.end_min % 60);
+
+        cr.set_font_size(10.0);
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.75);
+
+        // Start time — top-left
+        cr.move_to(x + 4.0, y_start + 10.0);
+        let _ = cr.show_text(&start_label);
+
+        // End time — bottom-left
+        cr.move_to(x + 4.0, y_start + block_h - 4.0);
+        let _ = cr.show_text(&end_label);
+
+        cr.set_source_rgb(1.0, 1.0, 1.0);
+    }
+
+    // Name — centered
+    cr.set_font_size(13.0);
     let te = cr
         .text_extents(&sched.name)
         .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
@@ -356,6 +378,27 @@ fn draw_drag_preview(cr: &gtk4::cairo::Context, h: f64, col_w: f64, data: &DrawD
     cr.set_line_width(2.0);
     rounded_rect(cr, x, ys, bw, bh, 4.0);
     let _ = cr.stroke();
+
+    // Draw start / end time labels inside the preview block
+    if bh > 20.0 {
+        cr.select_font_face(
+            "Sans",
+            gtk4::cairo::FontSlant::Normal,
+            gtk4::cairo::FontWeight::Normal,
+        );
+        cr.set_font_size(10.0);
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.9);
+
+        let start_label = format!("{:02}:{:02}", s_min / 60, s_min % 60);
+        cr.move_to(x + 4.0, ys + 10.0);
+        let _ = cr.show_text(&start_label);
+
+        if bh > 28.0 {
+            let end_label = format!("{:02}:{:02}", e_min / 60, e_min % 60);
+            cr.move_to(x + 4.0, ys + bh - 4.0);
+            let _ = cr.show_text(&end_label);
+        }
+    }
 }
 
 // ── Current-time indicator ────────────────────────────────────────────────────
