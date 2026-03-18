@@ -34,11 +34,11 @@ async fn main() -> Result<()> {
         }
     });
 
-    // Background task: sync CalDAV calendar every 15 minutes.
+    // Background task: sync CalDAV calendar every 6 hours.
     let cal_state = state.clone();
     tokio::spawn(async move {
         let mut interval =
-            tokio::time::interval(tokio::time::Duration::from_secs(15 * 60));
+            tokio::time::interval(tokio::time::Duration::from_secs(6 * 60 * 60));
         loop {
             interval.tick().await;
             if let Some(cfg) = cal_state.caldav_config() {
@@ -56,10 +56,10 @@ async fn main() -> Result<()> {
         }
     });
 
-    // Background task: sync Google Calendar every 15 minutes.
+    // Background task: sync Google Calendar every 6 hours.
     let gcal_state = state.clone();
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(15 * 60));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(6 * 60 * 60));
         loop {
             interval.tick().await;
             let cfg = match gcal_state.google_calendar_config() {
