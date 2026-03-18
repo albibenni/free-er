@@ -1,5 +1,12 @@
 # TODO
 
+## LOGIC
+
+- [ ] wildcard management:
+  - [ ] * means all sites: eg *.com means all .com sites, but not .com.br, youtube.com/watch* means all youtube.com/watch pages, but not youtube.com/channel
+- [ ] allow all search engines from settings
+- [ ] allow all ai web pages from settings
+
 ## FEATURES
 
 ### CALENDAR
