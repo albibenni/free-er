@@ -1,5 +1,12 @@
 # TODO
 
+## UI
+
+- [ ] sidebar:
+  - [ ] icons
+  - [ ] toggle sidebar with a button - if closed, only show icons, if open show icons and text
+  - [ ] settings on the bottom, not in the middle
+
 ## LOGIC
 
 - [ ] wildcard management:
@@ -17,13 +24,13 @@
 - [ ] task should show start and end time
 - [ ] adding new task should overlay start time and end time while selecting
 - [ ] two task in the same time - split the space
-- [ ] allow drag and drop to change the time of the task
+- [x] allow drag and drop to change the time of the task
 - [x] task should have selection for focus allowed list
 - [x] task could be a break
 - [x] by default should take the default allowed list, not none
-- [ ] icon and text style:
-  - [ ] icon padding from title
-  - [ ] icon and text bigger
+- [x] icon and text style:
+  - [x] icon padding from title
+  - [x] icon and text bigger
 
 ### POMODORO
 
