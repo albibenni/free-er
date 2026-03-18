@@ -9,8 +9,8 @@
 
 ## LOGIC
 
-- [ ] wildcard management:
-  - [ ] * means all sites: eg *.com means all .com sites, but not .com.br, youtube.com/watch* means all youtube.com/watch pages, but not youtube.com/channel
+- [x] wildcard management:
+  - [x] * means all sites: eg *.com means all .com sites, but not .com.br, youtube.com/watch* means all youtube.com/watch pages, but not youtube.com/channel
 - [x] allow all search engines from settings
 - [x] allow all ai web pages from settings
 - [x] allow new tab page from settings
@@ -31,6 +31,8 @@
 - [x] icon and text style:
   - [x] icon padding from title
   - [x] icon and text bigger
+- [ ] resync with google calendar when the app starts
+- [ ] resync button to resync with google calendar
 
 ### POMODORO
 
