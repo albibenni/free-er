@@ -48,6 +48,11 @@ pub async fn revoke_google_calendar() -> Result<()> {
     Ok(())
 }
 
+pub async fn sync_calendar() -> Result<()> {
+    send(&Command::SyncCalendar).await?;
+    Ok(())
+}
+
 /// Fetch all schedules from the daemon.
 pub async fn list_schedules() -> Result<Vec<ScheduleSummary>> {
     let raw = send(&Command::ListSchedules).await?;

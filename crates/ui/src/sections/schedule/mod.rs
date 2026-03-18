@@ -94,6 +94,7 @@ pub enum ScheduleInput {
         start_min: u32,
         end_min: u32,
     },
+    ResyncCalendar,
 }
 
 #[derive(Debug)]
@@ -118,6 +119,7 @@ pub enum ScheduleOutput {
         specific_date: Option<String>,
     },
     DeleteSchedule(uuid::Uuid),
+    ResyncCalendar,
 }
 
 #[relm4::component(pub)]
@@ -159,6 +161,13 @@ impl Component for ScheduleSection {
                     set_hexpand: true,
                     set_halign: gtk4::Align::Center,
                     add_css_class: "title-3",
+                },
+
+                gtk4::Button {
+                    set_icon_name: "view-refresh-symbolic",
+                    set_tooltip_text: Some("Resync calendar"),
+                    add_css_class: "flat",
+                    connect_clicked => ScheduleInput::ResyncCalendar,
                 },
             },
 
@@ -749,6 +758,9 @@ impl Component for ScheduleSection {
             }
             ScheduleInput::CommitDelete(id) => {
                 let _ = sender.output(ScheduleOutput::DeleteSchedule(id));
+            }
+            ScheduleInput::ResyncCalendar => {
+                let _ = sender.output(ScheduleOutput::ResyncCalendar);
             }
             ScheduleInput::CommitDragMove {
                 id,

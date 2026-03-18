@@ -100,6 +100,7 @@ pub enum AppMsg {
     },
     DeleteSchedule(Uuid),
     RefreshSchedules,
+    ResyncCalendar,
     // Status / refresh
     StatusTick,
     RefreshRuleSets,
@@ -291,6 +292,7 @@ impl Component for App {
                         schedule_type,
                     },
                     ScheduleOutput::DeleteSchedule(id) => AppMsg::DeleteSchedule(id),
+                    ScheduleOutput::ResyncCalendar => AppMsg::ResyncCalendar,
                 });
 
         let settings = SettingsSection::builder().launch(false).forward(
@@ -487,6 +489,7 @@ impl Component for App {
             }
             AppMsg::DeleteSchedule(id) => schedule_handlers::delete_schedule(id, sender),
             AppMsg::RefreshSchedules => schedule_handlers::refresh_schedules(sender),
+            AppMsg::ResyncCalendar => schedule_handlers::resync_calendar(sender),
 
             // ── Status / refresh ─────────────────────────────────────────
             AppMsg::StatusTick => status_handlers::status_tick(self, sender),

@@ -50,6 +50,7 @@ pub enum Command {
     SetCalDav { url: String, username: String, password: String },
     StartGoogleOAuth,
     RevokeGoogleCalendar,
+    SyncCalendar,
 }
 
 /// Returned by ListSchedules.

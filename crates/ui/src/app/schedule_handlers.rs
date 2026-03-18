@@ -73,6 +73,19 @@ pub(super) fn delete_schedule(id: Uuid, sender: ComponentSender<App>) {
     });
 }
 
+pub(super) fn resync_calendar(sender: ComponentSender<App>) {
+    tokio::spawn(async move {
+        if let Err(e) = ipc_client::sync_calendar().await {
+            tracing::warn!("sync_calendar failed: {e}");
+        }
+        // Refresh the schedule list after sync so new events appear immediately.
+        match ipc_client::list_schedules().await {
+            Ok(schedules) => sender.input(AppMsg::SchedulesUpdated(schedules)),
+            Err(e) => tracing::warn!("list_schedules after resync failed: {e}"),
+        }
+    });
+}
+
 pub(super) fn refresh_schedules(sender: ComponentSender<App>) {
     tokio::spawn(async move {
         match ipc_client::list_schedules().await {

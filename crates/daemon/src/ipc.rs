@@ -253,6 +253,41 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             state.revoke_google_calendar();
             ok(true)
         }
+        Command::SyncCalendar => {
+            // CalDAV sync
+            if let Some(cfg) = state.caldav_config() {
+                let s = state.clone();
+                tokio::spawn(async move {
+                    match crate::calendar::fetch_ics(&cfg).await {
+                        Ok(ics) => {
+                            let default_id = s.list_rule_sets().first()
+                                .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
+                            let schedules = crate::calendar::parse_schedules(&ics, &cfg, default_id);
+                            tracing::info!("calendar sync (manual): imported {} schedules", schedules.len());
+                            s.apply_calendar_schedules(schedules);
+                        }
+                        Err(e) => tracing::warn!("CalDAV manual sync failed: {e}"),
+                    }
+                });
+            }
+            // Google Calendar sync
+            if let Some(cfg) = state.google_calendar_config() {
+                let s = state.clone();
+                tokio::spawn(async move {
+                    let import_rules = cfg.import_rules.clone();
+                    let default_id = s.list_rule_sets().first()
+                        .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
+                    match crate::calendar::fetch_google_calendar_schedules(&cfg, &import_rules, default_id).await {
+                        Ok(schedules) => {
+                            tracing::info!("Google Calendar sync (manual): imported {} schedules", schedules.len());
+                            s.apply_calendar_schedules(schedules);
+                        }
+                        Err(e) => tracing::warn!("Google Calendar manual sync failed: {e}"),
+                    }
+                });
+            }
+            ok(false)
+        }
     }
 }
 
