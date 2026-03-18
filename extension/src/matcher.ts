@@ -76,3 +76,11 @@ export function isInternalUrl(url: string): boolean {
     url.startsWith("http://127.0.0.1:10000")
   );
 }
+
+export function isNewTabUrl(url: string): boolean {
+  return (
+    url.startsWith("chrome://newtab") ||
+    url.startsWith("edge://newtab") ||
+    url === "about:newtab"
+  );
+}
