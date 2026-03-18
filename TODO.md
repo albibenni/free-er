@@ -31,8 +31,13 @@
 - [x] icon and text style:
   - [x] icon padding from title
   - [x] icon and text bigger
-- [ ] resync with google calendar when the app starts
-- [ ] resync button to resync with google calendar
+- [x] resync with google calendar when the app starts
+- [x] resync button to resync with google calendar
+- [ ] rules for import
+  - [ ] personalized list
+    - [ ] no screen
+    - [ ] focus, study, work
+    - [ ] break, free, colloquio
 
 ### POMODORO
 
