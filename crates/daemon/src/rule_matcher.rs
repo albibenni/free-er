@@ -3,7 +3,9 @@
 /// Pattern syntax:
 /// - `"github.com"`                    → exact host, any path
 /// - `"*.rust-lang.org"`               → any subdomain, any path
-/// - `"github.com/torvalds"`           → host + path-prefix
+/// - `"*.com"`                         → any `.com` host (not `.com.br`)
+/// - `"github.com/torvalds"`           → host + exact path-prefix (sub-paths also match)
+/// - `"youtube.com/watch*"`            → host + path glob (matches `/watch`, `/watch?v=x`, `/watches`)
 /// - `"www.youtube.com/watch?v=abc"`   → host + path-prefix + required query param
 /// - `"*"`                             → matches everything
 ///
@@ -39,9 +41,17 @@ pub fn matches(pattern: &str, host: &str, path: &str, query: &str) -> bool {
 
     // Match path prefix
     if let Some(p) = path_prefix {
-        let full_prefix = format!("/{p}");
-        if path != full_prefix && !path.starts_with(&format!("{full_prefix}/")) {
-            return false;
+        if let Some(prefix) = p.strip_suffix('*') {
+            // Glob: path must start with the prefix (e.g. "watch*" matches "/watch", "/watches", "/watch?v=x")
+            if !path.starts_with(&format!("/{prefix}")) {
+                return false;
+            }
+        } else {
+            // Exact prefix: "/torvalds" or "/torvalds/anything" — but NOT "/torvalds-fork"
+            let full_prefix = format!("/{p}");
+            if path != full_prefix && !path.starts_with(&format!("{full_prefix}/")) {
+                return false;
+            }
         }
     }
 
@@ -85,6 +95,29 @@ mod tests {
         assert!(matches("github.com/torvalds/linux", "github.com", "/torvalds/linux/commits", ""));
         assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds", ""));
         assert!(!matches("github.com/torvalds/linux", "github.com", "/torvalds/linux-next", ""));
+    }
+
+    #[test]
+    fn wildcard_tld() {
+        // *.com matches any .com host but not .com.br
+        assert!(matches("*.com", "example.com", "/", ""));
+        assert!(matches("*.com", "foo.bar.com", "/", ""));
+        assert!(!matches("*.com", "example.com.br", "/", ""));
+        assert!(!matches("*.com", "example.net", "/", ""));
+    }
+
+    #[test]
+    fn path_glob() {
+        // youtube.com/watch* matches /watch, /watches, /watch/anything, /watch?v=x
+        assert!(matches("youtube.com/watch*", "youtube.com", "/watch", ""));
+        assert!(matches("youtube.com/watch*", "youtube.com", "/watch", "v=abc"));
+        assert!(matches("youtube.com/watch*", "youtube.com", "/watches", ""));
+        assert!(matches("youtube.com/watch*", "youtube.com", "/watch/later", ""));
+        assert!(!matches("youtube.com/watch*", "youtube.com", "/channel", ""));
+        // plain prefix (no *) still requires exact segment boundary
+        assert!(matches("github.com/torvalds", "github.com", "/torvalds", ""));
+        assert!(matches("github.com/torvalds", "github.com", "/torvalds/linux", ""));
+        assert!(!matches("github.com/torvalds", "github.com", "/torvalds-fork", ""));
     }
 
     #[test]

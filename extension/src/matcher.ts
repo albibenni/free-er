@@ -4,7 +4,9 @@
  * Pattern syntax:
  *   "github.com"                  → exact host, any path
  *   "*.rust-lang.org"             → any subdomain, any path
- *   "github.com/torvalds"         → host + path-prefix
+ *   "*.com"                       → any .com host (not .com.br)
+ *   "github.com/torvalds"         → host + exact path-prefix (sub-paths also match)
+ *   "youtube.com/watch*"          → host + path glob (matches /watch, /watches, /watch?v=x)
  *   "www.youtube.com/watch?v=abc" → host + path-prefix + required query param
  *   "*"                           → matches everything
  *
@@ -40,8 +42,15 @@ export function patternMatches(
 
   // Match path prefix
   if (pathPrefix !== null) {
-    const full = "/" + pathPrefix;
-    if (pathname !== full && !pathname.startsWith(full + "/")) return false;
+    if (pathPrefix.endsWith("*")) {
+      // Glob: path must start with the prefix (e.g. "watch*" matches "/watch", "/watches", "/watch?v=x")
+      const prefix = "/" + pathPrefix.slice(0, -1);
+      if (!pathname.startsWith(prefix)) return false;
+    } else {
+      // Exact prefix: "/torvalds" or "/torvalds/anything" — but NOT "/torvalds-fork"
+      const full = "/" + pathPrefix;
+      if (pathname !== full && !pathname.startsWith(full + "/")) return false;
+    }
   }
 
   // Match query params (all pattern params must appear in the URL)

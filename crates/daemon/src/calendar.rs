@@ -282,7 +282,7 @@ END:VCALENDAR\r\n";
                 rule_set_id,
             }],
         };
-        let schedules = parse_schedules(SAMPLE_ICS, &cfg);
+        let schedules = parse_schedules(SAMPLE_ICS, &cfg, Uuid::new_v4());
         assert_eq!(schedules.len(), 1);
         assert_eq!(schedules[0].name, "Deep Work Session");
         assert_eq!(schedules[0].rule_set_id, rule_set_id);
@@ -304,7 +304,7 @@ END:VCALENDAR\r\n";
                 rule_set_id: Uuid::new_v4(),
             }],
         };
-        let schedules = parse_schedules(SAMPLE_ICS, &cfg);
+        let schedules = parse_schedules(SAMPLE_ICS, &cfg, Uuid::new_v4());
         // "Lunch break" should not match
         assert!(schedules.iter().all(|s| s.name != "Lunch break"));
     }
