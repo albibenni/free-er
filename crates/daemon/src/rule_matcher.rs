@@ -4,6 +4,7 @@
 /// - `"github.com"`                    → exact host, any path
 /// - `"*.rust-lang.org"`               → any subdomain, any path
 /// - `"*.com"`                         → any `.com` host (not `.com.br`)
+/// - `"calendar.google.*"`             → any TLD (matches `.com`, `.co.uk`, …)
 /// - `"github.com/torvalds"`           → host + exact path-prefix (sub-paths also match)
 /// - `"youtube.com/watch*"`            → host + path glob (matches `/watch`, `/watch?v=x`, `/watches`)
 /// - `"www.youtube.com/watch?v=abc"`   → host + path-prefix + required query param
@@ -35,7 +36,11 @@ pub fn matches(pattern: &str, host: &str, path: &str, query: &str) -> bool {
 
     // Match host
     let host_ok = if let Some(suffix) = host_pat.strip_prefix("*.") {
+        // "*.netflix.com" → matches "netflix.com", "www.netflix.com", "api.netflix.com"
         host == suffix || host.ends_with(&format!(".{suffix}"))
+    } else if let Some(prefix) = host_pat.strip_suffix(".*") {
+        // "calendar.google.*" → matches "calendar.google.com", "calendar.google.co.uk"
+        host == prefix || host.starts_with(&format!("{prefix}."))
     } else {
         host_pat == host
     };
@@ -121,6 +126,14 @@ mod tests {
         assert!(matches("*.com", "foo.bar.com", "/", ""));
         assert!(!matches("*.com", "example.com.br", "/", ""));
         assert!(!matches("*.com", "example.net", "/", ""));
+    }
+
+    #[test]
+    fn wildcard_trailing_tld() {
+        // calendar.google.* matches any TLD
+        assert!(matches("calendar.google.*", "calendar.google.com", "/calendar/u/1/r/week", ""));
+        assert!(matches("calendar.google.*", "calendar.google.co.uk", "/", ""));
+        assert!(!matches("calendar.google.*", "mail.google.com", "/", ""));
     }
 
     #[test]

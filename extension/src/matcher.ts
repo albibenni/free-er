@@ -37,8 +37,13 @@ export function patternMatches(
   // Match host
   let hostOk: boolean;
   if (hostPat.startsWith("*.")) {
+    // "*.netflix.com" → matches "netflix.com", "www.netflix.com", "api.netflix.com"
     const suffix = hostPat.slice(2);
     hostOk = host === suffix || host.endsWith("." + suffix);
+  } else if (hostPat.endsWith(".*")) {
+    // "calendar.google.*" → matches "calendar.google.com", "calendar.google.co.uk"
+    const prefix = hostPat.slice(0, -2);
+    hostOk = host === prefix || host.startsWith(prefix + ".");
   } else {
     hostOk = hostPat === host;
   }
