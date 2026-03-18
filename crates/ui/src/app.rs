@@ -23,6 +23,7 @@ pub enum Page {
 
 pub struct App {
     current_page: Page,
+    sidebar_open: bool,
     /// ID of the first (default) rule set; used by Settings quick-toggles.
     default_rule_set_id: Option<Uuid>,
     focus: Controller<FocusSection>,
@@ -87,6 +88,7 @@ pub enum AppMsg {
     RefreshSchedules,
     RefreshRuleSets,
     SetDefaultRuleSet(Uuid),
+    ToggleSidebar,
 }
 
 #[relm4::component(pub)]
@@ -107,30 +109,94 @@ impl Component for App {
                 // ── Sidebar ──────────────────────────────────────────────
                 gtk4::Box {
                     set_orientation: gtk4::Orientation::Vertical,
-                    set_width_request: 160,
                     add_css_class: "sidebar",
                     set_spacing: 4,
                     set_margin_all: 8,
+                    #[watch]
+                    set_width_request: if model.sidebar_open { 160 } else { 48 },
+
+                    // Toggle button
+                    gtk4::Button {
+                        add_css_class: "flat",
+                        set_halign: gtk4::Align::End,
+                        #[watch]
+                        set_icon_name: if model.sidebar_open { "pan-start-symbolic" } else { "pan-end-symbolic" },
+                        connect_clicked => AppMsg::ToggleSidebar,
+                    },
 
                     gtk4::Button {
-                        set_label: "Focus",
+                        add_css_class: "flat",
                         connect_clicked => AppMsg::Navigate(Page::Focus),
+                        gtk4::Box {
+                            set_orientation: gtk4::Orientation::Horizontal,
+                            set_spacing: 8,
+                            gtk4::Image { set_icon_name: Some("media-playback-start-symbolic") },
+                            gtk4::Label {
+                                set_label: "Focus",
+                                #[watch]
+                                set_visible: model.sidebar_open,
+                            },
+                        },
                     },
                     gtk4::Button {
-                        set_label: "Allowed Lists",
+                        add_css_class: "flat",
                         connect_clicked => AppMsg::Navigate(Page::AllowedLists),
+                        gtk4::Box {
+                            set_orientation: gtk4::Orientation::Horizontal,
+                            set_spacing: 8,
+                            gtk4::Image { set_icon_name: Some("security-high-symbolic") },
+                            gtk4::Label {
+                                set_label: "Allowed Lists",
+                                #[watch]
+                                set_visible: model.sidebar_open,
+                            },
+                        },
                     },
                     gtk4::Button {
-                        set_label: "Pomodoro",
+                        add_css_class: "flat",
                         connect_clicked => AppMsg::Navigate(Page::Pomodoro),
+                        gtk4::Box {
+                            set_orientation: gtk4::Orientation::Horizontal,
+                            set_spacing: 8,
+                            gtk4::Image { set_icon_name: Some("alarm-symbolic") },
+                            gtk4::Label {
+                                set_label: "Pomodoro",
+                                #[watch]
+                                set_visible: model.sidebar_open,
+                            },
+                        },
                     },
                     gtk4::Button {
-                        set_label: "Schedule",
+                        add_css_class: "flat",
                         connect_clicked => AppMsg::Navigate(Page::Schedule),
+                        gtk4::Box {
+                            set_orientation: gtk4::Orientation::Horizontal,
+                            set_spacing: 8,
+                            gtk4::Image { set_icon_name: Some("x-office-calendar-symbolic") },
+                            gtk4::Label {
+                                set_label: "Schedule",
+                                #[watch]
+                                set_visible: model.sidebar_open,
+                            },
+                        },
                     },
+
+                    // Spacer — pushes Settings to the bottom
+                    gtk4::Box { set_vexpand: true },
+
                     gtk4::Button {
-                        set_label: "Settings",
+                        add_css_class: "flat",
                         connect_clicked => AppMsg::Navigate(Page::Settings),
+                        gtk4::Box {
+                            set_orientation: gtk4::Orientation::Horizontal,
+                            set_spacing: 8,
+                            gtk4::Image { set_icon_name: Some("preferences-system-symbolic") },
+                            gtk4::Label {
+                                set_label: "Settings",
+                                #[watch]
+                                set_visible: model.sidebar_open,
+                            },
+                        },
                     },
                 },
 
@@ -208,6 +274,7 @@ impl Component for App {
 
         let model = App {
             current_page: Page::Focus,
+            sidebar_open: true,
             default_rule_set_id: None,
             focus,
             pomodoro,
@@ -242,6 +309,9 @@ impl Component for App {
         _root: &Self::Root,
     ) {
         match msg {
+            AppMsg::ToggleSidebar => {
+                self.sidebar_open = !self.sidebar_open;
+            }
             AppMsg::Navigate(page) => {
                 let name = match page {
                     Page::Focus => "focus",
