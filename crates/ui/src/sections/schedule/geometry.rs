@@ -1,6 +1,154 @@
 use chrono::Datelike;
 use shared::ipc::{ScheduleSummary, ScheduleType};
 
+// ── Block layout ──────────────────────────────────────────────────────────────
+
+/// Rendering slot for one schedule in one column.
+#[derive(Debug, Clone)]
+pub(super) struct BlockLayout {
+    pub sched_id: uuid::Uuid,
+    pub col: usize,
+    /// Horizontal slot index within the column (0 = leftmost).
+    pub slot: usize,
+    /// Total number of horizontal slots in this overlap group.
+    pub total_slots: usize,
+    /// Don't render this block (e.g. focus hidden because break wins).
+    pub hidden: bool,
+    /// Number of additional schedules merged into this block (0 = standalone).
+    pub merged_count: usize,
+}
+
+/// Compute the rendering layout for all schedules in the given week.
+///
+/// Rules for overlapping events in the same column:
+/// - Break + Focus  → break takes full width; focus blocks are hidden.
+/// - Focus + Focus (different rule sets) → merged into one full-width block.
+/// - Anything else  → side-by-side (column split equally).
+pub(super) fn compute_layout(
+    schedules: &[ScheduleSummary],
+    week_monday: chrono::NaiveDate,
+) -> Vec<BlockLayout> {
+    let mut layouts: Vec<BlockLayout> = Vec::new();
+
+    for col in 0..7usize {
+        // Collect indices of schedules that appear in this column, sorted by start time.
+        let mut col_indices: Vec<usize> = (0..schedules.len())
+            .filter(|&i| event_columns(&schedules[i], week_monday).contains(&col))
+            .collect();
+        col_indices.sort_by_key(|&i| schedules[i].start_min);
+
+        for group in find_overlap_groups(&col_indices, schedules) {
+            if group.len() == 1 {
+                layouts.push(BlockLayout {
+                    sched_id: schedules[group[0]].id,
+                    col,
+                    slot: 0,
+                    total_slots: 1,
+                    hidden: false,
+                    merged_count: 0,
+                });
+                continue;
+            }
+
+            let has_break = group
+                .iter()
+                .any(|&i| schedules[i].schedule_type == ScheduleType::Break);
+            let all_focus = group
+                .iter()
+                .all(|&i| schedules[i].schedule_type == ScheduleType::Focus);
+
+            if has_break {
+                // Break wins: break full-width, focus hidden.
+                for &i in &group {
+                    let is_break = schedules[i].schedule_type == ScheduleType::Break;
+                    layouts.push(BlockLayout {
+                        sched_id: schedules[i].id,
+                        col,
+                        slot: 0,
+                        total_slots: 1,
+                        hidden: !is_break,
+                        merged_count: 0,
+                    });
+                }
+            } else if all_focus {
+                let first_rule_set = schedules[group[0]].rule_set_id;
+                let all_same_list = group
+                    .iter()
+                    .all(|&i| schedules[i].rule_set_id == first_rule_set);
+
+                if all_same_list {
+                    // Same rule set → side by side.
+                    let n = group.len();
+                    for (slot, &i) in group.iter().enumerate() {
+                        layouts.push(BlockLayout {
+                            sched_id: schedules[i].id,
+                            col,
+                            slot,
+                            total_slots: n,
+                            hidden: false,
+                            merged_count: 0,
+                        });
+                    }
+                } else {
+                    // Different rule sets → merge: first block full-width, rest hidden.
+                    let merged_count = group.len() - 1;
+                    for (idx, &i) in group.iter().enumerate() {
+                        layouts.push(BlockLayout {
+                            sched_id: schedules[i].id,
+                            col,
+                            slot: 0,
+                            total_slots: 1,
+                            hidden: idx > 0,
+                            merged_count: if idx == 0 { merged_count } else { 0 },
+                        });
+                    }
+                }
+            } else {
+                // Mixed non-break types → side by side.
+                let n = group.len();
+                for (slot, &i) in group.iter().enumerate() {
+                    layouts.push(BlockLayout {
+                        sched_id: schedules[i].id,
+                        col,
+                        slot,
+                        total_slots: n,
+                        hidden: false,
+                        merged_count: 0,
+                    });
+                }
+            }
+        }
+    }
+
+    layouts
+}
+
+/// Group sorted schedule indices into sets of overlapping intervals.
+fn find_overlap_groups(
+    sorted_indices: &[usize],
+    schedules: &[ScheduleSummary],
+) -> Vec<Vec<usize>> {
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    let mut current: Vec<usize> = Vec::new();
+    let mut max_end: u32 = 0;
+
+    for &idx in sorted_indices {
+        let s = &schedules[idx];
+        if current.is_empty() || s.start_min < max_end {
+            current.push(idx);
+            max_end = max_end.max(s.end_min);
+        } else {
+            groups.push(std::mem::take(&mut current));
+            current.push(idx);
+            max_end = s.end_min;
+        }
+    }
+    if !current.is_empty() {
+        groups.push(current);
+    }
+    groups
+}
+
 // ── Calendar layout constants ─────────────────────────────────────────────────
 
 pub(super) const MARGIN_LEFT: f64 = 52.0;
@@ -57,28 +205,40 @@ pub(super) fn hit_test_event(
     let this_mon = today - chrono::Duration::days(dfm);
     let week_monday = this_mon + chrono::Duration::weeks(week_offset as i64);
 
-    for sched in schedules {
-        let cols: Vec<usize> = event_columns(sched, week_monday);
-        for col in cols {
-            let ex = MARGIN_LEFT + col as f64 * col_w + 2.0;
-            let bw = col_w - 4.0;
-            let sf = clamp_hour_frac(sched.start_min as f64 / 60.0);
-            let ef = clamp_hour_frac(sched.end_min as f64 / 60.0);
-            let ys = HEADER_H + sf * (h - HEADER_H);
-            let ye = HEADER_H + ef * (h - HEADER_H);
-            let bh = (ye - ys).max(4.0);
-            if x >= ex && x <= ex + bw && y >= ys && y <= ys + bh {
-                return Some((
-                    sched.id,
-                    sched.name.clone(),
-                    col,
-                    sched.start_min,
-                    sched.end_min,
-                    sched.imported,
-                    sched.schedule_type.clone(),
-                    sched.rule_set_id,
-                ));
-            }
+    let layouts = compute_layout(schedules, week_monday);
+
+    for layout in &layouts {
+        if layout.hidden {
+            continue;
+        }
+        let sched = match schedules.iter().find(|s| s.id == layout.sched_id) {
+            Some(s) => s,
+            None => continue,
+        };
+        if !sched.enabled {
+            continue;
+        }
+
+        let slot_w = col_w / layout.total_slots as f64;
+        let ex = MARGIN_LEFT + layout.col as f64 * col_w + layout.slot as f64 * slot_w + 2.0;
+        let bw = slot_w - 4.0;
+        let sf = clamp_hour_frac(sched.start_min as f64 / 60.0);
+        let ef = clamp_hour_frac(sched.end_min as f64 / 60.0);
+        let ys = HEADER_H + sf * (h - HEADER_H);
+        let ye = HEADER_H + ef * (h - HEADER_H);
+        let bh = (ye - ys).max(4.0);
+
+        if x >= ex && x <= ex + bw && y >= ys && y <= ys + bh {
+            return Some((
+                sched.id,
+                sched.name.clone(),
+                layout.col,
+                sched.start_min,
+                sched.end_min,
+                sched.imported,
+                sched.schedule_type.clone(),
+                sched.rule_set_id,
+            ));
         }
     }
     None

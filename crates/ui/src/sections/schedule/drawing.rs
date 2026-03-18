@@ -3,7 +3,7 @@ use gtk4::prelude::*;
 
 use super::draw_data::{DragMode, DrawData};
 use super::geometry::{
-    clamp_hour_frac, event_columns, END_HOUR, HEADER_H, MARGIN_LEFT, MARGIN_RIGHT, START_HOUR,
+    clamp_hour_frac, compute_layout, END_HOUR, HEADER_H, MARGIN_LEFT, MARGIN_RIGHT, START_HOUR,
 };
 
 // ── Color palette ─────────────────────────────────────────────────────────────
@@ -206,17 +206,24 @@ fn draw_event_blocks(
     data: &DrawData,
     week_monday: chrono::NaiveDate,
 ) {
-    for sched in &data.schedules {
+    let layouts = compute_layout(&data.schedules, week_monday);
+
+    for layout in &layouts {
+        if layout.hidden {
+            continue;
+        }
+        let sched = match data.schedules.iter().find(|s| s.id == layout.sched_id) {
+            Some(s) => s,
+            None => continue,
+        };
         if !sched.enabled {
             continue;
         }
 
-        // Blocks being resized are rendered entirely by the drag preview.
         let is_resizing = matches!(&data.drag_mode, DragMode::Resize { id, .. } if *id == sched.id);
         if is_resizing {
             continue;
         }
-
         let is_moving = matches!(&data.drag_mode, DragMode::Move { id, .. } if *id == sched.id);
 
         let color_idx = sched
@@ -224,33 +231,33 @@ fn draw_event_blocks(
             .bytes()
             .fold(0usize, |acc, b| acc.wrapping_add(b as usize));
         let (r, g, b) = COLORS[color_idx % COLORS.len()];
-
-        // Dim the original ghost while moving.
         let fill_alpha = if is_moving { 0.25 } else { 0.80 };
 
-        for col in event_columns(sched, week_monday) {
-            let x = MARGIN_LEFT + col as f64 * col_w + 2.0;
-            let block_w = col_w - 4.0;
+        let slot_w = col_w / layout.total_slots as f64;
+        let x = MARGIN_LEFT + layout.col as f64 * col_w + layout.slot as f64 * slot_w + 2.0;
+        let block_w = slot_w - 4.0;
 
-            let start_frac = clamp_hour_frac(sched.start_min as f64 / 60.0);
-            let end_frac = clamp_hour_frac(sched.end_min as f64 / 60.0);
-            let y_start = HEADER_H + start_frac * (h - HEADER_H);
-            let y_end = HEADER_H + end_frac * (h - HEADER_H);
-            let block_h = (y_end - y_start).max(4.0);
+        let start_frac = clamp_hour_frac(sched.start_min as f64 / 60.0);
+        let end_frac = clamp_hour_frac(sched.end_min as f64 / 60.0);
+        let y_start = HEADER_H + start_frac * (h - HEADER_H);
+        let y_end = HEADER_H + end_frac * (h - HEADER_H);
+        let block_h = (y_end - y_start).max(4.0);
 
-            cr.set_source_rgba(r, g, b, fill_alpha);
+        cr.set_source_rgba(r, g, b, fill_alpha);
+        rounded_rect(cr, x, y_start, block_w, block_h, 4.0);
+        let _ = cr.fill();
+
+        if !sched.imported {
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.5 * fill_alpha);
+            cr.set_line_width(1.5);
             rounded_rect(cr, x, y_start, block_w, block_h, 4.0);
-            let _ = cr.fill();
+            let _ = cr.stroke();
+        }
 
-            if !sched.imported {
-                cr.set_source_rgba(1.0, 1.0, 1.0, 0.5 * fill_alpha);
-                cr.set_line_width(1.5);
-                rounded_rect(cr, x, y_start, block_w, block_h, 4.0);
-                let _ = cr.stroke();
-            }
-
-            if !is_moving {
-                draw_event_label(cr, sched, x, block_w, y_start, block_h);
+        if !is_moving {
+            draw_event_label(cr, sched, x, block_w, y_start, block_h);
+            if layout.merged_count > 0 {
+                draw_merged_badge(cr, x, block_w, y_start, layout.merged_count);
             }
         }
     }
@@ -313,6 +320,24 @@ fn draw_event_label(
 
     cr.move_to(text_x, text_y);
     let _ = cr.show_text(&sched.name);
+}
+
+/// Draw a small "+N" badge in the top-right corner of a merged focus block.
+fn draw_merged_badge(
+    cr: &gtk4::cairo::Context,
+    x: f64,
+    block_w: f64,
+    y_start: f64,
+    merged_count: usize,
+) {
+    let label = format!("+{merged_count}");
+    cr.set_font_size(9.0);
+    cr.set_source_rgba(1.0, 1.0, 1.0, 0.80);
+    let te = cr
+        .text_extents(&label)
+        .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+    cr.move_to(x + block_w - te.width() - 4.0, y_start + 10.0);
+    let _ = cr.show_text(&label);
 }
 
 // ── Drag preview ──────────────────────────────────────────────────────────────
