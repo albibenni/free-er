@@ -3,7 +3,7 @@ use gtk4::prelude::*;
 
 use super::draw_data::{DragMode, DrawData};
 use super::geometry::{
-    clamp_hour_frac, event_columns, HEADER_H, MARGIN_LEFT, MARGIN_RIGHT, END_HOUR, START_HOUR,
+    clamp_hour_frac, event_columns, END_HOUR, HEADER_H, MARGIN_LEFT, MARGIN_RIGHT, START_HOUR,
 };
 
 // ── Color palette ─────────────────────────────────────────────────────────────
@@ -31,8 +31,7 @@ pub(super) struct Theme {
 impl Theme {
     pub fn from_widget(da: &gtk4::DrawingArea) -> Self {
         let fg = da.style_context().color();
-        let lum =
-            0.299 * fg.red() as f64 + 0.587 * fg.green() as f64 + 0.114 * fg.blue() as f64;
+        let lum = 0.299 * fg.red() as f64 + 0.587 * fg.green() as f64 + 0.114 * fg.blue() as f64;
         if lum > 0.5 {
             Theme {
                 bg: (0.16, 0.16, 0.16),
@@ -118,13 +117,7 @@ fn draw_today_highlight(
 
 // ── Hour grid + labels ────────────────────────────────────────────────────────
 
-fn draw_hour_grid(
-    cr: &gtk4::cairo::Context,
-    t: &Theme,
-    w: f64,
-    _h: f64,
-    hour_h: f64,
-) {
+fn draw_hour_grid(cr: &gtk4::cairo::Context, t: &Theme, w: f64, _h: f64, hour_h: f64) {
     cr.select_font_face(
         "Sans",
         gtk4::cairo::FontSlant::Normal,
@@ -219,14 +212,12 @@ fn draw_event_blocks(
         }
 
         // Blocks being resized are rendered entirely by the drag preview.
-        let is_resizing =
-            matches!(&data.drag_mode, DragMode::Resize { id, .. } if *id == sched.id);
+        let is_resizing = matches!(&data.drag_mode, DragMode::Resize { id, .. } if *id == sched.id);
         if is_resizing {
             continue;
         }
 
-        let is_moving =
-            matches!(&data.drag_mode, DragMode::Move { id, .. } if *id == sched.id);
+        let is_moving = matches!(&data.drag_mode, DragMode::Move { id, .. } if *id == sched.id);
 
         let color_idx = sched
             .name
@@ -260,7 +251,6 @@ fn draw_event_blocks(
 
             if !is_moving {
                 draw_event_label(cr, sched, x, block_w, y_start, block_h);
-                draw_resize_handles(cr, sched, x, block_w, y_start, block_h);
             }
         }
     }
@@ -281,7 +271,11 @@ fn draw_event_label(
 
     const ICON_W: f64 = 13.0;
     const ICON_GAP: f64 = 6.0;
-    let icon_total = if sched.imported { ICON_W + ICON_GAP } else { 0.0 };
+    let icon_total = if sched.imported {
+        ICON_W + ICON_GAP
+    } else {
+        0.0
+    };
 
     // Show start/end times when there's enough room
     let show_times = block_h > 36.0;
@@ -321,44 +315,32 @@ fn draw_event_label(
     let _ = cr.show_text(&sched.name);
 }
 
-fn draw_resize_handles(
-    cr: &gtk4::cairo::Context,
-    sched: &shared::ipc::ScheduleSummary,
-    x: f64,
-    block_w: f64,
-    y_start: f64,
-    block_h: f64,
-) {
-    if sched.imported || block_h <= 18.0 {
-        return;
-    }
-    let handle_w = (block_w * 0.35).min(28.0);
-    let handle_h = 3.0;
-    let handle_x = x + (block_w - handle_w) / 2.0;
-    cr.set_source_rgba(1.0, 1.0, 1.0, 0.55);
-    rounded_rect(cr, handle_x, y_start + 3.0, handle_w, handle_h, 1.5);
-    let _ = cr.fill();
-    rounded_rect(
-        cr,
-        handle_x,
-        y_start + block_h - handle_h - 3.0,
-        handle_w,
-        handle_h,
-        1.5,
-    );
-    let _ = cr.fill();
-}
-
 // ── Drag preview ──────────────────────────────────────────────────────────────
 
 fn draw_drag_preview(cr: &gtk4::cairo::Context, h: f64, col_w: f64, data: &DrawData) {
     let preview: Option<(usize, u32, u32)> = match &data.drag_mode {
-        DragMode::Create { col, start_min, end_min } => Some((*col, *start_min, *end_min)),
-        DragMode::Move { col, start_min, end_min, .. } => Some((*col, *start_min, *end_min)),
-        DragMode::Resize { col, start_min, end_min, .. } => Some((*col, *start_min, *end_min)),
+        DragMode::Create {
+            col,
+            start_min,
+            end_min,
+        } => Some((*col, *start_min, *end_min)),
+        DragMode::Move {
+            col,
+            start_min,
+            end_min,
+            ..
+        } => Some((*col, *start_min, *end_min)),
+        DragMode::Resize {
+            col,
+            start_min,
+            end_min,
+            ..
+        } => Some((*col, *start_min, *end_min)),
         DragMode::None => None,
     };
-    let Some((col, s_min, e_min)) = preview else { return };
+    let Some((col, s_min, e_min)) = preview else {
+        return;
+    };
 
     let x = MARGIN_LEFT + col as f64 * col_w + 2.0;
     let bw = col_w - 4.0;
@@ -435,10 +417,22 @@ fn draw_now_indicator(
 fn rounded_rect(cr: &gtk4::cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
     let r = r.min(w / 2.0).min(h / 2.0);
     cr.new_sub_path();
-    cr.arc(x + r, y + r, r, std::f64::consts::PI, 3.0 * std::f64::consts::PI / 2.0);
+    cr.arc(
+        x + r,
+        y + r,
+        r,
+        std::f64::consts::PI,
+        3.0 * std::f64::consts::PI / 2.0,
+    );
     cr.arc(x + w - r, y + r, r, 3.0 * std::f64::consts::PI / 2.0, 0.0);
     cr.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::PI / 2.0);
-    cr.arc(x + r, y + h - r, r, std::f64::consts::PI / 2.0, std::f64::consts::PI);
+    cr.arc(
+        x + r,
+        y + h - r,
+        r,
+        std::f64::consts::PI / 2.0,
+        std::f64::consts::PI,
+    );
     cr.close_path();
 }
 
