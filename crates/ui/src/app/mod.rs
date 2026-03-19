@@ -191,7 +191,16 @@ impl Component for App {
                         },
                     },
 
-                                    gtk4::Button {
+                    // Spacer — pushes Settings to the bottom
+                    gtk4::Box { set_vexpand: true },
+
+                    gtk4::Separator {
+                        set_orientation: gtk4::Orientation::Horizontal,
+                        set_margin_top: 6,
+                        set_margin_bottom: 6,
+                    },
+
+                    gtk4::Button {
                         add_css_class: "flat",
                         connect_clicked => AppMsg::Navigate(Page::Calendar),
                         gtk4::Box {
@@ -202,9 +211,6 @@ impl Component for App {
                             gtk4::Label { set_label: "Calendar Settings" },
                         },
                     },
-
-                    // Spacer — pushes Settings to the bottom
-                    gtk4::Box { set_vexpand: true },
 
                     gtk4::Button {
                         add_css_class: "flat",
