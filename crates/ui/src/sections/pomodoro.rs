@@ -31,6 +31,8 @@ pub enum PomodoroInput {
     SetQuickBreak { break_secs: u64 },
     AdjustFocus(i64),
     AdjustBreak(i64),
+    DragFocusAt { x: f64, y: f64, w: f64, h: f64 },
+    DragBreakAt { x: f64, y: f64, w: f64, h: f64 },
     Start,
     Stop,
     RuleSetChanged,
@@ -318,6 +320,62 @@ impl Component for PomodoroSection {
         };
         let widgets = view_output!();
         {
+            let start = Rc::new(RefCell::new((0.0_f64, 0.0_f64)));
+            let s = _sender.clone();
+            let da = widgets.focus_ring.clone();
+            let start_begin = start.clone();
+            let drag = gtk4::GestureDrag::new();
+            drag.connect_drag_begin(move |_, x, y| {
+                *start_begin.borrow_mut() = (x, y);
+                s.input(PomodoroInput::DragFocusAt {
+                    x,
+                    y,
+                    w: da.width() as f64,
+                    h: da.allocated_height() as f64,
+                });
+            });
+            let s = _sender.clone();
+            let da = widgets.focus_ring.clone();
+            drag.connect_drag_update(move |_, off_x, off_y| {
+                let (sx, sy) = *start.borrow();
+                s.input(PomodoroInput::DragFocusAt {
+                    x: sx + off_x,
+                    y: sy + off_y,
+                    w: da.width() as f64,
+                    h: da.allocated_height() as f64,
+                });
+            });
+            widgets.focus_ring.add_controller(drag);
+        }
+        {
+            let start = Rc::new(RefCell::new((0.0_f64, 0.0_f64)));
+            let s = _sender.clone();
+            let da = widgets.break_ring.clone();
+            let start_begin = start.clone();
+            let drag = gtk4::GestureDrag::new();
+            drag.connect_drag_begin(move |_, x, y| {
+                *start_begin.borrow_mut() = (x, y);
+                s.input(PomodoroInput::DragBreakAt {
+                    x,
+                    y,
+                    w: da.width() as f64,
+                    h: da.allocated_height() as f64,
+                });
+            });
+            let s = _sender.clone();
+            let da = widgets.break_ring.clone();
+            drag.connect_drag_update(move |_, off_x, off_y| {
+                let (sx, sy) = *start.borrow();
+                s.input(PomodoroInput::DragBreakAt {
+                    x: sx + off_x,
+                    y: sy + off_y,
+                    w: da.width() as f64,
+                    h: da.allocated_height() as f64,
+                });
+            });
+            widgets.break_ring.add_controller(drag);
+        }
+        {
             let ring = model.ring_visual.clone();
             widgets.focus_ring.set_draw_func(move |_, cr, w, h| {
                 let s = ring.borrow();
@@ -378,6 +436,16 @@ impl Component for PomodoroSection {
                 let mins = (self.break_secs / 60) as i64;
                 let new_mins = (mins + delta_min).clamp(1, 90) as u64;
                 self.break_secs = new_mins * 60;
+                self.ring_visual.borrow_mut().break_secs = self.break_secs;
+            }
+            PomodoroInput::DragFocusAt { x, y, w, h } => {
+                let mins = minutes_from_ring_pos(x, y, w, h, 5, 180);
+                self.focus_secs = mins * 60;
+                self.ring_visual.borrow_mut().focus_secs = self.focus_secs;
+            }
+            PomodoroInput::DragBreakAt { x, y, w, h } => {
+                let mins = minutes_from_ring_pos(x, y, w, h, 1, 90);
+                self.break_secs = mins * 60;
                 self.ring_visual.borrow_mut().break_secs = self.break_secs;
             }
             PomodoroInput::Start => {
@@ -489,4 +557,21 @@ fn draw_ring(
     cr.set_source_rgb(0.92, 0.92, 0.92);
     cr.arc(hx, hy, 3.5, 0.0, 2.0 * PI);
     let _ = cr.fill();
+}
+
+fn minutes_from_ring_pos(x: f64, y: f64, w: f64, h: f64, min_m: u64, max_m: u64) -> u64 {
+    let cx = w / 2.0;
+    let cy = h / 2.0;
+    let angle = (y - cy).atan2(x - cx);
+    let start = -FRAC_PI_2;
+    let mut t = (angle - start) / (2.0 * PI);
+    while t < 0.0 {
+        t += 1.0;
+    }
+    while t >= 1.0 {
+        t -= 1.0;
+    }
+    let span = (max_m - min_m) as f64;
+    let mins = min_m as f64 + t * span;
+    mins.round().clamp(min_m as f64, max_m as f64) as u64
 }
