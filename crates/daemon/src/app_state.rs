@@ -163,20 +163,25 @@ impl AppState {
         let has_break = inner.config.schedules.iter()
             .any(|s| s.schedule_type == shared::models::ScheduleType::Break && s.is_active_now());
 
-        if let Some(rule_set_id) = active_focus {
-            // Start focus (or update rule set) if not already schedule-activated with same rule set
-            if !inner.focus_active || inner.active_rule_set_id != Some(rule_set_id) {
-                inner.focus_active = true;
-                inner.active_rule_set_id = Some(rule_set_id);
-                inner.schedule_activated = true;
-            }
-        } else if has_break || !inner.schedule_activated {
-            // Only auto-stop if we were the ones who started it
+        if has_break {
+            // Break wins: stop focus if we started it.
             if inner.schedule_activated {
                 inner.focus_active = false;
                 inner.active_rule_set_id = None;
                 inner.schedule_activated = false;
             }
+        } else if let Some(rule_set_id) = active_focus {
+            // Start focus (or update rule set) if not already schedule-activated with same rule set.
+            if !inner.focus_active || inner.active_rule_set_id != Some(rule_set_id) {
+                inner.focus_active = true;
+                inner.active_rule_set_id = Some(rule_set_id);
+                inner.schedule_activated = true;
+            }
+        } else if inner.schedule_activated {
+            // No active schedule — stop if we were the ones who started it.
+            inner.focus_active = false;
+            inner.active_rule_set_id = None;
+            inner.schedule_activated = false;
         }
     }
 
