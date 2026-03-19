@@ -19,6 +19,9 @@ use geometry::{
     MARGIN_RIGHT, START_HOUR,
 };
 
+const MIN_WEEK_OFFSET: i32 = -1;
+const MAX_WEEK_OFFSET: i32 = 1;
+
 pub struct ScheduleSection {
     week_offset: i32,
     draw_data: Rc<RefCell<DrawData>>,
@@ -143,6 +146,8 @@ impl Component for ScheduleSection {
 
                 gtk4::Button {
                     set_label: "‹",
+                    #[watch]
+                    set_sensitive: model.week_offset > MIN_WEEK_OFFSET,
                     connect_clicked => ScheduleInput::PrevWeek,
                 },
                 gtk4::Button {
@@ -151,6 +156,8 @@ impl Component for ScheduleSection {
                 },
                 gtk4::Button {
                     set_label: "›",
+                    #[watch]
+                    set_sensitive: model.week_offset < MAX_WEEK_OFFSET,
                     connect_clicked => ScheduleInput::NextWeek,
                 },
 
@@ -581,11 +588,11 @@ impl Component for ScheduleSection {
     ) {
         match msg {
             ScheduleInput::PrevWeek => {
-                self.week_offset -= 1;
+                self.week_offset = (self.week_offset - 1).max(MIN_WEEK_OFFSET);
                 self.draw_data.borrow_mut().week_offset = self.week_offset;
             }
             ScheduleInput::NextWeek => {
-                self.week_offset += 1;
+                self.week_offset = (self.week_offset + 1).min(MAX_WEEK_OFFSET);
                 self.draw_data.borrow_mut().week_offset = self.week_offset;
             }
             ScheduleInput::Today => {

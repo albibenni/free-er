@@ -33,13 +33,17 @@
   - [x] icon and text bigger
 - [x] resync with google calendar when the app starts
 - [x] resync button to resync with google calendar
+- [x] import from calendar previous week and next week only
+  - [x] clean schedule out of time - 2 weeks ago and 2 weeks in the future
+  - [ ] check if weekly could affect it
+- [ ] allow creating inside repeating task
 - [ ] change default allowed list from settings
 - [ ] import from open websites
-- [ ] rules for import
-  - [ ] personalized list
-    - [ ] no screen
-    - [ ] focus, study, work
-    - [ ] break, free, colloquio
+- [x] rules for import
+  - [x] personalized list
+    - [x] no screen
+    - [x] focus, study, work
+    - [x] break, free, colloquio
 
 ### POMODORO
 
