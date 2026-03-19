@@ -575,3 +575,86 @@ fn minutes_from_ring_pos(x: f64, y: f64, w: f64, h: f64, min_m: u64, max_m: u64)
     let mins = min_m as f64 + t * span;
     mins.round().clamp(min_m as f64, max_m as f64) as u64
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn focus_fraction_uses_remaining_when_active() {
+        let s = RingVisualState {
+            focus_secs: 3000,
+            break_secs: 900,
+            phase: Some("Focus".into()),
+            seconds_remaining: Some(1500),
+        };
+        let f = focus_fraction(&s);
+        assert!((f - 0.5).abs() < 0.05);
+    }
+
+    #[test]
+    fn break_fraction_uses_remaining_when_active() {
+        let s = RingVisualState {
+            focus_secs: 3000,
+            break_secs: 1200,
+            phase: Some("Break".into()),
+            seconds_remaining: Some(300),
+        };
+        let f = break_fraction(&s);
+        assert!((f - 0.25).abs() < 0.05);
+    }
+
+    #[test]
+    fn focus_fraction_fallback_stays_in_bounds() {
+        let s = RingVisualState {
+            focus_secs: 45 * 60,
+            break_secs: 15 * 60,
+            phase: None,
+            seconds_remaining: None,
+        };
+        let f = focus_fraction(&s);
+        assert!((0.15..=0.95).contains(&f));
+    }
+
+    #[test]
+    fn break_fraction_fallback_stays_in_bounds() {
+        let s = RingVisualState {
+            focus_secs: 45 * 60,
+            break_secs: 15 * 60,
+            phase: None,
+            seconds_remaining: None,
+        };
+        let f = break_fraction(&s);
+        assert!((0.10..=0.95).contains(&f));
+    }
+
+    #[test]
+    fn minutes_from_ring_pos_clamps_bounds() {
+        let m = minutes_from_ring_pos(100.0, 0.0, 200.0, 200.0, 5, 180);
+        assert!((5..=180).contains(&m));
+    }
+
+    #[test]
+    fn minutes_from_ring_pos_top_is_minimum() {
+        let m = minutes_from_ring_pos(100.0, 0.0, 200.0, 200.0, 5, 180);
+        assert_eq!(m, 5);
+    }
+
+    #[test]
+    fn minutes_from_ring_pos_right_is_quarter_turn() {
+        let m = minutes_from_ring_pos(200.0, 100.0, 200.0, 200.0, 0, 120);
+        assert!((28..=32).contains(&m));
+    }
+
+    #[test]
+    fn minutes_from_ring_pos_bottom_is_half_turn() {
+        let m = minutes_from_ring_pos(100.0, 200.0, 200.0, 200.0, 0, 120);
+        assert!((58..=62).contains(&m));
+    }
+
+    #[test]
+    fn minutes_from_ring_pos_left_is_three_quarters_turn() {
+        let m = minutes_from_ring_pos(0.0, 100.0, 200.0, 200.0, 0, 120);
+        assert!((88..=92).contains(&m));
+    }
+}
