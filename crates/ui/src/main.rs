@@ -1,9 +1,5 @@
-mod app;
-mod ipc_client;
-mod sections;
-
-use app::App;
 use relm4::RelmApp;
+use ui::app::App;
 
 fn default_env_filter() -> tracing_subscriber::EnvFilter {
     tracing_subscriber::EnvFilter::from_default_env()

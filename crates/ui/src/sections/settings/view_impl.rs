@@ -1,7 +1,5 @@
 use gtk4::prelude::*;
-use relm4::{prelude::*, ComponentController};
-use std::cell::RefCell;
-use std::rc::Rc;
+use relm4::prelude::*;
 
 use super::{
     component::SettingsSection,
@@ -245,6 +243,9 @@ impl SimpleComponent for SettingsSection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use relm4::ComponentController;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn flush_main_context() {
         let ctx = gtk4::glib::MainContext::default();
