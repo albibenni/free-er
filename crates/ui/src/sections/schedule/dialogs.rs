@@ -29,15 +29,14 @@ pub(super) fn show_create_dialog(
     name_entry.set_margin_top(4);
     vbox.append(&name_entry);
 
-    let date_str = date.format("%Y-%m-%d").to_string();
-    let (repeat_btn, _once_btn, day_combo) =
-        append_recurrence_row(&vbox, col, Some(date_str.clone()));
-
     let (start_entry, end_entry) = append_time_row(&vbox, start_min, end_min);
 
     let default_rule_set_id = rule_sets.first().map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
     let (focus_btn, break_btn, list_combo) =
         build_type_and_list_rows(&vbox, &ScheduleType::Focus, default_rule_set_id, &rule_sets);
+    let date_str = date.format("%Y-%m-%d").to_string();
+    let (repeat_btn, _once_btn, weekday_buttons) =
+        append_recurrence_row(&vbox, &[col as u8], Some(date_str.clone()));
 
     // Auto-update name when type toggles, unless the user already changed it
     {
@@ -86,7 +85,11 @@ pub(super) fn show_create_dialog(
             ScheduleType::Break
         };
         let rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
-        let col = day_combo.active().unwrap_or(col as u32) as usize;
+        let days = if repeat_btn.is_active() {
+            selected_weekdays(&weekday_buttons)
+        } else {
+            vec![col as u8]
+        };
         let specific_date = if repeat_btn.is_active() {
             None
         } else {
@@ -94,7 +97,7 @@ pub(super) fn show_create_dialog(
         };
         sender.input(ScheduleInput::CommitCreate {
             name,
-            col,
+            days,
             start_min: s_min,
             end_min: e_min,
             specific_date,
@@ -111,6 +114,7 @@ pub(super) fn show_edit_dialog(
     id: uuid::Uuid,
     name: &str,
     col: usize,
+    days: Vec<u8>,
     start_min: u32,
     end_min: u32,
     specific_date: Option<String>,
@@ -128,13 +132,17 @@ pub(super) fn show_edit_dialog(
     name_entry.set_placeholder_text(Some("Event name"));
     vbox.append(&name_entry);
 
-    let (repeat_btn, _once_btn, day_combo) =
-        append_recurrence_row(&vbox, col, specific_date.clone());
-
     let (start_entry, end_entry) = append_time_row(&vbox, start_min, end_min);
 
     let (focus_btn, _break_btn, list_combo) =
         build_type_and_list_rows(&vbox, &schedule_type, rule_set_id, &rule_sets);
+    let initial_days = if days.is_empty() {
+        vec![col as u8]
+    } else {
+        days
+    };
+    let (repeat_btn, _once_btn, weekday_buttons) =
+        append_recurrence_row(&vbox, &initial_days, specific_date.clone());
 
     // Button row with Delete on the left
     let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
@@ -183,7 +191,16 @@ pub(super) fn show_edit_dialog(
             ScheduleType::Break
         };
         let rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
-        let col = day_combo.active().unwrap_or(col as u32) as usize;
+        let days = if repeat_btn.is_active() {
+            let selected = selected_weekdays(&weekday_buttons);
+            if selected.is_empty() {
+                vec![col as u8]
+            } else {
+                selected
+            }
+        } else {
+            vec![col as u8]
+        };
         let specific_date = if repeat_btn.is_active() {
             None
         } else {
@@ -192,7 +209,7 @@ pub(super) fn show_edit_dialog(
         sender.input(ScheduleInput::CommitEdit {
             id,
             name,
-            col,
+            days,
             start_min: s_min,
             end_min: e_min,
             specific_date,
@@ -273,7 +290,7 @@ pub(super) fn show_view_dialog(
         sender.input(ScheduleInput::CommitEdit {
             id,
             name: name_owned.clone(),
-            col,
+            days: vec![col as u8],
             start_min,
             end_min,
             specific_date: specific_date.clone(),
@@ -398,9 +415,9 @@ pub(super) fn build_type_and_list_rows(
 
 fn append_recurrence_row(
     vbox: &gtk4::Box,
-    initial_col: usize,
+    initial_days: &[u8],
     specific_date: Option<String>,
-) -> (gtk4::ToggleButton, gtk4::ToggleButton, gtk4::ComboBoxText) {
+) -> (gtk4::ToggleButton, gtk4::ToggleButton, Vec<gtk4::ToggleButton>) {
     let mode_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
     let mode_lbl = gtk4::Label::new(Some("Repeat:"));
     mode_lbl.set_width_chars(8);
@@ -416,28 +433,47 @@ fn append_recurrence_row(
     mode_row.append(&repeat_btn);
     vbox.append(&mode_row);
 
-    let day_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
-    let day_lbl = gtk4::Label::new(Some("Weekday:"));
-    day_lbl.set_width_chars(8);
-    day_lbl.set_halign(gtk4::Align::Start);
-    let day_combo = gtk4::ComboBoxText::new();
-    for day in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] {
-        day_combo.append_text(day);
+    let day_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    day_row.set_margin_top(4);
+    let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+    spacer.set_width_request(64);
+    day_row.append(&spacer);
+
+    let mut day_buttons = Vec::with_capacity(7);
+    for (idx, day) in ["M", "T", "W", "T", "F", "S", "S"].iter().enumerate() {
+        let btn = gtk4::ToggleButton::with_label(day);
+        btn.set_width_request(30);
+        btn.set_active(initial_days.contains(&(idx as u8)));
+        day_row.append(&btn);
+        day_buttons.push(btn);
     }
-    day_combo.set_active(Some(initial_col as u32));
-    day_row.append(&day_lbl);
-    day_row.append(&day_combo);
-    day_row.set_visible(is_repeating);
+    if initial_days.is_empty() {
+        if let Some(first) = day_buttons.first() {
+            first.set_active(true);
+        }
+    }
+    day_row.set_sensitive(is_repeating);
+    day_row.set_opacity(if is_repeating { 1.0 } else { 0.45 });
     vbox.append(&day_row);
 
     {
         let day_row = day_row.clone();
         repeat_btn.connect_toggled(move |btn| {
-            day_row.set_visible(btn.is_active());
+            let active = btn.is_active();
+            day_row.set_sensitive(active);
+            day_row.set_opacity(if active { 1.0 } else { 0.45 });
         });
     }
 
-    (repeat_btn, once_btn, day_combo)
+    (repeat_btn, once_btn, day_buttons)
+}
+
+fn selected_weekdays(buttons: &[gtk4::ToggleButton]) -> Vec<u8> {
+    buttons
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, btn)| btn.is_active().then_some(idx as u8))
+        .collect()
 }
 
 pub(super) fn resolve_rule_set(

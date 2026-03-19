@@ -52,6 +52,7 @@ pub enum ScheduleInput {
         id: uuid::Uuid,
         name: String,
         col: usize,
+        days: Vec<u8>,
         start_min: u32,
         end_min: u32,
         specific_date: Option<String>,
@@ -60,7 +61,7 @@ pub enum ScheduleInput {
     },
     CommitCreate {
         name: String,
-        col: usize,
+        days: Vec<u8>,
         start_min: u32,
         end_min: u32,
         specific_date: Option<String>,
@@ -70,7 +71,7 @@ pub enum ScheduleInput {
     CommitEdit {
         id: uuid::Uuid,
         name: String,
-        col: usize,
+        days: Vec<u8>,
         start_min: u32,
         end_min: u32,
         specific_date: Option<String>,
@@ -280,6 +281,14 @@ impl Component for ScheduleSection {
                             id,
                             name,
                             col,
+                            days: self
+                                .draw_data
+                                .borrow()
+                                .schedules
+                                .iter()
+                                .find(|s| s.id == id)
+                                .map(|s| s.days.clone())
+                                .unwrap_or_else(|| vec![col as u8]),
                             start_min,
                             end_min,
                             specific_date: self
@@ -346,6 +355,7 @@ impl Component for ScheduleSection {
                 id,
                 name,
                 col,
+                days,
                 start_min,
                 end_min,
                 specific_date,
@@ -357,6 +367,7 @@ impl Component for ScheduleSection {
                     id,
                     &name,
                     col,
+                    days,
                     start_min,
                     end_min,
                     specific_date,
@@ -374,7 +385,7 @@ impl Component for ScheduleSection {
             }
             ScheduleInput::CommitCreate {
                 name,
-                col,
+                days,
                 start_min,
                 end_min,
                 specific_date,
@@ -383,7 +394,7 @@ impl Component for ScheduleSection {
             } => {
                 let _ = sender.output(ScheduleOutput::CreateSchedule {
                     name,
-                    days: vec![col as u8],
+                    days,
                     start_min,
                     end_min,
                     specific_date,
@@ -394,7 +405,7 @@ impl Component for ScheduleSection {
             ScheduleInput::CommitEdit {
                 id,
                 name,
-                col,
+                days,
                 start_min,
                 end_min,
                 specific_date,
@@ -404,7 +415,7 @@ impl Component for ScheduleSection {
                 let _ = sender.output(ScheduleOutput::UpdateSchedule {
                     id,
                     name,
-                    days: vec![col as u8],
+                    days,
                     start_min,
                     end_min,
                     schedule_type,
