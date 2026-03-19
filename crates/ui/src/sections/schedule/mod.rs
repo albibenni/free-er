@@ -139,42 +139,54 @@ impl Component for ScheduleSection {
             set_margin_all: 16,
 
             // ── Navigation header ──────────────────────────────────────────
-            gtk4::Box {
-                set_orientation: gtk4::Orientation::Horizontal,
-                set_spacing: 8,
+            gtk4::Overlay {
                 set_margin_bottom: 12,
 
-                gtk4::Button {
-                    set_label: "‹",
-                    #[watch]
-                    set_sensitive: model.week_offset > MIN_WEEK_OFFSET,
-                    connect_clicked => ScheduleInput::PrevWeek,
-                },
-                gtk4::Button {
-                    set_label: "Today",
-                    connect_clicked => ScheduleInput::Today,
-                },
-                gtk4::Button {
-                    set_label: "›",
-                    #[watch]
-                    set_sensitive: model.week_offset < MAX_WEEK_OFFSET,
-                    connect_clicked => ScheduleInput::NextWeek,
-                },
-
-                #[name = "week_label"]
-                gtk4::Label {
+                add_overlay = &gtk4::Label {
                     #[watch]
                     set_label: &week_label_text(model.week_offset),
-                    set_hexpand: true,
                     set_halign: gtk4::Align::Center,
+                    set_valign: gtk4::Align::Center,
+                    set_can_target: false,
                     add_css_class: "title-3",
                 },
 
-                gtk4::Button {
-                    set_icon_name: "view-refresh-symbolic",
-                    set_tooltip_text: Some("Resync calendar"),
-                    add_css_class: "flat",
-                    connect_clicked => ScheduleInput::ResyncCalendar,
+                gtk4::Box {
+                    set_orientation: gtk4::Orientation::Horizontal,
+                    set_spacing: 8,
+
+                    gtk4::Box {
+                        set_orientation: gtk4::Orientation::Horizontal,
+                        set_spacing: 8,
+
+                        gtk4::Button {
+                            set_label: "‹",
+                            #[watch]
+                            set_sensitive: model.week_offset > MIN_WEEK_OFFSET,
+                            connect_clicked => ScheduleInput::PrevWeek,
+                        },
+                        gtk4::Button {
+                            set_label: "Today",
+                            connect_clicked => ScheduleInput::Today,
+                        },
+                        gtk4::Button {
+                            set_label: "›",
+                            #[watch]
+                            set_sensitive: model.week_offset < MAX_WEEK_OFFSET,
+                            connect_clicked => ScheduleInput::NextWeek,
+                        },
+                    },
+
+                    gtk4::Box {
+                        set_hexpand: true,
+                    },
+
+                    gtk4::Button {
+                        set_icon_name: "view-refresh-symbolic",
+                        set_tooltip_text: Some("Resync calendar"),
+                        add_css_class: "flat",
+                        connect_clicked => ScheduleInput::ResyncCalendar,
+                    },
                 },
             },
 
