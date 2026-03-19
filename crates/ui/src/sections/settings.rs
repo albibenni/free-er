@@ -31,6 +31,46 @@ pub const AI_SITES: &[&str] = &[
     "huggingface.co",       // HuggingFace
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct QuickUrlState {
+    whatsapp: bool,
+    telegram: bool,
+    discord: bool,
+    spotify: bool,
+    allow_ai_sites: bool,
+    allow_search_engines: bool,
+}
+
+fn contains_any(urls: &[String], patterns: &[&str]) -> bool {
+    patterns.iter().any(|p| urls.iter().any(|u| u == p))
+}
+
+fn quick_url_state_from_urls(urls: &[String]) -> QuickUrlState {
+    QuickUrlState {
+        whatsapp: contains_any(urls, &[WHATSAPP]),
+        telegram: contains_any(urls, &[TELEGRAM]),
+        discord: contains_any(urls, &[DISCORD]),
+        spotify: contains_any(urls, &[SPOTIFY]),
+        allow_ai_sites: contains_any(urls, AI_SITES),
+        allow_search_engines: contains_any(urls, SEARCH_ENGINES),
+    }
+}
+
+fn apply_quick_toggle(state: &mut QuickUrlState, url: &'static str, enabled: bool) -> bool {
+    let target = match url {
+        WHATSAPP => &mut state.whatsapp,
+        TELEGRAM => &mut state.telegram,
+        DISCORD => &mut state.discord,
+        SPOTIFY => &mut state.spotify,
+        _ => return false,
+    };
+    if *target == enabled {
+        return false;
+    }
+    *target = enabled;
+    true
+}
+
 #[derive(Debug)]
 pub struct SettingsSection {
     strict_mode: bool,
@@ -45,6 +85,28 @@ pub struct SettingsSection {
     caldav_user: gtk4::EntryBuffer,
     caldav_pass: gtk4::EntryBuffer,
     google_connected: bool,
+}
+
+impl SettingsSection {
+    fn quick_state(&self) -> QuickUrlState {
+        QuickUrlState {
+            whatsapp: self.whatsapp,
+            telegram: self.telegram,
+            discord: self.discord,
+            spotify: self.spotify,
+            allow_ai_sites: self.allow_ai_sites,
+            allow_search_engines: self.allow_search_engines,
+        }
+    }
+
+    fn set_quick_state(&mut self, state: QuickUrlState) {
+        self.whatsapp = state.whatsapp;
+        self.telegram = state.telegram;
+        self.discord = state.discord;
+        self.spotify = state.spotify;
+        self.allow_ai_sites = state.allow_ai_sites;
+        self.allow_search_engines = state.allow_search_engines;
+    }
 }
 
 #[derive(Debug)]
@@ -331,24 +393,15 @@ impl SimpleComponent for SettingsSection {
                 let _ = sender.output(SettingsOutput::SearchEnginesToggled(enabled));
             }
             SettingsInput::SetQuick(url, enabled) => {
-                let changed = match url {
-                    WHATSAPP => { if self.whatsapp == enabled { return; } self.whatsapp = enabled; true }
-                    TELEGRAM => { if self.telegram == enabled { return; } self.telegram = enabled; true }
-                    DISCORD  => { if self.discord  == enabled { return; } self.discord  = enabled; true }
-                    SPOTIFY  => { if self.spotify  == enabled { return; } self.spotify  = enabled; true }
-                    _ => return,
-                };
+                let mut quick = self.quick_state();
+                let changed = apply_quick_toggle(&mut quick, url, enabled);
                 if changed {
+                    self.set_quick_state(quick);
                     let _ = sender.output(SettingsOutput::QuickUrlToggled { url, enabled });
                 }
             }
             SettingsInput::QuickUrlsUpdated(urls) => {
-                self.whatsapp      = urls.iter().any(|u| u == WHATSAPP);
-                self.telegram      = urls.iter().any(|u| u == TELEGRAM);
-                self.discord       = urls.iter().any(|u| u == DISCORD);
-                self.spotify       = urls.iter().any(|u| u == SPOTIFY);
-                self.allow_ai_sites       = AI_SITES.iter().any(|s| urls.iter().any(|u| u == s));
-                self.allow_search_engines = SEARCH_ENGINES.iter().any(|s| urls.iter().any(|u| u == s));
+                self.set_quick_state(quick_url_state_from_urls(&urls));
             }
             SettingsInput::SaveCalDav => {
                 let _ = sender.output(SettingsOutput::CalDavSaved {
@@ -367,5 +420,42 @@ impl SimpleComponent for SettingsSection {
                 self.google_connected = connected;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contains_any_matches_and_misses() {
+        let urls = vec!["discord.com".to_string(), "github.com".to_string()];
+        assert!(contains_any(&urls, &[DISCORD]));
+        assert!(!contains_any(&urls, &[WHATSAPP, TELEGRAM]));
+    }
+
+    #[test]
+    fn quick_url_state_detects_single_toggles_and_groups() {
+        let urls = vec![
+            WHATSAPP.to_string(),
+            "google.com".to_string(),
+            "chat.openai.com".to_string(),
+        ];
+        let state = quick_url_state_from_urls(&urls);
+        assert!(state.whatsapp);
+        assert!(!state.telegram);
+        assert!(!state.discord);
+        assert!(!state.spotify);
+        assert!(state.allow_search_engines);
+        assert!(state.allow_ai_sites);
+    }
+
+    #[test]
+    fn apply_quick_toggle_changes_only_known_urls() {
+        let mut state = QuickUrlState::default();
+        assert!(apply_quick_toggle(&mut state, WHATSAPP, true));
+        assert!(state.whatsapp);
+        assert!(!apply_quick_toggle(&mut state, WHATSAPP, true));
+        assert!(!apply_quick_toggle(&mut state, "unknown.site", true));
     }
 }

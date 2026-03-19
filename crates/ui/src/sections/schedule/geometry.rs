@@ -299,4 +299,67 @@ mod tests {
         assert_eq!(layouts.len(), 2);
         assert!(layouts.iter().all(|l| l.total_slots == 2));
     }
+
+    #[test]
+    fn find_overlap_groups_splits_non_overlapping_events() {
+        let week_monday = NaiveDate::from_ymd_opt(2026, 3, 16).unwrap();
+        let a = sched(vec![0], 9 * 60, 10 * 60, None);
+        let b = sched(vec![0], 11 * 60, 12 * 60, None);
+        let schedules = vec![a, b];
+        let groups = find_overlap_groups(&[0, 1], &schedules);
+        assert_eq!(groups, vec![vec![0], vec![1]]);
+
+        // Sanity: layout still places both on the same day with one slot each.
+        let layout = compute_layout(&schedules, week_monday);
+        assert_eq!(layout.len(), 2);
+        assert!(layout.iter().all(|l| l.total_slots == 1));
+    }
+
+    #[test]
+    fn hit_test_event_returns_matching_schedule_inside_block() {
+        let week_monday = NaiveDate::from_ymd_opt(2026, 3, 16).unwrap();
+        let s = sched(vec![0], 9 * 60, 10 * 60, None);
+        let id = s.id;
+        let schedules = vec![s];
+        let layout = compute_layout(&schedules, week_monday);
+        let l = &layout[0];
+
+        let w = 700.0;
+        let h = 900.0;
+        let col_w = (w - MARGIN_LEFT - MARGIN_RIGHT) / 7.0;
+        let slot_w = col_w / l.total_slots as f64;
+        let x = MARGIN_LEFT + l.col as f64 * col_w + l.slot as f64 * slot_w + slot_w / 2.0;
+
+        let sf = clamp_hour_frac(schedules[0].start_min as f64 / 60.0);
+        let ef = clamp_hour_frac(schedules[0].end_min as f64 / 60.0);
+        let ys = HEADER_H + sf * (h - HEADER_H);
+        let ye = HEADER_H + ef * (h - HEADER_H);
+        let y = (ys + ye) / 2.0;
+
+        let hit = hit_test_event(x, y, w, h, 0, &schedules);
+        assert!(hit.is_some());
+        assert_eq!(hit.unwrap().0, id);
+    }
+
+    #[test]
+    fn hit_test_event_ignores_disabled_schedule() {
+        let mut s = sched(vec![0], 9 * 60, 10 * 60, None);
+        s.enabled = false;
+        let hit = hit_test_event(100.0, 200.0, 700.0, 900.0, 0, &[s]);
+        assert!(hit.is_none());
+    }
+
+    #[test]
+    fn event_columns_with_invalid_specific_date_is_empty() {
+        let week_monday = NaiveDate::from_ymd_opt(2026, 3, 16).unwrap();
+        let s = sched(vec![], 9 * 60, 10 * 60, Some("invalid-date".to_string()));
+        assert!(event_columns(&s, week_monday).is_empty());
+    }
+
+    #[test]
+    fn pixel_to_day_time_rejects_right_side_overflow() {
+        let w = 700.0;
+        let h = 900.0;
+        assert_eq!(pixel_to_day_time(w + 1.0, HEADER_H + 10.0, w, h), None);
+    }
 }

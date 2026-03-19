@@ -15,7 +15,10 @@ pub(super) fn week_monday_for_offset(offset: i32) -> chrono::NaiveDate {
 }
 
 pub(super) fn week_label_text(offset: i32) -> String {
-    let week_monday = week_monday_for_offset(offset);
+    format_week_label(week_monday_for_offset(offset))
+}
+
+fn format_week_label(week_monday: chrono::NaiveDate) -> String {
     let week_sunday = week_monday + Duration::days(6);
 
     if week_monday.month() == week_sunday.month() {
@@ -62,5 +65,17 @@ mod tests {
     fn week_label_is_non_empty() {
         let lbl = week_label_text(0);
         assert!(!lbl.trim().is_empty());
+    }
+
+    #[test]
+    fn week_label_formats_single_month_range() {
+        let monday = chrono::NaiveDate::from_ymd_opt(2026, 3, 16).unwrap();
+        assert_eq!(format_week_label(monday), "Mar 16–22");
+    }
+
+    #[test]
+    fn week_label_formats_cross_month_range() {
+        let monday = chrono::NaiveDate::from_ymd_opt(2026, 3, 30).unwrap();
+        assert_eq!(format_week_label(monday), "Mar 30 – Apr 5");
     }
 }
