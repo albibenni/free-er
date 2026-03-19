@@ -240,4 +240,37 @@ mod tests {
         );
         assert!(!state.spotify);
     }
+
+    #[test]
+    fn reducer_covers_noop_and_reset_paths() {
+        let mut state = mk_state();
+
+        // no-op branch: already true
+        assert_eq!(
+            reduce_settings_input(&mut state, SettingsInput::SetAllowNewTab(true)),
+            None
+        );
+
+        // apply change then reset through QuickUrlsUpdated empty list
+        let _ = reduce_settings_input(&mut state, SettingsInput::SetQuick(WHATSAPP, true));
+        assert!(state.whatsapp);
+
+        assert_eq!(
+            reduce_settings_input(&mut state, SettingsInput::QuickUrlsUpdated(vec![])),
+            None
+        );
+        assert!(!state.whatsapp);
+        assert!(!state.telegram);
+        assert!(!state.discord);
+        assert!(!state.spotify);
+        assert!(!state.allow_ai_sites);
+        assert!(!state.allow_search_engines);
+
+        // also hit google false update path
+        assert_eq!(
+            reduce_settings_input(&mut state, SettingsInput::GoogleStatusUpdated(false)),
+            None
+        );
+        assert!(!state.google_connected);
+    }
 }
