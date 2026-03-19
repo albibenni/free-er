@@ -33,6 +33,7 @@
   - [x] icon and text bigger
 - [x] resync with google calendar when the app starts
 - [x] resync button to resync with google calendar
+- [ ] change default allowed list from settings
 - [ ] rules for import
   - [ ] personalized list
     - [ ] no screen
