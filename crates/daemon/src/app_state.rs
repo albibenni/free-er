@@ -137,9 +137,8 @@ impl AppState {
             s.days = days;
             s.start = start;
             s.end = end;
-            if let Some(rsid) = rule_set_id {
-                s.rule_set_id = rsid;
-            }
+            // Always apply allowed-list changes; `None` means clear selection.
+            s.rule_set_id = rule_set_id.unwrap_or_else(Uuid::nil);
             s.specific_date = new_specific_date;
             s.schedule_type = schedule_type;
         }

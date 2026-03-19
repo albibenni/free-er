@@ -39,6 +39,7 @@ pub enum Command {
         days: Vec<u8>,
         start_min: u32,
         end_min: u32,
+        /// Overwrite the event's allowed-list association. `None` clears it.
         rule_set_id: Option<Uuid>,
         /// Overwrite the event's specific_date. `None` clears it for repeating schedules.
         specific_date: Option<String>,
