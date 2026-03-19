@@ -65,6 +65,20 @@ cd free-er
 make run
 ```
 
+## Coverage Setup
+
+Install the coverage tool once:
+
+```bash
+cargo install cargo-llvm-cov
+```
+
+Then run:
+
+```bash
+make coverage
+```
+
 ## Make Targets
 
 | Target | Description |
@@ -77,6 +91,7 @@ make run
 | `make extension-watch` | Watch and rebuild extension on changes |
 | `make dev` | Build + start daemon in background + launch UI |
 | `make test` | Run all tests |
+| `make coverage` | Generate HTML coverage report (requires `cargo-llvm-cov`) |
 | `make clean` | Remove build artifacts and extension/dist |
 | `make help` | Show all available targets |
 
