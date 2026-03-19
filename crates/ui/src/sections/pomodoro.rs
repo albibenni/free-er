@@ -1,5 +1,5 @@
-use relm4::prelude::*;
 use gtk4::prelude::*;
+use relm4::prelude::*;
 use shared::ipc::RuleSetSummary;
 use uuid::Uuid;
 
@@ -9,12 +9,19 @@ pub struct PomodoroSection {
     seconds_remaining: Option<u64>,
     rule_sets: Vec<RuleSetSummary>,
     selected_rule_set_id: Option<Uuid>,
+    focus_secs: u64,
+    break_secs: u64,
 }
 
 #[derive(Debug)]
 pub enum PomodoroInput {
-    StartPreset { focus_secs: u64, break_secs: u64 },
+    SelectPreset { focus_secs: u64, break_secs: u64 },
+    SetQuickBreak { break_secs: u64 },
+    AdjustFocus(i64),
+    AdjustBreak(i64),
+    Start,
     Stop,
+    RuleSetChanged,
     StatusUpdated { phase: Option<String>, seconds_remaining: Option<u64> },
     RuleSetsUpdated(Vec<RuleSetSummary>),
 }
@@ -35,80 +42,225 @@ impl Component for PomodoroSection {
     view! {
         gtk4::Box {
             set_orientation: gtk4::Orientation::Vertical,
-            set_spacing: 16,
-            set_margin_all: 24,
+            set_spacing: 12,
+            set_margin_all: 20,
 
             gtk4::Label {
-                set_label: "Pomodoro",
+                set_label: "Pomodoro Mode",
                 add_css_class: "title-1",
                 set_halign: gtk4::Align::Start,
             },
 
-            gtk4::Label {
-                #[watch]
-                set_label: &match (model.phase.as_deref(), model.seconds_remaining) {
-                    (Some(phase), Some(secs)) => {
-                        let m = secs / 60;
-                        let s = secs % 60;
-                        format!("{phase} — {m:02}:{s:02}")
-                    }
-                    _ => "Idle".into(),
-                },
-                add_css_class: "title-2",
-            },
+            gtk4::Frame {
+                set_hexpand: true,
+                set_margin_bottom: 6,
 
-            // ── Rule set selector ─────────────────────────────────────────
-            gtk4::Box {
-                set_orientation: gtk4::Orientation::Horizontal,
-                set_spacing: 8,
-                set_valign: gtk4::Align::Center,
+                gtk4::Box {
+                    set_orientation: gtk4::Orientation::Vertical,
+                    set_spacing: 14,
+                    set_margin_all: 12,
 
-                gtk4::Label {
-                    set_label: "Allowed list:",
-                    add_css_class: "dim-label",
-                },
+                    gtk4::Box {
+                        set_orientation: gtk4::Orientation::Horizontal,
+                        set_spacing: 24,
 
-                #[name = "rule_set_combo"]
-                gtk4::ComboBoxText {
-                    set_hexpand: true,
-                },
-            },
+                        // Left rail: presets + quick break
+                        gtk4::Box {
+                            set_orientation: gtk4::Orientation::Vertical,
+                            set_spacing: 8,
+                            set_width_request: 130,
 
-            gtk4::Box {
-                set_orientation: gtk4::Orientation::Horizontal,
-                set_spacing: 8,
-                set_homogeneous: true,
+                            gtk4::Label {
+                                set_label: "PRESETS",
+                                add_css_class: "dim-label",
+                                set_halign: gtk4::Align::Start,
+                            },
+                            gtk4::Button {
+                                set_label: "25 / 5",
+                                connect_clicked => PomodoroInput::SelectPreset { focus_secs: 25 * 60, break_secs: 5 * 60 },
+                            },
+                            gtk4::Button {
+                                set_label: "45 / 15",
+                                add_css_class: "suggested-action",
+                                connect_clicked => PomodoroInput::SelectPreset { focus_secs: 45 * 60, break_secs: 15 * 60 },
+                            },
+                            gtk4::Button {
+                                set_label: "50 / 10",
+                                connect_clicked => PomodoroInput::SelectPreset { focus_secs: 50 * 60, break_secs: 10 * 60 },
+                            },
+                            gtk4::Button {
+                                set_label: "90 / 20",
+                                connect_clicked => PomodoroInput::SelectPreset { focus_secs: 90 * 60, break_secs: 20 * 60 },
+                            },
 
-                gtk4::Button {
-                    set_label: "25 / 5",
-                    connect_clicked => PomodoroInput::StartPreset { focus_secs: 25 * 60, break_secs: 5 * 60 },
-                },
-                gtk4::Button {
-                    set_label: "50 / 10",
-                    connect_clicked => PomodoroInput::StartPreset { focus_secs: 50 * 60, break_secs: 10 * 60 },
-                },
-                gtk4::Button {
-                    set_label: "90 / 20",
-                    connect_clicked => PomodoroInput::StartPreset { focus_secs: 90 * 60, break_secs: 20 * 60 },
-                },
-            },
+                            gtk4::Separator {
+                                set_orientation: gtk4::Orientation::Horizontal,
+                                set_margin_top: 6,
+                                set_margin_bottom: 4,
+                            },
 
-            gtk4::Button {
-                set_label: "Stop",
-                set_css_classes: &["destructive-action"],
-                #[watch]
-                set_sensitive: model.phase.is_some(),
-                connect_clicked => PomodoroInput::Stop,
+                            gtk4::Label {
+                                set_label: "QUICK BREAK",
+                                add_css_class: "dim-label",
+                                set_halign: gtk4::Align::Start,
+                            },
+                            gtk4::Button {
+                                set_label: "5m",
+                                connect_clicked => PomodoroInput::SetQuickBreak { break_secs: 5 * 60 },
+                            },
+                            gtk4::Button {
+                                set_label: "15m",
+                                connect_clicked => PomodoroInput::SetQuickBreak { break_secs: 15 * 60 },
+                            },
+                            gtk4::Button {
+                                set_label: "30m",
+                                connect_clicked => PomodoroInput::SetQuickBreak { break_secs: 30 * 60 },
+                            },
+                        },
+
+                        // Center: focus / break controls
+                        gtk4::Box {
+                            set_orientation: gtk4::Orientation::Horizontal,
+                            set_spacing: 28,
+                            set_halign: gtk4::Align::Center,
+                            set_hexpand: true,
+
+                            gtk4::Frame {
+                                set_width_request: 220,
+                                gtk4::Box {
+                                    set_orientation: gtk4::Orientation::Vertical,
+                                    set_spacing: 8,
+                                    set_margin_all: 12,
+
+                                    gtk4::Label {
+                                        set_label: "FOCUS",
+                                        add_css_class: "dim-label",
+                                        set_halign: gtk4::Align::Center,
+                                    },
+                                    gtk4::Image {
+                                        set_icon_name: Some("weather-clear-symbolic"),
+                                        set_pixel_size: 34,
+                                        set_halign: gtk4::Align::Center,
+                                    },
+                                    gtk4::Label {
+                                        #[watch]
+                                        set_label: &format!("{}m", model.focus_secs / 60),
+                                        add_css_class: "title-1",
+                                        set_halign: gtk4::Align::Center,
+                                    },
+                                    gtk4::Box {
+                                        set_orientation: gtk4::Orientation::Horizontal,
+                                        set_halign: gtk4::Align::Center,
+                                        set_spacing: 6,
+                                        gtk4::Button {
+                                            set_label: "−",
+                                            connect_clicked => PomodoroInput::AdjustFocus(-5),
+                                        },
+                                        gtk4::Button {
+                                            set_label: "+",
+                                            connect_clicked => PomodoroInput::AdjustFocus(5),
+                                        },
+                                    },
+                                },
+                            },
+
+                            gtk4::Frame {
+                                set_width_request: 220,
+                                gtk4::Box {
+                                    set_orientation: gtk4::Orientation::Vertical,
+                                    set_spacing: 8,
+                                    set_margin_all: 12,
+
+                                    gtk4::Label {
+                                        set_label: "BREAK",
+                                        add_css_class: "dim-label",
+                                        set_halign: gtk4::Align::Center,
+                                    },
+                                    gtk4::Image {
+                                        set_icon_name: Some("emblem-favorite-symbolic"),
+                                        set_pixel_size: 34,
+                                        set_halign: gtk4::Align::Center,
+                                    },
+                                    gtk4::Label {
+                                        #[watch]
+                                        set_label: &format!("{}m", model.break_secs / 60),
+                                        add_css_class: "title-1",
+                                        set_halign: gtk4::Align::Center,
+                                    },
+                                    gtk4::Box {
+                                        set_orientation: gtk4::Orientation::Horizontal,
+                                        set_halign: gtk4::Align::Center,
+                                        set_spacing: 6,
+                                        gtk4::Button {
+                                            set_label: "−",
+                                            connect_clicked => PomodoroInput::AdjustBreak(-5),
+                                        },
+                                        gtk4::Button {
+                                            set_label: "+",
+                                            connect_clicked => PomodoroInput::AdjustBreak(5),
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+
+                    gtk4::Label {
+                        #[watch]
+                        set_label: &match (model.phase.as_deref(), model.seconds_remaining) {
+                            (Some(phase), Some(secs)) => {
+                                let m = secs / 60;
+                                let s = secs % 60;
+                                format!("{phase} - {m:02}:{s:02}")
+                            }
+                            _ => "Inactive".into(),
+                        },
+                        add_css_class: "dim-label",
+                        set_halign: gtk4::Align::Start,
+                    },
+
+                    gtk4::Label {
+                        set_label: "SELECT LIST",
+                        add_css_class: "dim-label",
+                        set_halign: gtk4::Align::Start,
+                    },
+
+                    #[name = "rule_set_combo"]
+                    gtk4::ComboBoxText {
+                        set_hexpand: true,
+                        connect_changed => PomodoroInput::RuleSetChanged,
+                    },
+
+                    gtk4::Box {
+                        set_orientation: gtk4::Orientation::Horizontal,
+                        set_spacing: 8,
+                        gtk4::Button {
+                            set_label: "Start Focus Session",
+                            add_css_class: "suggested-action",
+                            set_hexpand: true,
+                            connect_clicked => PomodoroInput::Start,
+                        },
+                        gtk4::Button {
+                            set_label: "Stop",
+                            add_css_class: "destructive-action",
+                            #[watch]
+                            set_sensitive: model.phase.is_some(),
+                            connect_clicked => PomodoroInput::Stop,
+                        },
+                    },
+                },
             },
         }
     }
 
-    fn init(_: (), root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
+    fn init(_: (), _root: Self::Root, _sender: ComponentSender<Self>) -> ComponentParts<Self> {
         let model = PomodoroSection {
             phase: None,
             seconds_remaining: None,
             rule_sets: vec![],
             selected_rule_set_id: None,
+            focus_secs: 45 * 60,
+            break_secs: 15 * 60,
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -122,24 +274,51 @@ impl Component for PomodoroSection {
         _root: &Self::Root,
     ) {
         match msg {
-            PomodoroInput::StartPreset { focus_secs, break_secs } => {
-                // Read selected rule set from the combo box
-                let rule_set_id = widgets.rule_set_combo
-                    .active_id()
-                    .and_then(|id| id.parse::<Uuid>().ok());
-                let _ = sender.output(PomodoroOutput::Start { focus_secs, break_secs, rule_set_id });
+            PomodoroInput::SelectPreset {
+                focus_secs,
+                break_secs,
+            } => {
+                self.focus_secs = focus_secs;
+                self.break_secs = break_secs;
+            }
+            PomodoroInput::SetQuickBreak { break_secs } => {
+                self.break_secs = break_secs;
+            }
+            PomodoroInput::AdjustFocus(delta_min) => {
+                let mins = (self.focus_secs / 60) as i64;
+                let new_mins = (mins + delta_min).clamp(5, 180) as u64;
+                self.focus_secs = new_mins * 60;
+            }
+            PomodoroInput::AdjustBreak(delta_min) => {
+                let mins = (self.break_secs / 60) as i64;
+                let new_mins = (mins + delta_min).clamp(1, 90) as u64;
+                self.break_secs = new_mins * 60;
+            }
+            PomodoroInput::Start => {
+                let _ = sender.output(PomodoroOutput::Start {
+                    focus_secs: self.focus_secs,
+                    break_secs: self.break_secs,
+                    rule_set_id: self.selected_rule_set_id,
+                });
             }
             PomodoroInput::Stop => {
                 let _ = sender.output(PomodoroOutput::Stop);
             }
-            PomodoroInput::StatusUpdated { phase, seconds_remaining } => {
+            PomodoroInput::RuleSetChanged => {
+                self.selected_rule_set_id = widgets
+                    .rule_set_combo
+                    .active_id()
+                    .and_then(|id| id.parse::<Uuid>().ok());
+            }
+            PomodoroInput::StatusUpdated {
+                phase,
+                seconds_remaining,
+            } => {
                 self.phase = phase;
                 self.seconds_remaining = seconds_remaining;
             }
             PomodoroInput::RuleSetsUpdated(sets) => {
-                let prev_id = widgets.rule_set_combo
-                    .active_id()
-                    .and_then(|id| id.parse::<Uuid>().ok());
+                let prev_id = self.selected_rule_set_id;
 
                 widgets.rule_set_combo.remove_all();
                 for (i, rs) in sets.iter().enumerate() {
@@ -148,18 +327,20 @@ impl Component for PomodoroSection {
                     } else {
                         rs.name.clone()
                     };
-                    widgets.rule_set_combo.append(Some(&rs.id.to_string()), &label);
+                    widgets
+                        .rule_set_combo
+                        .append(Some(&rs.id.to_string()), &label);
                 }
 
-                // Restore selection or default to first
                 let restore_id = prev_id
                     .filter(|id| sets.iter().any(|s| s.id == *id))
                     .or_else(|| sets.first().map(|s| s.id));
                 if let Some(id) = restore_id {
                     widgets.rule_set_combo.set_active_id(Some(&id.to_string()));
                     self.selected_rule_set_id = Some(id);
+                } else {
+                    self.selected_rule_set_id = None;
                 }
-
                 self.rule_sets = sets;
             }
         }
