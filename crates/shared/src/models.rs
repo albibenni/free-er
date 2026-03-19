@@ -42,6 +42,8 @@ pub struct Schedule {
     pub enabled: bool,
     #[serde(default)]
     pub imported: bool,
+    #[serde(default)]
+    pub imported_repeating: bool,
     /// If set, this is a one-time event on a specific date (not a recurring weekly schedule).
     #[serde(default)]
     pub specific_date: Option<chrono::NaiveDate>,

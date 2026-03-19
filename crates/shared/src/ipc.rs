@@ -71,6 +71,7 @@ pub struct ScheduleSummary {
     pub end_min: u32,
     pub enabled: bool,
     pub imported: bool,
+    pub imported_repeating: bool,
     /// If set, this is a one-time event on this specific date (YYYY-MM-DD).
     /// If None, the event repeats weekly on the days in `days`.
     pub specific_date: Option<String>,

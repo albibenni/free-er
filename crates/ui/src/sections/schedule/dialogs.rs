@@ -225,9 +225,11 @@ pub(super) fn show_edit_dialog(
 pub(super) fn show_view_dialog(
     id: uuid::Uuid,
     name: &str,
+    days: Vec<u8>,
     col: usize,
     start_min: u32,
     end_min: u32,
+    imported_repeating: bool,
     schedule_type: ScheduleType,
     rule_set_id: uuid::Uuid,
     week_monday: chrono::NaiveDate,
@@ -270,6 +272,17 @@ pub(super) fn show_view_dialog(
 
     let (focus_btn, _break_btn, list_combo) =
         build_type_and_list_rows(&vbox, &schedule_type, rule_set_id, &rule_sets);
+    let recurrence_days = if days.is_empty() {
+        vec![col as u8]
+    } else {
+        days
+    };
+    let (repeat_btn, once_btn, weekday_buttons) = append_recurrence_row(
+        &vbox,
+        &recurrence_days,
+        if imported_repeating { None } else { Some(date.format("%Y-%m-%d").to_string()) },
+    );
+    set_recurrence_read_only(&repeat_btn, &once_btn, &weekday_buttons);
 
     let (cancel_btn, save_btn) = append_button_row(&vbox);
     dialog.set_child(Some(&vbox));
@@ -474,6 +487,18 @@ fn selected_weekdays(buttons: &[gtk4::ToggleButton]) -> Vec<u8> {
         .enumerate()
         .filter_map(|(idx, btn)| btn.is_active().then_some(idx as u8))
         .collect()
+}
+
+fn set_recurrence_read_only(
+    repeat_btn: &gtk4::ToggleButton,
+    once_btn: &gtk4::ToggleButton,
+    weekday_buttons: &[gtk4::ToggleButton],
+) {
+    repeat_btn.set_sensitive(false);
+    once_btn.set_sensitive(false);
+    for btn in weekday_buttons {
+        btn.set_sensitive(false);
+    }
 }
 
 pub(super) fn resolve_rule_set(

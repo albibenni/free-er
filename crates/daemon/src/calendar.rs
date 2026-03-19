@@ -68,6 +68,7 @@ fn event_to_schedule(
     let weekday = start_dt.weekday();
     let start_time = start_dt.time();
     let end_time = end_dt.time();
+    let imported_repeating = event.properties.iter().any(|p| p.name == "RRULE");
 
     Some(Schedule {
         id: Uuid::new_v4(),
@@ -78,6 +79,7 @@ fn event_to_schedule(
         rule_set_id,
         enabled: true,
         imported: true,
+        imported_repeating,
         specific_date: Some(start_dt.date()),
         schedule_type,
     })
@@ -250,6 +252,8 @@ fn google_event_to_schedule(
         rule_set_id,
         enabled: true,
         imported: true,
+        imported_repeating: event.get("recurringEventId").is_some()
+            || event.get("recurrence").and_then(|v| v.as_array()).is_some(),
         specific_date: Some(start_dt.date()),
         schedule_type,
     })

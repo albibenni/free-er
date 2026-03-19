@@ -139,9 +139,11 @@ pub(super) fn hit_test_event(
 ) -> Option<(
     uuid::Uuid,
     String,
+    Vec<u8>,
     usize,
     u32,
     u32,
+    bool,
     bool,
     ScheduleType,
     uuid::Uuid,
@@ -177,10 +179,12 @@ pub(super) fn hit_test_event(
             return Some((
                 sched.id,
                 sched.name.clone(),
+                sched.days.clone(),
                 layout.col,
                 sched.start_min,
                 sched.end_min,
                 sched.imported,
+                sched.imported_repeating,
                 sched.schedule_type.clone(),
                 sched.rule_set_id,
             ));

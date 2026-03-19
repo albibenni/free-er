@@ -39,7 +39,7 @@ fn install_drag_controller(
             let week_offset = data.week_offset;
             let hit = hit_test_event(x, y, w, h, week_offset, &data.schedules);
             data.drag_mode =
-                if let Some((id, _name, col, start_min, end_min, imported, _stype, _rs)) = hit {
+                if let Some((id, _name, _days, col, start_min, end_min, imported, _repeating, _stype, _rs)) = hit {
                     if imported {
                         DragMode::None
                     } else {

@@ -163,6 +163,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 rule_set_id: rule_set_id.unwrap_or_else(Uuid::nil),
                 enabled: true,
                 imported: false,
+                imported_repeating: false,
                 specific_date: parsed_date,
                 schedule_type,
             };
@@ -205,6 +206,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                     end_min: s.end.hour() * 60 + s.end.minute(),
                     enabled: s.enabled,
                     imported: s.imported,
+                    imported_repeating: s.imported_repeating,
                     specific_date: s.specific_date.map(|d| d.format("%Y-%m-%d").to_string()),
                     schedule_type: s.schedule_type,
                     rule_set_id: s.rule_set_id,

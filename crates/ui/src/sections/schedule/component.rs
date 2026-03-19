@@ -42,9 +42,11 @@ pub enum ScheduleInput {
     ShowViewDialog {
         id: uuid::Uuid,
         name: String,
+        days: Vec<u8>,
         col: usize,
         start_min: u32,
         end_min: u32,
+        imported_repeating: bool,
         schedule_type: ScheduleType,
         rule_set_id: uuid::Uuid,
     },
@@ -258,10 +260,12 @@ impl Component for ScheduleSection {
                 if let Some((
                     id,
                     name,
+                    days,
                     col,
                     start_min,
                     end_min,
                     imported,
+                    imported_repeating,
                     schedule_type,
                     rule_set_id,
                 )) = hit
@@ -270,9 +274,11 @@ impl Component for ScheduleSection {
                         sender.input(ScheduleInput::ShowViewDialog {
                             id,
                             name,
+                            days,
                             col,
                             start_min,
                             end_min,
+                            imported_repeating,
                             schedule_type,
                             rule_set_id,
                         });
@@ -309,9 +315,11 @@ impl Component for ScheduleSection {
             ScheduleInput::ShowViewDialog {
                 id,
                 name,
+                days,
                 col,
                 start_min,
                 end_min,
+                imported_repeating,
                 schedule_type,
                 rule_set_id,
             } => {
@@ -320,9 +328,11 @@ impl Component for ScheduleSection {
                 show_view_dialog(
                     id,
                     &name,
+                    days,
                     col,
                     start_min,
                     end_min,
+                    imported_repeating,
                     schedule_type,
                     rule_set_id,
                     week_monday,
