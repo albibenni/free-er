@@ -87,7 +87,7 @@ pub enum AppMsg {
         days: Vec<u8>,
         start_min: u32,
         end_min: u32,
-        specific_date: String,
+        specific_date: Option<String>,
         rule_set_id: Option<Uuid>,
         schedule_type: ScheduleType,
     },

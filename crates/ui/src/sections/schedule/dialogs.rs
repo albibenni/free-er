@@ -29,6 +29,10 @@ pub(super) fn show_create_dialog(
     name_entry.set_margin_top(4);
     vbox.append(&name_entry);
 
+    let date_str = date.format("%Y-%m-%d").to_string();
+    let (repeat_btn, _once_btn, day_combo) =
+        append_recurrence_row(&vbox, col, Some(date_str.clone()));
+
     let (start_entry, end_entry) = append_time_row(&vbox, start_min, end_min);
 
     let default_rule_set_id = rule_sets.first().map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
@@ -66,7 +70,6 @@ pub(super) fn show_create_dialog(
     cancel_btn.connect_clicked(move |_| d.close());
 
     let d = dialog.clone();
-    let date_str = date.format("%Y-%m-%d").to_string();
     save_btn.connect_clicked(move |_| {
         let name = name_entry.text().to_string();
         if name.is_empty() {
@@ -83,12 +86,18 @@ pub(super) fn show_create_dialog(
             ScheduleType::Break
         };
         let rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
+        let col = day_combo.active().unwrap_or(col as u32) as usize;
+        let specific_date = if repeat_btn.is_active() {
+            None
+        } else {
+            Some(date_str.clone())
+        };
         sender.input(ScheduleInput::CommitCreate {
             name,
             col,
             start_min: s_min,
             end_min: e_min,
-            specific_date: date_str.clone(),
+            specific_date,
             schedule_type: stype,
             rule_set_id,
         });
@@ -104,6 +113,7 @@ pub(super) fn show_edit_dialog(
     col: usize,
     start_min: u32,
     end_min: u32,
+    specific_date: Option<String>,
     schedule_type: ScheduleType,
     rule_set_id: uuid::Uuid,
     rule_sets: Vec<RuleSetSummary>,
@@ -117,6 +127,9 @@ pub(super) fn show_edit_dialog(
     name_entry.set_text(name);
     name_entry.set_placeholder_text(Some("Event name"));
     vbox.append(&name_entry);
+
+    let (repeat_btn, _once_btn, day_combo) =
+        append_recurrence_row(&vbox, col, specific_date.clone());
 
     let (start_entry, end_entry) = append_time_row(&vbox, start_min, end_min);
 
@@ -170,12 +183,19 @@ pub(super) fn show_edit_dialog(
             ScheduleType::Break
         };
         let rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
+        let col = day_combo.active().unwrap_or(col as u32) as usize;
+        let specific_date = if repeat_btn.is_active() {
+            None
+        } else {
+            specific_date.clone()
+        };
         sender.input(ScheduleInput::CommitEdit {
             id,
             name,
             col,
             start_min: s_min,
             end_min: e_min,
+            specific_date,
             schedule_type: stype,
             rule_set_id,
         });
@@ -242,6 +262,7 @@ pub(super) fn show_view_dialog(
 
     let d = dialog.clone();
     let name_owned = name.to_string();
+    let specific_date = Some(date.format("%Y-%m-%d").to_string());
     save_btn.connect_clicked(move |_| {
         let stype = if focus_btn.is_active() {
             ScheduleType::Focus
@@ -255,6 +276,7 @@ pub(super) fn show_view_dialog(
             col,
             start_min,
             end_min,
+            specific_date: specific_date.clone(),
             schedule_type: stype,
             rule_set_id: new_rule_set_id,
         });
@@ -372,6 +394,50 @@ pub(super) fn build_type_and_list_rows(
     }
 
     (focus_btn, break_btn, list_combo)
+}
+
+fn append_recurrence_row(
+    vbox: &gtk4::Box,
+    initial_col: usize,
+    specific_date: Option<String>,
+) -> (gtk4::ToggleButton, gtk4::ToggleButton, gtk4::ComboBoxText) {
+    let mode_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+    let mode_lbl = gtk4::Label::new(Some("Repeat:"));
+    mode_lbl.set_width_chars(8);
+    mode_lbl.set_halign(gtk4::Align::Start);
+    let once_btn = gtk4::ToggleButton::with_label("This date");
+    let repeat_btn = gtk4::ToggleButton::with_label("Weekly");
+    repeat_btn.set_group(Some(&once_btn));
+    let is_repeating = specific_date.is_none();
+    once_btn.set_active(!is_repeating);
+    repeat_btn.set_active(is_repeating);
+    mode_row.append(&mode_lbl);
+    mode_row.append(&once_btn);
+    mode_row.append(&repeat_btn);
+    vbox.append(&mode_row);
+
+    let day_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+    let day_lbl = gtk4::Label::new(Some("Weekday:"));
+    day_lbl.set_width_chars(8);
+    day_lbl.set_halign(gtk4::Align::Start);
+    let day_combo = gtk4::ComboBoxText::new();
+    for day in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] {
+        day_combo.append_text(day);
+    }
+    day_combo.set_active(Some(initial_col as u32));
+    day_row.append(&day_lbl);
+    day_row.append(&day_combo);
+    day_row.set_visible(is_repeating);
+    vbox.append(&day_row);
+
+    {
+        let day_row = day_row.clone();
+        repeat_btn.connect_toggled(move |btn| {
+            day_row.set_visible(btn.is_active());
+        });
+    }
+
+    (repeat_btn, once_btn, day_combo)
 }
 
 pub(super) fn resolve_rule_set(

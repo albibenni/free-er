@@ -54,6 +54,7 @@ pub enum ScheduleInput {
         col: usize,
         start_min: u32,
         end_min: u32,
+        specific_date: Option<String>,
         schedule_type: ScheduleType,
         rule_set_id: uuid::Uuid,
     },
@@ -62,7 +63,7 @@ pub enum ScheduleInput {
         col: usize,
         start_min: u32,
         end_min: u32,
-        specific_date: String,
+        specific_date: Option<String>,
         schedule_type: ScheduleType,
         rule_set_id: Option<uuid::Uuid>,
     },
@@ -72,6 +73,7 @@ pub enum ScheduleInput {
         col: usize,
         start_min: u32,
         end_min: u32,
+        specific_date: Option<String>,
         schedule_type: ScheduleType,
         rule_set_id: Option<uuid::Uuid>,
     },
@@ -99,7 +101,7 @@ pub enum ScheduleOutput {
         days: Vec<u8>,
         start_min: u32,
         end_min: u32,
-        specific_date: String,
+        specific_date: Option<String>,
         schedule_type: ScheduleType,
         rule_set_id: Option<uuid::Uuid>,
     },
@@ -280,6 +282,13 @@ impl Component for ScheduleSection {
                             col,
                             start_min,
                             end_min,
+                            specific_date: self
+                                .draw_data
+                                .borrow()
+                                .schedules
+                                .iter()
+                                .find(|s| s.id == id)
+                                .and_then(|s| s.specific_date.clone()),
                             schedule_type,
                             rule_set_id,
                         });
@@ -339,6 +348,7 @@ impl Component for ScheduleSection {
                 col,
                 start_min,
                 end_min,
+                specific_date,
                 schedule_type,
                 rule_set_id,
             } => {
@@ -349,6 +359,7 @@ impl Component for ScheduleSection {
                     col,
                     start_min,
                     end_min,
+                    specific_date,
                     schedule_type,
                     rule_set_id,
                     rule_sets,
@@ -386,6 +397,7 @@ impl Component for ScheduleSection {
                 col,
                 start_min,
                 end_min,
+                specific_date,
                 schedule_type,
                 rule_set_id,
             } => {
@@ -397,7 +409,7 @@ impl Component for ScheduleSection {
                     end_min,
                     schedule_type,
                     rule_set_id,
-                    specific_date: None,
+                    specific_date,
                 });
             }
             ScheduleInput::CommitDelete(id) => {
@@ -465,7 +477,7 @@ impl Component for ScheduleSection {
                         end_min,
                         schedule_type: sched.schedule_type,
                         rule_set_id,
-                        specific_date: None,
+                        specific_date: sched.specific_date,
                     });
                 }
             }

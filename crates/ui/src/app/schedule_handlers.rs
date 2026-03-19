@@ -11,7 +11,7 @@ pub(super) fn create_schedule(
     days: Vec<u8>,
     start_min: u32,
     end_min: u32,
-    specific_date: String,
+    specific_date: Option<String>,
     rule_set_id: Option<Uuid>,
     schedule_type: ScheduleType,
     sender: ComponentSender<App>,
@@ -22,7 +22,7 @@ pub(super) fn create_schedule(
             days,
             start_min,
             end_min,
-            Some(specific_date),
+            specific_date,
             rule_set_id,
             schedule_type,
         )

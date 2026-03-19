@@ -37,6 +37,8 @@
   - [x] clean schedule out of time - 2 weeks ago and 2 weeks in the future
   - [ ] check if weekly could affect it
 - [ ] allow creating inside repeating task
+- [ ] modify repeating days
+- [ ] see repreating days in calendar imports too - but blocked from modifying them
 - [ ] change default allowed list from settings
 - [ ] import from open websites
 - [x] rules for import

@@ -40,7 +40,7 @@ pub enum Command {
         start_min: u32,
         end_min: u32,
         rule_set_id: Option<Uuid>,
-        /// If Some, overwrite the event's specific_date. None = leave unchanged.
+        /// Overwrite the event's specific_date. `None` clears it for repeating schedules.
         specific_date: Option<String>,
         schedule_type: ScheduleType,
     },
