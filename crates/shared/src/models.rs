@@ -92,11 +92,16 @@ impl Default for PomodoroConfig {
 }
 
 /// A keyword rule: if a calendar event title contains `keyword`,
-/// it is imported as a focus session using `rule_set_id`.
+/// it is imported as the given `schedule_type`.
+/// For Focus rules the default rule set is used; `rule_set_id` overrides it when set.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalendarImportRule {
     pub keyword: String,
-    pub rule_set_id: Uuid,
+    #[serde(default)]
+    pub schedule_type: ScheduleType,
+    /// Optional override for which allowed list to use (Focus rules only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_set_id: Option<Uuid>,
 }
 
 /// CalDAV / remote .ics source configuration.
@@ -106,8 +111,6 @@ pub struct CalDavConfig {
     pub url: String,
     pub username: Option<String>,
     pub password: Option<String>,
-    /// How to map event titles → rule sets.
-    pub import_rules: Vec<CalendarImportRule>,
 }
 
 /// OAuth2 credentials and tokens for Google Calendar integration.
@@ -119,8 +122,6 @@ pub struct GoogleCalendarConfig {
     pub refresh_token: Option<String>,
     /// Unix timestamp (seconds) at which the access_token expires.
     pub token_expiry_secs: Option<i64>,
-    /// How to map event titles → rule sets (shared with CalDAV import_rules).
-    pub import_rules: Vec<CalendarImportRule>,
 }
 
 fn default_true() -> bool { true }
@@ -133,6 +134,10 @@ pub struct Config {
     pub pomodoro: PomodoroConfig,
     pub caldav: Option<CalDavConfig>,
     pub google_calendar: Option<GoogleCalendarConfig>,
+    /// Global calendar import rules applied to all calendar sources.
+    /// Each rule maps a title keyword → whether the event is Focus or Break.
+    #[serde(default)]
+    pub import_rules: Vec<CalendarImportRule>,
     /// If true, focus cannot be stopped manually while a schedule is active.
     pub strict_mode: bool,
     /// If false, new tab pages (chrome://newtab, about:newtab) are blocked during focus.

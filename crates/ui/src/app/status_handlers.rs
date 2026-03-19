@@ -1,7 +1,7 @@
 use crate::ipc_client;
 use crate::sections::{
-    allowed_lists::AllowedListsInput, focus::FocusInput, pomodoro::PomodoroInput,
-    schedule::ScheduleInput, settings::SettingsInput,
+    allowed_lists::AllowedListsInput, calendar_rules::CalendarRulesInput, focus::FocusInput,
+    pomodoro::PomodoroInput, schedule::ScheduleInput, settings::SettingsInput,
 };
 use relm4::{ComponentController, ComponentSender, Sender};
 use tracing::warn;
@@ -14,6 +14,7 @@ pub(super) fn status_tick(app: &App, sender: ComponentSender<App>) {
     let lists_sender = app.allowed_lists.sender().clone();
     let settings_sender = app.settings.sender().clone();
     let schedule_sender = app.schedule.sender().clone();
+    let cal_sender = app.calendar_rules.sender().clone();
 
     tokio::spawn(async move {
         match ipc_client::get_status().await {
@@ -39,6 +40,11 @@ pub(super) fn status_tick(app: &App, sender: ComponentSender<App>) {
         match ipc_client::list_schedules().await {
             Ok(schedules) => sender.input(AppMsg::SchedulesUpdated(schedules)),
             Err(e) => warn!("list_schedules failed: {e}"),
+        }
+
+        match ipc_client::list_import_rules().await {
+            Ok(rules) => cal_sender.emit(CalendarRulesInput::RulesUpdated(rules)),
+            Err(e) => warn!("list_import_rules failed: {e}"),
         }
     });
 }

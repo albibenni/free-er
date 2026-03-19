@@ -1,5 +1,5 @@
 use anyhow::Result;
-use shared::ipc::{Command, RuleSetSummary, ScheduleSummary, ScheduleType, StatusResponse};
+use shared::ipc::{Command, ImportRuleSummary, RuleSetSummary, ScheduleSummary, ScheduleType, StatusResponse};
 use uuid::Uuid;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -107,6 +107,30 @@ pub async fn update_schedule(
 
 pub async fn remove_schedule(id: Uuid) -> Result<()> {
     send(&Command::RemoveSchedule { id }).await?;
+    Ok(())
+}
+
+/// Fetch all global calendar import rules.
+pub async fn list_import_rules() -> Result<Vec<ImportRuleSummary>> {
+    let raw = send(&Command::ListImportRules).await?;
+    Ok(serde_json::from_str(&raw)?)
+}
+
+/// Add a global calendar import rule.
+pub async fn add_import_rule(keyword: &str, schedule_type: ScheduleType) -> Result<()> {
+    send(&Command::AddImportRule {
+        keyword: keyword.to_string(),
+        schedule_type,
+    }).await?;
+    Ok(())
+}
+
+/// Remove a global calendar import rule.
+pub async fn remove_import_rule(keyword: &str, schedule_type: ScheduleType) -> Result<()> {
+    send(&Command::RemoveImportRule {
+        keyword: keyword.to_string(),
+        schedule_type,
+    }).await?;
     Ok(())
 }
 

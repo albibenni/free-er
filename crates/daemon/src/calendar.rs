@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{Datelike, NaiveDateTime, NaiveTime};
 use ical::parser::ical::component::IcalEvent;
-use shared::models::{CalDavConfig, CalendarImportRule, GoogleCalendarConfig, Schedule};
+use shared::models::{CalDavConfig, CalendarImportRule, GoogleCalendarConfig, Schedule, ScheduleType};
 use uuid::Uuid;
 
 /// Fetch raw ICS text from a URL (with optional basic auth).
@@ -18,16 +18,16 @@ pub async fn fetch_ics(cfg: &CalDavConfig) -> Result<String> {
 /// Parse ICS text and convert matching events into `Schedule` entries.
 ///
 /// Only future / ongoing events are included; past events are skipped.
-/// Title-based matching: if any `import_rule.keyword` is a case-insensitive
-/// substring of the event SUMMARY, that rule's `rule_set_id` is used.
-pub fn parse_schedules(ics: &str, cfg: &CalDavConfig, default_rule_set_id: Uuid) -> Vec<Schedule> {
+/// Global `import_rules` determine whether each event is Focus or Break and
+/// which allowed list to apply.
+pub fn parse_schedules(ics: &str, import_rules: &[CalendarImportRule], default_rule_set_id: Uuid) -> Vec<Schedule> {
     let now = chrono::Local::now().naive_local();
     let reader = ical::IcalParser::new(ics.as_bytes());
     let mut schedules = Vec::new();
 
     for calendar in reader.flatten() {
         for event in calendar.events {
-            if let Some(schedule) = event_to_schedule(&event, cfg, now, default_rule_set_id) {
+            if let Some(schedule) = event_to_schedule(&event, import_rules, now, default_rule_set_id) {
                 schedules.push(schedule);
             }
         }
@@ -37,7 +37,7 @@ pub fn parse_schedules(ics: &str, cfg: &CalDavConfig, default_rule_set_id: Uuid)
 
 fn event_to_schedule(
     event: &IcalEvent,
-    cfg: &CalDavConfig,
+    import_rules: &[CalendarImportRule],
     now: chrono::NaiveDateTime,
     default_rule_set_id: Uuid,
 ) -> Option<Schedule> {
@@ -53,21 +53,7 @@ fn event_to_schedule(
         return None;
     }
 
-    // Find a matching import rule; fall back to the default rule set
-    let rule_set_id = cfg
-        .import_rules
-        .iter()
-        .find_map(|rule| {
-            if summary
-                .to_lowercase()
-                .contains(&rule.keyword.to_lowercase())
-            {
-                Some(rule.rule_set_id)
-            } else {
-                None
-            }
-        })
-        .unwrap_or(default_rule_set_id);
+    let (schedule_type, rule_set_id) = resolve_rule(&summary, import_rules, default_rule_set_id);
 
     // Map the event's weekday to a Schedule.
     // For recurring events this is a simplification — full RRULE expansion
@@ -86,8 +72,29 @@ fn event_to_schedule(
         enabled: true,
         imported: true,
         specific_date: Some(start_dt.date()),
-        schedule_type: shared::models::ScheduleType::Focus,
+        schedule_type,
     })
+}
+
+/// Match a summary against import rules. Returns (ScheduleType, rule_set_id).
+/// Focus events use the rule's rule_set_id override or fall back to default.
+/// Break events use nil uuid (no allowed list needed).
+fn resolve_rule(
+    summary: &str,
+    import_rules: &[CalendarImportRule],
+    default_rule_set_id: Uuid,
+) -> (ScheduleType, Uuid) {
+    let lower = summary.to_lowercase();
+    if let Some(rule) = import_rules.iter().find(|r| lower.contains(&r.keyword.to_lowercase())) {
+        let rule_set_id = match rule.schedule_type {
+            ScheduleType::Focus => rule.rule_set_id.unwrap_or(default_rule_set_id),
+            ScheduleType::Break => Uuid::nil(),
+        };
+        (rule.schedule_type.clone(), rule_set_id)
+    } else {
+        // Default: Focus with default allowed list
+        (ScheduleType::Focus, default_rule_set_id)
+    }
 }
 
 fn prop_value(event: &IcalEvent, name: &str) -> Option<String> {
@@ -200,21 +207,7 @@ fn google_event_to_schedule(
 ) -> Option<Schedule> {
     let summary = event["summary"].as_str()?;
 
-    // Use the first matching rule's rule_set_id, or nil if none match.
-    // All events are imported regardless of whether a rule matches.
-    let rule_set_id = import_rules
-        .iter()
-        .find_map(|rule| {
-            if summary
-                .to_lowercase()
-                .contains(&rule.keyword.to_lowercase())
-            {
-                Some(rule.rule_set_id)
-            } else {
-                None
-            }
-        })
-        .unwrap_or(default_rule_set_id);
+    let (schedule_type, rule_set_id) = resolve_rule(summary, import_rules, default_rule_set_id);
 
     let start_str = event["start"]["dateTime"]
         .as_str()
@@ -248,7 +241,7 @@ fn google_event_to_schedule(
         enabled: true,
         imported: true,
         specific_date: Some(start_dt.date()),
-        schedule_type: shared::models::ScheduleType::Focus,
+        schedule_type,
     })
 }
 
@@ -272,40 +265,32 @@ END:VCALENDAR\r\n";
 
     #[test]
     fn parses_matching_events() {
-        let rule_set_id = Uuid::new_v4();
-        let cfg = CalDavConfig {
-            url: String::new(),
-            username: None,
-            password: None,
-            import_rules: vec![CalendarImportRule {
-                keyword: "work".into(),
-                rule_set_id,
-            }],
-        };
-        let schedules = parse_schedules(SAMPLE_ICS, &cfg, Uuid::new_v4());
-        assert_eq!(schedules.len(), 1);
-        assert_eq!(schedules[0].name, "Deep Work Session");
-        assert_eq!(schedules[0].rule_set_id, rule_set_id);
-        assert_eq!(
-            schedules[0].start,
-            NaiveTime::from_hms_opt(9, 0, 0).unwrap()
-        );
-        assert_eq!(schedules[0].end, NaiveTime::from_hms_opt(11, 0, 0).unwrap());
+        let default_id = Uuid::new_v4();
+        let import_rules = vec![CalendarImportRule {
+            keyword: "work".into(),
+            schedule_type: ScheduleType::Focus,
+            rule_set_id: None,
+        }];
+        let schedules = parse_schedules(SAMPLE_ICS, &import_rules, default_id);
+        assert_eq!(schedules.len(), 2); // both events are imported; rule only affects type
+        let work = schedules.iter().find(|s| s.name == "Deep Work Session").unwrap();
+        assert_eq!(work.rule_set_id, default_id);
+        assert_eq!(work.schedule_type, ScheduleType::Focus);
+        assert_eq!(work.start, NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+        assert_eq!(work.end, NaiveTime::from_hms_opt(11, 0, 0).unwrap());
     }
 
     #[test]
-    fn skips_non_matching_events() {
-        let cfg = CalDavConfig {
-            url: String::new(),
-            username: None,
-            password: None,
-            import_rules: vec![CalendarImportRule {
-                keyword: "work".into(),
-                rule_set_id: Uuid::new_v4(),
-            }],
-        };
-        let schedules = parse_schedules(SAMPLE_ICS, &cfg, Uuid::new_v4());
-        // "Lunch break" should not match
-        assert!(schedules.iter().all(|s| s.name != "Lunch break"));
+    fn break_rule_sets_break_type() {
+        let default_id = Uuid::new_v4();
+        let import_rules = vec![CalendarImportRule {
+            keyword: "lunch".into(),
+            schedule_type: ScheduleType::Break,
+            rule_set_id: None,
+        }];
+        let schedules = parse_schedules(SAMPLE_ICS, &import_rules, default_id);
+        let lunch = schedules.iter().find(|s| s.name == "Lunch break").unwrap();
+        assert_eq!(lunch.schedule_type, ScheduleType::Break);
+        assert_eq!(lunch.rule_set_id, Uuid::nil());
     }
 }

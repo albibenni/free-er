@@ -254,15 +254,17 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             ok(true)
         }
         Command::SyncCalendar => {
+            let import_rules = state.list_import_rules();
             // CalDAV sync
             if let Some(cfg) = state.caldav_config() {
                 let s = state.clone();
+                let rules = import_rules.clone();
                 tokio::spawn(async move {
                     match crate::calendar::fetch_ics(&cfg).await {
                         Ok(ics) => {
                             let default_id = s.list_rule_sets().first()
                                 .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
-                            let schedules = crate::calendar::parse_schedules(&ics, &cfg, default_id);
+                            let schedules = crate::calendar::parse_schedules(&ics, &rules, default_id);
                             tracing::info!("calendar sync (manual): imported {} schedules", schedules.len());
                             s.apply_calendar_schedules(schedules);
                         }
@@ -273,11 +275,11 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             // Google Calendar sync
             if let Some(cfg) = state.google_calendar_config() {
                 let s = state.clone();
+                let rules = import_rules.clone();
                 tokio::spawn(async move {
-                    let import_rules = cfg.import_rules.clone();
                     let default_id = s.list_rule_sets().first()
                         .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
-                    match crate::calendar::fetch_google_calendar_schedules(&cfg, &import_rules, default_id).await {
+                    match crate::calendar::fetch_google_calendar_schedules(&cfg, &rules, default_id).await {
                         Ok(schedules) => {
                             tracing::info!("Google Calendar sync (manual): imported {} schedules", schedules.len());
                             s.apply_calendar_schedules(schedules);
@@ -287,6 +289,25 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 });
             }
             ok(false)
+        }
+        Command::AddImportRule { keyword, schedule_type } => {
+            state.add_import_rule(keyword, schedule_type);
+            ok(true)
+        }
+        Command::RemoveImportRule { keyword, schedule_type } => {
+            state.remove_import_rule(&keyword, &schedule_type);
+            ok(true)
+        }
+        Command::ListImportRules => {
+            let rules: Vec<shared::ipc::ImportRuleSummary> = state
+                .list_import_rules()
+                .into_iter()
+                .map(|r| shared::ipc::ImportRuleSummary {
+                    keyword: r.keyword,
+                    schedule_type: r.schedule_type,
+                })
+                .collect();
+            (serde_json::to_string(&rules).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
         }
     }
 }

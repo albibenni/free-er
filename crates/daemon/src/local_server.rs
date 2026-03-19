@@ -66,7 +66,9 @@ async fn oauth_google_callback(
 
     let body = format!(
         "code={}&client_id={}&client_secret={}&redirect_uri={}&grant_type=authorization_code",
-        code, client_id, client_secret,
+        code,
+        client_id,
+        client_secret,
         "http%3A%2F%2F127.0.0.1%3A10000%2Foauth%2Fgoogle%2Fcallback"
     );
     let client = reqwest::Client::new();
@@ -117,12 +119,20 @@ async fn oauth_google_callback(
     let sync_state = state.clone();
     tokio::spawn(async move {
         if let Some(cfg) = sync_state.google_calendar_config() {
-            let import_rules = cfg.import_rules.clone();
-            let default_id = sync_state.list_rule_sets().first()
-                .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
-            match crate::calendar::fetch_google_calendar_schedules(&cfg, &import_rules, default_id).await {
+            let import_rules = sync_state.list_import_rules();
+            let default_id = sync_state
+                .list_rule_sets()
+                .first()
+                .map(|r| r.id)
+                .unwrap_or_else(uuid::Uuid::nil);
+            match crate::calendar::fetch_google_calendar_schedules(&cfg, &import_rules, default_id)
+                .await
+            {
                 Ok(schedules) => {
-                    info!("Google Calendar initial sync: imported {} schedules", schedules.len());
+                    info!(
+                        "Google Calendar initial sync: imported {} schedules",
+                        schedules.len()
+                    );
                     sync_state.apply_calendar_schedules(schedules);
                 }
                 Err(e) => tracing::warn!("Google Calendar initial sync failed: {e}"),

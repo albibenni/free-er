@@ -51,6 +51,12 @@ pub enum Command {
     StartGoogleOAuth,
     RevokeGoogleCalendar,
     SyncCalendar,
+    /// Add a global calendar import rule.
+    AddImportRule { keyword: String, schedule_type: ScheduleType },
+    /// Remove a global calendar import rule by keyword + type.
+    RemoveImportRule { keyword: String, schedule_type: ScheduleType },
+    /// List all global calendar import rules.
+    ListImportRules,
 }
 
 /// Returned by ListSchedules.
@@ -86,6 +92,13 @@ pub struct RuleSetSummary {
 pub enum PomodoroPhase {
     Focus,
     Break,
+}
+
+/// Returned by ListImportRules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportRuleSummary {
+    pub keyword: String,
+    pub schedule_type: ScheduleType,
 }
 
 /// Response sent from the daemon back to the client.

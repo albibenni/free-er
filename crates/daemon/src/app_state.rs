@@ -222,6 +222,32 @@ impl AppState {
         self.0.lock().unwrap().config.caldav.clone()
     }
 
+    pub fn list_import_rules(&self) -> Vec<shared::models::CalendarImportRule> {
+        self.0.lock().unwrap().config.import_rules.clone()
+    }
+
+    pub fn add_import_rule(&self, keyword: String, schedule_type: shared::models::ScheduleType) {
+        let mut inner = self.0.lock().unwrap();
+        // Avoid exact duplicates
+        let exists = inner.config.import_rules.iter().any(|r| {
+            r.keyword.to_lowercase() == keyword.to_lowercase() && r.schedule_type == schedule_type
+        });
+        if !exists {
+            inner.config.import_rules.push(shared::models::CalendarImportRule {
+                keyword,
+                schedule_type,
+                rule_set_id: None,
+            });
+        }
+    }
+
+    pub fn remove_import_rule(&self, keyword: &str, schedule_type: &shared::models::ScheduleType) {
+        let mut inner = self.0.lock().unwrap();
+        inner.config.import_rules.retain(|r| {
+            !(r.keyword.to_lowercase() == keyword.to_lowercase() && &r.schedule_type == schedule_type)
+        });
+    }
+
     pub fn set_strict_mode(&self, enabled: bool) {
         self.0.lock().unwrap().config.strict_mode = enabled;
     }
@@ -261,17 +287,12 @@ impl AppState {
         expiry_secs: i64,
     ) {
         let mut inner = self.0.lock().unwrap();
-        let import_rules = inner.config.google_calendar
-            .as_ref()
-            .map(|c| c.import_rules.clone())
-            .unwrap_or_default();
         inner.config.google_calendar = Some(shared::models::GoogleCalendarConfig {
             client_id,
             client_secret,
             access_token: Some(access_token),
             refresh_token: Some(refresh_token),
             token_expiry_secs: Some(expiry_secs),
-            import_rules,
         });
     }
 
@@ -297,12 +318,6 @@ impl AppState {
             url,
             username: Some(username),
             password: Some(password),
-            import_rules: inner
-                .config
-                .caldav
-                .as_ref()
-                .map(|c| c.import_rules.clone())
-                .unwrap_or_default(),
         });
     }
 

@@ -6,6 +6,7 @@ mod url_handlers;
 
 use crate::sections::{
     allowed_lists::{AllowedListsOutput, AllowedListsSection},
+    calendar_rules::{CalendarRulesOutput, CalendarRulesSection},
     focus::{FocusOutput, FocusSection},
     pomodoro::{PomodoroOutput, PomodoroSection},
     schedule::{ScheduleOutput, ScheduleSection},
@@ -23,6 +24,7 @@ pub enum Page {
     AllowedLists,
     Pomodoro,
     Schedule,
+    Calendar,
     Settings,
 }
 
@@ -35,6 +37,7 @@ pub struct App {
     pomodoro: Controller<PomodoroSection>,
     allowed_lists: Controller<AllowedListsSection>,
     schedule: Controller<ScheduleSection>,
+    calendar_rules: Controller<CalendarRulesSection>,
     settings: Controller<SettingsSection>,
 }
 
@@ -101,6 +104,9 @@ pub enum AppMsg {
     DeleteSchedule(Uuid),
     RefreshSchedules,
     ResyncCalendar,
+    // Calendar import rules
+    AddImportRule { keyword: String, schedule_type: shared::ipc::ScheduleType },
+    RemoveImportRule { keyword: String, schedule_type: shared::ipc::ScheduleType },
     // Status / refresh
     StatusTick,
     RefreshRuleSets,
@@ -181,6 +187,18 @@ impl Component for App {
                             gtk4::Image { set_icon_name: Some("x-office-calendar-symbolic") },
                             #[name = "lbl_schedule"]
                             gtk4::Label { set_label: "Schedule" },
+                        },
+                    },
+
+                                    gtk4::Button {
+                        add_css_class: "flat",
+                        connect_clicked => AppMsg::Navigate(Page::Calendar),
+                        gtk4::Box {
+                            set_orientation: gtk4::Orientation::Horizontal,
+                            set_spacing: 8,
+                            gtk4::Image { set_icon_name: Some("x-office-calendar-symbolic") },
+                            #[name = "lbl_calendar"]
+                            gtk4::Label { set_label: "Calendar" },
                         },
                     },
 
@@ -295,6 +313,18 @@ impl Component for App {
                     ScheduleOutput::ResyncCalendar => AppMsg::ResyncCalendar,
                 });
 
+        let calendar_rules = CalendarRulesSection::builder().launch(()).forward(
+            sender.input_sender(),
+            |out| match out {
+                CalendarRulesOutput::AddRule { keyword, schedule_type } => {
+                    AppMsg::AddImportRule { keyword, schedule_type }
+                }
+                CalendarRulesOutput::RemoveRule { keyword, schedule_type } => {
+                    AppMsg::RemoveImportRule { keyword, schedule_type }
+                }
+            },
+        );
+
         let settings = SettingsSection::builder().launch(false).forward(
             sender.input_sender(),
             |out| match out {
@@ -325,6 +355,7 @@ impl Component for App {
             pomodoro,
             allowed_lists,
             schedule,
+            calendar_rules,
             settings,
         };
 
@@ -340,6 +371,9 @@ impl Component for App {
         widgets
             .stack
             .add_named(model.schedule.widget(), Some("schedule"));
+        widgets
+            .stack
+            .add_named(model.calendar_rules.widget(), Some("calendar"));
         widgets
             .stack
             .add_named(model.settings.widget(), Some("settings"));
@@ -378,6 +412,7 @@ impl Component for App {
                 widgets.lbl_allowed.set_visible(open);
                 widgets.lbl_pomodoro.set_visible(open);
                 widgets.lbl_schedule.set_visible(open);
+                widgets.lbl_calendar.set_visible(open);
                 widgets.lbl_settings.set_visible(open);
                 widgets.btn_toggle.set_icon_name(if open {
                     "pan-start-symbolic"
@@ -391,6 +426,7 @@ impl Component for App {
                     Page::AllowedLists => "allowed_lists",
                     Page::Pomodoro => "pomodoro",
                     Page::Schedule => "schedule",
+                    Page::Calendar => "calendar",
                     Page::Settings => "settings",
                 };
                 widgets.stack.set_visible_child_name(name);
@@ -491,6 +527,17 @@ impl Component for App {
             AppMsg::RefreshSchedules => schedule_handlers::refresh_schedules(sender),
             AppMsg::ResyncCalendar => schedule_handlers::resync_calendar(sender),
 
+            // ── Calendar import rules ────────────────────────────────────
+            AppMsg::AddImportRule { keyword, schedule_type } => {
+                relm4::spawn(async move {
+                    let _ = crate::ipc_client::add_import_rule(&keyword, schedule_type).await;
+                });
+            }
+            AppMsg::RemoveImportRule { keyword, schedule_type } => {
+                relm4::spawn(async move {
+                    let _ = crate::ipc_client::remove_import_rule(&keyword, schedule_type).await;
+                });
+            }
             // ── Status / refresh ─────────────────────────────────────────
             AppMsg::StatusTick => status_handlers::status_tick(self, sender),
             AppMsg::RefreshRuleSets => status_handlers::refresh_rule_sets(self, sender),
