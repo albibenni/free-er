@@ -9,6 +9,7 @@ pub struct AllowedListsSection {
     new_list_name: gtk4::EntryBuffer,
     rule_sets: Vec<RuleSetSummary>,
     selected_id: Option<Uuid>,
+    default_id: Option<Uuid>,
     creating_new: bool,
 }
 
@@ -17,11 +18,13 @@ pub enum AllowedListsInput {
     AddUrl,
     RemoveUrl { rule_set_id: Uuid, url: String },
     RuleSetsUpdated(Vec<RuleSetSummary>),
+    DefaultRuleSetUpdated(Option<Uuid>),
     ComboChanged,
     ShowNewListEntry,
     ConfirmNewList,
     CancelNewList,
     DeleteSelectedList,
+    SetSelectedAsDefault,
 }
 
 #[derive(Debug)]
@@ -30,6 +33,7 @@ pub enum AllowedListsOutput {
     RemoveUrl { rule_set_id: Uuid, url: String },
     CreateRuleSet(String),
     DeleteRuleSet(Uuid),
+    SetDefaultRuleSet(Uuid),
 }
 
 #[relm4::component(pub)]
@@ -74,6 +78,16 @@ impl Component for AllowedListsSection {
                         .map(|id| model.rule_sets.iter().position(|s| s.id == id).unwrap_or(0) > 0)
                         .unwrap_or(false),
                     connect_clicked => AllowedListsInput::DeleteSelectedList,
+                },
+
+                gtk4::Button {
+                    set_label: "Set default",
+                    add_css_class: "flat",
+                    set_tooltip_text: Some("Use selected list as default"),
+                    #[watch]
+                    set_sensitive: model.selected_id.is_some()
+                        && model.selected_id != model.default_id,
+                    connect_clicked => AllowedListsInput::SetSelectedAsDefault,
                 },
 
                 // New list inline entry (shown while creating)
@@ -182,6 +196,7 @@ impl Component for AllowedListsSection {
             new_list_name: gtk4::EntryBuffer::default(),
             rule_sets: vec![],
             selected_id: None,
+            default_id: None,
             creating_new: false,
         };
         let widgets = view_output!();
@@ -212,9 +227,16 @@ impl Component for AllowedListsSection {
                 if self.selected_id.map_or(true, |id| !sets.iter().any(|s| s.id == id)) {
                     self.selected_id = sets.first().map(|s| s.id);
                 }
+                if self.default_id.map_or(true, |id| !sets.iter().any(|s| s.id == id)) {
+                    self.default_id = sets.first().map(|s| s.id);
+                }
                 self.rule_sets = sets;
                 self.rebuild_combo(widgets);
                 self.rebuild_url_list(widgets, &sender);
+            }
+            AllowedListsInput::DefaultRuleSetUpdated(default_id) => {
+                self.default_id = default_id;
+                self.rebuild_combo(widgets);
             }
             AllowedListsInput::ComboChanged => {
                 let new_id = widgets.list_combo
@@ -244,6 +266,11 @@ impl Component for AllowedListsSection {
                     let _ = sender.output(AllowedListsOutput::DeleteRuleSet(id));
                 }
             }
+            AllowedListsInput::SetSelectedAsDefault => {
+                if let Some(id) = self.selected_id {
+                    let _ = sender.output(AllowedListsOutput::SetDefaultRuleSet(id));
+                }
+            }
         }
         self.update_view(widgets, sender);
     }
@@ -260,8 +287,8 @@ impl AllowedListsSection {
     fn rebuild_combo(&self, widgets: &mut AllowedListsSectionWidgets) {
         // Block the signal temporarily by rebuilding without triggering ComboChanged logic
         widgets.list_combo.remove_all();
-        for (i, rs) in self.rule_sets.iter().enumerate() {
-            let label = if i == 0 {
+        for rs in &self.rule_sets {
+            let label = if Some(rs.id) == self.default_id {
                 format!("{} (default)", rs.name)
             } else {
                 rs.name.clone()

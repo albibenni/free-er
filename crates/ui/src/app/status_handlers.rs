@@ -8,7 +8,11 @@ use tracing::warn;
 
 use super::{App, AppMsg};
 
-pub(super) fn status_tick(app: &App, sender: ComponentSender<App>) {
+pub(super) fn status_tick(
+    app: &App,
+    default_rule_set_id: Option<uuid::Uuid>,
+    sender: ComponentSender<App>,
+) {
     let focus_sender = app.focus.sender().clone();
     let pom_sender = app.pomodoro.sender().clone();
     let lists_sender = app.allowed_lists.sender().clone();
@@ -34,7 +38,14 @@ pub(super) fn status_tick(app: &App, sender: ComponentSender<App>) {
             Err(e) => warn!("status poll failed: {e}"),
         }
 
-        push_rule_sets(&lists_sender, &pom_sender, &schedule_sender, &settings_sender, &sender)
+        push_rule_sets(
+            &lists_sender,
+            &pom_sender,
+            &schedule_sender,
+            &settings_sender,
+            default_rule_set_id,
+            &sender,
+        )
             .await;
 
         match ipc_client::list_schedules().await {
@@ -49,14 +60,22 @@ pub(super) fn status_tick(app: &App, sender: ComponentSender<App>) {
     });
 }
 
-pub(super) fn refresh_rule_sets(app: &App, sender: ComponentSender<App>) {
+pub(super) fn refresh_rule_sets(app: &App, default_rule_set_id: Option<uuid::Uuid>, sender: ComponentSender<App>) {
     let lists_sender = app.allowed_lists.sender().clone();
     let pom_sender = app.pomodoro.sender().clone();
     let sched_sender = app.schedule.sender().clone();
     let settings_sender = app.settings.sender().clone();
 
     tokio::spawn(async move {
-        push_rule_sets(&lists_sender, &pom_sender, &sched_sender, &settings_sender, &sender).await;
+        push_rule_sets(
+            &lists_sender,
+            &pom_sender,
+            &sched_sender,
+            &settings_sender,
+            default_rule_set_id,
+            &sender,
+        )
+        .await;
     });
 }
 
@@ -65,6 +84,7 @@ async fn push_rule_sets(
     pom_sender: &Sender<PomodoroInput>,
     sched_sender: &Sender<ScheduleInput>,
     settings_sender: &Sender<SettingsInput>,
+    current_default_rule_set_id: Option<uuid::Uuid>,
     tick_sender: &ComponentSender<App>,
 ) {
     match ipc_client::list_rule_sets().await {
@@ -75,8 +95,11 @@ async fn push_rule_sets(
             let all_urls: Vec<String> =
                 sets.iter().flat_map(|s| s.allowed_urls.clone()).collect();
             settings_sender.emit(SettingsInput::QuickUrlsUpdated(all_urls));
-            if let Some(first_id) = sets.first().map(|s| s.id) {
-                tick_sender.input(AppMsg::SetDefaultRuleSet(first_id));
+            let next_default = current_default_rule_set_id
+                .filter(|id| sets.iter().any(|s| s.id == *id))
+                .or_else(|| sets.first().map(|s| s.id));
+            if let Some(default_id) = next_default {
+                tick_sender.input(AppMsg::SetDefaultRuleSet(default_id));
             }
         }
         Err(e) => warn!("list_rule_sets failed: {e}"),

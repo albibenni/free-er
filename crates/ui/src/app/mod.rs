@@ -266,6 +266,7 @@ impl Component for App {
                 }
                 AllowedListsOutput::CreateRuleSet(name) => AppMsg::CreateRuleSet(name),
                 AllowedListsOutput::DeleteRuleSet(id) => AppMsg::DeleteRuleSet(id),
+                AllowedListsOutput::SetDefaultRuleSet(id) => AppMsg::SetDefaultRuleSet(id),
             },
         );
 
@@ -539,10 +540,17 @@ impl Component for App {
                 });
             }
             // ── Status / refresh ─────────────────────────────────────────
-            AppMsg::StatusTick => status_handlers::status_tick(self, sender),
-            AppMsg::RefreshRuleSets => status_handlers::refresh_rule_sets(self, sender),
+            AppMsg::StatusTick => status_handlers::status_tick(self, self.default_rule_set_id, sender),
+            AppMsg::RefreshRuleSets => {
+                status_handlers::refresh_rule_sets(self, self.default_rule_set_id, sender)
+            }
             AppMsg::SetDefaultRuleSet(id) => {
                 self.default_rule_set_id = Some(id);
+                self.allowed_lists
+                    .sender()
+                    .emit(crate::sections::allowed_lists::AllowedListsInput::DefaultRuleSetUpdated(
+                        Some(id),
+                    ));
             }
         }
     }
