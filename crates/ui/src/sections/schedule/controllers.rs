@@ -369,6 +369,25 @@ mod tests {
     }
 
     #[test]
+    fn create_drag_range_handles_reverse_drag_direction() {
+        let w = 700.0;
+        let h = 900.0;
+        let sx = MARGIN_LEFT + 10.0;
+        let sy = HEADER_H + 200.0;
+        let cx = sx;
+        let cy = HEADER_H + 120.0;
+        let (_col, s, e) = create_drag_range(sx, sy, cx, cy, w, h).unwrap();
+        assert!(e > s);
+        assert_eq!(s % 15, 0);
+        assert_eq!(e % 15, 0);
+    }
+
+    #[test]
+    fn create_drag_range_outside_grid_returns_none() {
+        assert!(create_drag_range(0.0, 0.0, 10.0, 10.0, 700.0, 900.0).is_none());
+    }
+
+    #[test]
     fn move_drag_target_keeps_duration_and_bounds() {
         let (col, start, end) = move_drag_target(
             MARGIN_LEFT + 500.0,
@@ -385,6 +404,12 @@ mod tests {
     }
 
     #[test]
+    fn move_drag_target_left_of_grid_clamps_to_first_col() {
+        let (col, _start, _end) = move_drag_target(0.0, HEADER_H + 200.0, 700.0, 900.0, 30, 5);
+        assert_eq!(col, 0);
+    }
+
+    #[test]
     fn resize_drag_target_enforces_min_block() {
         let w = 700.0;
         let h = 900.0;
@@ -392,6 +417,18 @@ mod tests {
         let cy = HEADER_H + 400.0;
         let (s, e) = resize_drag_target(sx, cy, w, h, 9 * 60, 10 * 60, false).unwrap();
         assert!(e >= s + 15);
+    }
+
+    #[test]
+    fn resize_drag_target_from_top_keeps_end_and_clamps_start() {
+        let w = 700.0;
+        let h = 900.0;
+        let sx = MARGIN_LEFT + 20.0;
+        let cy = HEADER_H + 1.0;
+        let (s, e) = resize_drag_target(sx, cy, w, h, 9 * 60, 10 * 60, true).unwrap();
+        assert_eq!(e, 10 * 60);
+        assert!(s >= START_HOUR * 60);
+        assert!(s <= e.saturating_sub(15));
     }
 }
 

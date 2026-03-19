@@ -486,6 +486,17 @@ fn draw_calendar_icon(cr: &gtk4::cairo::Context, x: f64, y: f64, size: f64) {
 mod tests {
     use super::*;
     use chrono::NaiveDate;
+    use shared::ipc::{ScheduleSummary, ScheduleType};
+    use uuid::Uuid;
+
+    fn ensure_gtk() -> Option<std::sync::MutexGuard<'static, ()>> {
+        let guard = crate::sections::test_support::GTK_TEST_LOCK.lock().unwrap();
+        if gtk4::init().is_ok() {
+            Some(guard)
+        } else {
+            None
+        }
+    }
 
     #[test]
     fn dark_theme_threshold() {
@@ -513,11 +524,81 @@ mod tests {
             (0.35, 0.85)
         );
         assert_eq!(drag_preview_alphas(&DragMode::None), (0.55, 0.95));
+        assert_eq!(
+            drag_preview_alphas(&DragMode::Move {
+                id: Uuid::new_v4(),
+                col: 0,
+                start_min: 10,
+                end_min: 20,
+                duration_min: 10,
+                click_offset_min: 1
+            }),
+            (0.55, 0.95)
+        );
     }
 
     #[test]
     fn event_color_index_is_stable() {
         assert_eq!(event_color_index("abc"), event_color_index("abc"));
         assert_ne!(event_color_index("abc"), event_color_index("abd"));
+        assert_eq!(event_color_index(""), 0);
+    }
+
+    #[test]
+    #[ignore = "requires GTK runtime stability"]
+    fn draw_calendar_smoke_runs_for_drag_modes() {
+        let Some(_gtk_guard) = ensure_gtk() else { return; };
+        let da = gtk4::DrawingArea::new();
+        let surface = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, 800, 900)
+            .unwrap();
+        let cr = gtk4::cairo::Context::new(&surface).unwrap();
+
+        let sched = ScheduleSummary {
+            id: Uuid::new_v4(),
+            name: "Study".into(),
+            days: vec![0],
+            start_min: 9 * 60,
+            end_min: 10 * 60,
+            enabled: true,
+            imported: false,
+            imported_repeating: false,
+            specific_date: None,
+            schedule_type: ScheduleType::Focus,
+            rule_set_id: Uuid::new_v4(),
+        };
+
+        let mut data = DrawData {
+            schedules: vec![sched.clone()],
+            week_offset: 0,
+            drag_start: None,
+            drag_mode: DragMode::None,
+        };
+        draw_calendar(&da, &cr, 800, 900, &data);
+
+        data.drag_mode = DragMode::Create {
+            col: 0,
+            start_min: 9 * 60,
+            end_min: 10 * 60,
+        };
+        draw_calendar(&da, &cr, 800, 900, &data);
+
+        data.drag_mode = DragMode::Move {
+            id: sched.id,
+            col: 1,
+            start_min: 10 * 60,
+            end_min: 11 * 60,
+            duration_min: 60,
+            click_offset_min: 10,
+        };
+        draw_calendar(&da, &cr, 800, 900, &data);
+
+        data.drag_mode = DragMode::Resize {
+            id: sched.id,
+            col: 1,
+            start_min: 10 * 60,
+            end_min: 11 * 60,
+            from_top: false,
+        };
+        draw_calendar(&da, &cr, 800, 900, &data);
     }
 }

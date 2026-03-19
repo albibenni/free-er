@@ -534,6 +534,15 @@ pub(super) fn parse_hhmm(s: &str) -> Option<u32> {
 mod tests {
     use super::*;
 
+    fn ensure_gtk() -> Option<std::sync::MutexGuard<'static, ()>> {
+        let guard = crate::sections::test_support::GTK_TEST_LOCK.lock().unwrap();
+        if gtk4::init().is_ok() {
+            Some(guard)
+        } else {
+            None
+        }
+    }
+
     #[test]
     fn parse_hhmm_accepts_valid_times() {
         assert_eq!(parse_hhmm("00:00"), Some(0));
@@ -567,5 +576,38 @@ mod tests {
         assert_eq!(resolve_rule_set_index(Some(1), &sets), Some(a.id));
         assert_eq!(resolve_rule_set_index(Some(2), &sets), Some(b.id));
         assert_eq!(resolve_rule_set_index(Some(9), &sets), None);
+    }
+
+    #[test]
+    fn resolve_rule_set_index_handles_none_and_empty_sets() {
+        assert_eq!(resolve_rule_set_index(None, &[]), None);
+        assert_eq!(resolve_rule_set_index(Some(1), &[]), None);
+    }
+
+    #[test]
+    #[ignore = "requires GTK runtime stability"]
+    fn recurrence_helpers_select_and_lock_days() {
+        let Some(_gtk_guard) = ensure_gtk() else { return; };
+        let vbox = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        let (repeat_btn, once_btn, buttons) =
+            append_recurrence_row(&vbox, &[1, 3], None);
+        assert!(repeat_btn.is_active());
+        assert!(!once_btn.is_active());
+        assert_eq!(selected_weekdays(&buttons), vec![1, 3]);
+
+        set_recurrence_read_only(&repeat_btn, &once_btn, &buttons);
+        assert!(!repeat_btn.is_sensitive());
+        assert!(!once_btn.is_sensitive());
+        assert!(buttons.iter().all(|b| !b.is_sensitive()));
+    }
+
+    #[test]
+    #[ignore = "requires GTK runtime stability"]
+    fn recurrence_defaults_first_day_when_empty() {
+        let Some(_gtk_guard) = ensure_gtk() else { return; };
+        let vbox = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        let (_repeat, _once, buttons) =
+            append_recurrence_row(&vbox, &[], Some("2026-03-16".into()));
+        assert_eq!(selected_weekdays(&buttons), vec![0]);
     }
 }

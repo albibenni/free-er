@@ -120,6 +120,25 @@ impl SimpleComponent for FocusSection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use relm4::ComponentController;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    fn ensure_gtk() -> Option<std::sync::MutexGuard<'static, ()>> {
+        let guard = crate::sections::test_support::GTK_TEST_LOCK.lock().unwrap();
+        if gtk4::init().is_ok() {
+            Some(guard)
+        } else {
+            None
+        }
+    }
+
+    fn flush() {
+        let ctx = gtk4::glib::MainContext::default();
+        while ctx.pending() {
+            ctx.iteration(false);
+        }
+    }
 
     fn model() -> FocusSection {
         FocusSection {
@@ -170,5 +189,30 @@ mod tests {
         );
         assert!(m.focus_active);
         assert_eq!(m.active_rule_set.as_deref(), Some("Default"));
+    }
+
+    #[test]
+    #[ignore = "requires GTK runtime stability"]
+    fn integration_component_emits_focus_outputs() {
+        let Some(_gtk_guard) = ensure_gtk() else { return; };
+        let outputs: Rc<RefCell<Vec<FocusOutput>>> = Rc::new(RefCell::new(Vec::new()));
+        let captured = outputs.clone();
+        let controller = FocusSection::builder()
+            .launch(())
+            .connect_receiver(move |_, out| captured.borrow_mut().push(out));
+
+        controller.emit(FocusInput::Toggle);
+        controller.emit(FocusInput::SkipBreak);
+        controller.emit(FocusInput::StatusUpdated {
+            active: true,
+            rule_set: Some("Work".into()),
+        });
+        controller.emit(FocusInput::Toggle);
+        flush();
+
+        let out = outputs.borrow();
+        assert!(out.iter().any(|o| matches!(o, FocusOutput::StartFocus)));
+        assert!(out.iter().any(|o| matches!(o, FocusOutput::SkipBreak)));
+        assert!(out.iter().any(|o| matches!(o, FocusOutput::StopFocus)));
     }
 }
