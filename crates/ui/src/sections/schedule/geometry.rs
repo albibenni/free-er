@@ -1,5 +1,6 @@
-use chrono::Datelike;
 use shared::ipc::{ScheduleSummary, ScheduleType};
+
+use super::week::week_monday_for_offset;
 
 // ── Block layout ──────────────────────────────────────────────────────────────
 
@@ -147,10 +148,7 @@ pub(super) fn hit_test_event(
 )> {
     let col_w = (w - MARGIN_LEFT - MARGIN_RIGHT) / 7.0;
 
-    let today = chrono::Local::now().date_naive();
-    let dfm = today.weekday().num_days_from_monday() as i64;
-    let this_mon = today - chrono::Duration::days(dfm);
-    let week_monday = this_mon + chrono::Duration::weeks(week_offset as i64);
+    let week_monday = week_monday_for_offset(week_offset);
 
     let layouts = compute_layout(schedules, week_monday);
 
