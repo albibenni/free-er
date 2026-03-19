@@ -227,10 +227,11 @@ impl AppState {
     }
 
     pub fn add_import_rule(&self, keyword: String, schedule_type: shared::models::ScheduleType) {
+        let keyword = keyword.to_lowercase();
         let mut inner = self.0.lock().unwrap();
-        // Avoid exact duplicates
+        // Avoid duplicates (comparison is already on lowercased keyword)
         let exists = inner.config.import_rules.iter().any(|r| {
-            r.keyword.to_lowercase() == keyword.to_lowercase() && r.schedule_type == schedule_type
+            r.keyword == keyword && r.schedule_type == schedule_type
         });
         if !exists {
             inner.config.import_rules.push(shared::models::CalendarImportRule {
@@ -242,9 +243,10 @@ impl AppState {
     }
 
     pub fn remove_import_rule(&self, keyword: &str, schedule_type: &shared::models::ScheduleType) {
+        let keyword = keyword.to_lowercase();
         let mut inner = self.0.lock().unwrap();
         inner.config.import_rules.retain(|r| {
-            !(r.keyword.to_lowercase() == keyword.to_lowercase() && &r.schedule_type == schedule_type)
+            !(r.keyword == keyword && &r.schedule_type == schedule_type)
         });
     }
 

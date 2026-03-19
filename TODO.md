@@ -34,6 +34,7 @@
 - [x] resync with google calendar when the app starts
 - [x] resync button to resync with google calendar
 - [ ] change default allowed list from settings
+- [ ] import from open websites
 - [ ] rules for import
   - [ ] personalized list
     - [ ] no screen

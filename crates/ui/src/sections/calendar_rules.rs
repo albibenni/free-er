@@ -154,7 +154,7 @@ impl Component for CalendarRulesSection {
     ) {
         match msg {
             CalendarRulesInput::AddFocusKeyword => {
-                let kw = self.focus_entry.text().trim().to_string();
+                let kw = self.focus_entry.text().trim().to_lowercase();
                 if kw.is_empty() || self.focus_keywords.contains(&kw) {
                     return;
                 }
@@ -170,7 +170,7 @@ impl Component for CalendarRulesSection {
                 });
             }
             CalendarRulesInput::AddBreakKeyword => {
-                let kw = self.break_entry.text().trim().to_string();
+                let kw = self.break_entry.text().trim().to_lowercase();
                 if kw.is_empty() || self.break_keywords.contains(&kw) {
                     return;
                 }
