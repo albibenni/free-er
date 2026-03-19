@@ -500,6 +500,9 @@ mod tests {
         find_switch_by_row_label(&root, "Search engines").set_active(true);
         find_switch_by_row_label(&root, "AI web pages").set_active(true);
         find_switch_by_row_label(&root, "WhatsApp Web").set_active(true);
+        find_switch_by_row_label(&root, "Telegram Web").set_active(true);
+        find_switch_by_row_label(&root, "Discord").set_active(true);
+        find_switch_by_row_label(&root, "Spotify").set_active(true);
         find_button_by_label(&root, "Connect").emit_clicked();
 
         let url_entry = find_entry_by_placeholder(&root, "Calendar URL (.ics or CalDAV)");
@@ -515,6 +518,7 @@ mod tests {
         let disconnect = find_button_by_label(&root, "Disconnect");
         assert!(disconnect.is_visible());
         disconnect.emit_clicked();
+        controller.emit(SettingsInput::GoogleStatusUpdated(false));
         flush_main_context();
 
         let out = outputs.borrow();
@@ -524,6 +528,18 @@ mod tests {
         assert!(out.contains(&SettingsOutput::AiSitesToggled(true)));
         assert!(out.contains(&SettingsOutput::QuickUrlToggled {
             url: WHATSAPP,
+            enabled: true,
+        }));
+        assert!(out.contains(&SettingsOutput::QuickUrlToggled {
+            url: TELEGRAM,
+            enabled: true,
+        }));
+        assert!(out.contains(&SettingsOutput::QuickUrlToggled {
+            url: DISCORD,
+            enabled: true,
+        }));
+        assert!(out.contains(&SettingsOutput::QuickUrlToggled {
+            url: SPOTIFY,
             enabled: true,
         }));
         assert!(out.contains(&SettingsOutput::ConnectGoogleRequested));
