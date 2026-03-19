@@ -594,6 +594,7 @@ impl Component for ScheduleSection {
             }
             ScheduleInput::SchedulesUpdated(schedules) => {
                 self.draw_data.borrow_mut().schedules = schedules;
+                widgets.drawing_area.queue_draw();
             }
             ScheduleInput::DragBegin(..)
             | ScheduleInput::DragUpdate(..)

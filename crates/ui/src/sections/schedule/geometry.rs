@@ -14,8 +14,6 @@ pub(super) struct BlockLayout {
     pub total_slots: usize,
     /// Don't render this block (e.g. focus hidden because break wins).
     pub hidden: bool,
-    /// Number of additional schedules merged into this block (0 = standalone).
-    pub merged_count: usize,
 }
 
 /// Compute the rendering layout for all schedules in the given week.
@@ -45,20 +43,18 @@ pub(super) fn compute_layout(
                     slot: 0,
                     total_slots: 1,
                     hidden: false,
-                    merged_count: 0,
                 });
                 continue;
             }
 
-            let has_break = group
+            let break_count = group
                 .iter()
-                .any(|&i| schedules[i].schedule_type == ScheduleType::Break);
-            let all_focus = group
-                .iter()
-                .all(|&i| schedules[i].schedule_type == ScheduleType::Focus);
+                .filter(|&&i| schedules[i].schedule_type == ScheduleType::Break)
+                .count();
+            let has_mixed = break_count > 0 && break_count < group.len();
 
-            if has_break {
-                // Break wins: break full-width, focus hidden.
+            if has_mixed {
+                // Break + Focus: break wins full-width; focus events are hidden.
                 for &i in &group {
                     let is_break = schedules[i].schedule_type == ScheduleType::Break;
                     layouts.push(BlockLayout {
@@ -67,44 +63,10 @@ pub(super) fn compute_layout(
                         slot: 0,
                         total_slots: 1,
                         hidden: !is_break,
-                        merged_count: 0,
                     });
                 }
-            } else if all_focus {
-                let first_rule_set = schedules[group[0]].rule_set_id;
-                let all_same_list = group
-                    .iter()
-                    .all(|&i| schedules[i].rule_set_id == first_rule_set);
-
-                if all_same_list {
-                    // Same rule set → side by side.
-                    let n = group.len();
-                    for (slot, &i) in group.iter().enumerate() {
-                        layouts.push(BlockLayout {
-                            sched_id: schedules[i].id,
-                            col,
-                            slot,
-                            total_slots: n,
-                            hidden: false,
-                            merged_count: 0,
-                        });
-                    }
-                } else {
-                    // Different rule sets → merge: first block full-width, rest hidden.
-                    let merged_count = group.len() - 1;
-                    for (idx, &i) in group.iter().enumerate() {
-                        layouts.push(BlockLayout {
-                            sched_id: schedules[i].id,
-                            col,
-                            slot: 0,
-                            total_slots: 1,
-                            hidden: idx > 0,
-                            merged_count: if idx == 0 { merged_count } else { 0 },
-                        });
-                    }
-                }
             } else {
-                // Mixed non-break types → side by side.
+                // All same type (all Focus or all Break) → side by side.
                 let n = group.len();
                 for (slot, &i) in group.iter().enumerate() {
                     layouts.push(BlockLayout {
@@ -113,7 +75,6 @@ pub(super) fn compute_layout(
                         slot,
                         total_slots: n,
                         hidden: false,
-                        merged_count: 0,
                     });
                 }
             }
@@ -124,17 +85,14 @@ pub(super) fn compute_layout(
 }
 
 /// Group sorted schedule indices into sets of overlapping intervals.
-fn find_overlap_groups(
-    sorted_indices: &[usize],
-    schedules: &[ScheduleSummary],
-) -> Vec<Vec<usize>> {
+fn find_overlap_groups(sorted_indices: &[usize], schedules: &[ScheduleSummary]) -> Vec<Vec<usize>> {
     let mut groups: Vec<Vec<usize>> = Vec::new();
     let mut current: Vec<usize> = Vec::new();
     let mut max_end: u32 = 0;
 
     for &idx in sorted_indices {
         let s = &schedules[idx];
-        if current.is_empty() || s.start_min < max_end {
+        if current.is_empty() || s.start_min <= max_end {
             current.push(idx);
             max_end = max_end.max(s.end_min);
         } else {
@@ -197,7 +155,16 @@ pub(super) fn hit_test_event(
     h: f64,
     week_offset: i32,
     schedules: &[ScheduleSummary],
-) -> Option<(uuid::Uuid, String, usize, u32, u32, bool, ScheduleType, uuid::Uuid)> {
+) -> Option<(
+    uuid::Uuid,
+    String,
+    usize,
+    u32,
+    u32,
+    bool,
+    ScheduleType,
+    uuid::Uuid,
+)> {
     let col_w = (w - MARGIN_LEFT - MARGIN_RIGHT) / 7.0;
 
     let today = chrono::Local::now().date_naive();
@@ -245,10 +212,7 @@ pub(super) fn hit_test_event(
 }
 
 /// Columns (0–6, Mon–Sun) a schedule occupies in the given week.
-pub(super) fn event_columns(
-    sched: &ScheduleSummary,
-    week_monday: chrono::NaiveDate,
-) -> Vec<usize> {
+pub(super) fn event_columns(sched: &ScheduleSummary, week_monday: chrono::NaiveDate) -> Vec<usize> {
     if let Some(ds) = &sched.specific_date {
         if let Ok(date) = chrono::NaiveDate::parse_from_str(ds, "%Y-%m-%d") {
             let off = (date - week_monday).num_days();

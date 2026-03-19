@@ -256,9 +256,6 @@ fn draw_event_blocks(
 
         if !is_moving {
             draw_event_label(cr, sched, x, block_w, y_start, block_h);
-            if layout.merged_count > 0 {
-                draw_merged_badge(cr, x, block_w, y_start, layout.merged_count);
-            }
         }
     }
 }
@@ -324,30 +321,6 @@ fn draw_event_label(
 
     cr.move_to(text_x, text_y);
     let _ = cr.show_text(&sched.name);
-
-    cr.restore().unwrap();
-}
-
-/// Draw a small "+N" badge in the top-right corner of a merged focus block.
-fn draw_merged_badge(
-    cr: &gtk4::cairo::Context,
-    x: f64,
-    block_w: f64,
-    y_start: f64,
-    merged_count: usize,
-) {
-    cr.save().unwrap();
-    cr.rectangle(x, y_start, block_w, 14.0);
-    let _ = cr.clip();
-
-    let label = format!("+{merged_count}");
-    cr.set_font_size(9.0);
-    cr.set_source_rgba(1.0, 1.0, 1.0, 0.80);
-    let te = cr
-        .text_extents(&label)
-        .unwrap_or(gtk4::cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
-    cr.move_to(x + block_w - te.width() - 6.0, y_start + 10.0);
-    let _ = cr.show_text(&label);
 
     cr.restore().unwrap();
 }
