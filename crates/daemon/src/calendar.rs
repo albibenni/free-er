@@ -21,13 +21,19 @@ pub async fn fetch_ics(cfg: &CalDavConfig) -> Result<String> {
 /// Global `import_rules` determine whether each event is Focus or Break and
 /// which allowed list to apply.
 pub fn parse_schedules(ics: &str, import_rules: &[CalendarImportRule], default_rule_set_id: Uuid) -> Vec<Schedule> {
-    let now = chrono::Local::now().naive_local();
+    let (window_start, window_end) = schedule_window_bounds();
     let reader = ical::IcalParser::new(ics.as_bytes());
     let mut schedules = Vec::new();
 
     for calendar in reader.flatten() {
         for event in calendar.events {
-            if let Some(schedule) = event_to_schedule(&event, import_rules, now, default_rule_set_id) {
+            if let Some(schedule) = event_to_schedule(
+                &event,
+                import_rules,
+                window_start,
+                window_end,
+                default_rule_set_id,
+            ) {
                 schedules.push(schedule);
             }
         }
@@ -38,7 +44,8 @@ pub fn parse_schedules(ics: &str, import_rules: &[CalendarImportRule], default_r
 fn event_to_schedule(
     event: &IcalEvent,
     import_rules: &[CalendarImportRule],
-    now: chrono::NaiveDateTime,
+    window_start: chrono::NaiveDateTime,
+    window_end: chrono::NaiveDateTime,
     default_rule_set_id: Uuid,
 ) -> Option<Schedule> {
     let summary = prop_value(event, "SUMMARY")?;
@@ -48,8 +55,8 @@ fn event_to_schedule(
     let start_dt = parse_dt(&dtstart)?;
     let end_dt = parse_dt(&dtend)?;
 
-    // Skip events that have already ended
-    if end_dt <= now {
+    // Keep only events from previous/current/next week in local time.
+    if start_dt < window_start || start_dt >= window_end {
         return None;
     }
 
@@ -160,22 +167,11 @@ pub async fn fetch_google_calendar_schedules(
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("no access token"))?;
 
-    let now = chrono::Utc::now();
+    let (window_start_local, window_end_local) = schedule_window_bounds();
     // Use Z (UTC) suffix so no encoding is needed for the `+` in ±offset timestamps
     let fmt = "%Y-%m-%dT%H:%M:%SZ";
-    // Start from Monday of the current week so that today's already-ended events
-    // and earlier-this-week events are included in the calendar view.
-    let today_local = chrono::Local::now();
-    let days_from_mon = today_local.weekday().num_days_from_monday() as i64;
-    let week_monday_local = today_local - chrono::Duration::days(days_from_mon);
-    let time_min = week_monday_local
-        .date_naive()
-        .and_hms_opt(0, 0, 0)
-        .unwrap()
-        .and_utc()
-        .format(fmt)
-        .to_string();
-    let time_max = (now + chrono::Duration::days(35)).format(fmt).to_string();
+    let time_min = window_start_local.and_utc().format(fmt).to_string();
+    let time_max = window_end_local.and_utc().format(fmt).to_string();
     let url = format!(
         "https://www.googleapis.com/calendar/v3/calendars/primary/events\
          ?singleEvents=true&orderBy=startTime&timeMin={time_min}&timeMax={time_max}"
@@ -196,13 +192,23 @@ pub async fn fetch_google_calendar_schedules(
     // appear on every week within the fetched window; one-time events appear once.
     Ok(items
         .iter()
-        .filter_map(|item| google_event_to_schedule(item, import_rules, default_rule_set_id))
+        .filter_map(|item| {
+            google_event_to_schedule(
+                item,
+                import_rules,
+                window_start_local,
+                window_end_local,
+                default_rule_set_id,
+            )
+        })
         .collect())
 }
 
 fn google_event_to_schedule(
     event: &serde_json::Value,
     import_rules: &[CalendarImportRule],
+    window_start: chrono::NaiveDateTime,
+    window_end: chrono::NaiveDateTime,
     default_rule_set_id: Uuid,
 ) -> Option<Schedule> {
     let summary = event["summary"].as_str()?;
@@ -231,6 +237,10 @@ fn google_event_to_schedule(
         })
         .ok()?;
 
+    if start_dt < window_start || start_dt >= window_end {
+        return None;
+    }
+
     Some(Schedule {
         id: Uuid::new_v4(),
         name: summary.to_string(),
@@ -245,33 +255,55 @@ fn google_event_to_schedule(
     })
 }
 
+/// Inclusive lower bound and exclusive upper bound for the schedule view window:
+/// previous week Monday 00:00 local → week after next Monday 00:00 local.
+fn schedule_window_bounds() -> (chrono::NaiveDateTime, chrono::NaiveDateTime) {
+    let today = chrono::Local::now().date_naive();
+    let days_from_mon = today.weekday().num_days_from_monday() as i64;
+    let this_monday = today - chrono::Duration::days(days_from_mon);
+    let prev_monday = this_monday - chrono::Duration::weeks(1);
+    let week_after_next_monday = this_monday + chrono::Duration::weeks(2);
+
+    (
+        prev_monday.and_hms_opt(0, 0, 0).unwrap(),
+        week_after_next_monday.and_hms_opt(0, 0, 0).unwrap(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use shared::models::CalendarImportRule;
 
-    const SAMPLE_ICS: &str = "BEGIN:VCALENDAR\r\n\
+    fn sample_ics_for_date(date: chrono::NaiveDate) -> String {
+        let d = date.format("%Y%m%d");
+        format!(
+            "BEGIN:VCALENDAR\r\n\
 BEGIN:VEVENT\r\n\
 SUMMARY:Deep Work Session\r\n\
-DTSTART:29991231T090000Z\r\n\
-DTEND:29991231T110000Z\r\n\
+DTSTART:{d}T090000Z\r\n\
+DTEND:{d}T110000Z\r\n\
 END:VEVENT\r\n\
 BEGIN:VEVENT\r\n\
 SUMMARY:Lunch break\r\n\
-DTSTART:29991231T120000Z\r\n\
-DTEND:29991231T130000Z\r\n\
+DTSTART:{d}T120000Z\r\n\
+DTEND:{d}T130000Z\r\n\
 END:VEVENT\r\n\
-END:VCALENDAR\r\n";
+END:VCALENDAR\r\n"
+        )
+    }
 
     #[test]
     fn parses_matching_events() {
         let default_id = Uuid::new_v4();
+        let event_date = chrono::Local::now().date_naive();
+        let sample_ics = sample_ics_for_date(event_date);
         let import_rules = vec![CalendarImportRule {
             keyword: "work".into(),
             schedule_type: ScheduleType::Focus,
             rule_set_id: None,
         }];
-        let schedules = parse_schedules(SAMPLE_ICS, &import_rules, default_id);
+        let schedules = parse_schedules(&sample_ics, &import_rules, default_id);
         assert_eq!(schedules.len(), 2); // both events are imported; rule only affects type
         let work = schedules.iter().find(|s| s.name == "Deep Work Session").unwrap();
         assert_eq!(work.rule_set_id, default_id);
@@ -283,14 +315,25 @@ END:VCALENDAR\r\n";
     #[test]
     fn break_rule_sets_break_type() {
         let default_id = Uuid::new_v4();
+        let event_date = chrono::Local::now().date_naive();
+        let sample_ics = sample_ics_for_date(event_date);
         let import_rules = vec![CalendarImportRule {
             keyword: "lunch".into(),
             schedule_type: ScheduleType::Break,
             rule_set_id: None,
         }];
-        let schedules = parse_schedules(SAMPLE_ICS, &import_rules, default_id);
+        let schedules = parse_schedules(&sample_ics, &import_rules, default_id);
         let lunch = schedules.iter().find(|s| s.name == "Lunch break").unwrap();
         assert_eq!(lunch.schedule_type, ScheduleType::Break);
         assert_eq!(lunch.rule_set_id, Uuid::nil());
+    }
+
+    #[test]
+    fn drops_events_outside_three_week_window() {
+        let default_id = Uuid::new_v4();
+        let far_future = chrono::Local::now().date_naive() + chrono::Duration::weeks(8);
+        let sample_ics = sample_ics_for_date(far_future);
+        let schedules = parse_schedules(&sample_ics, &[], default_id);
+        assert!(schedules.is_empty());
     }
 }

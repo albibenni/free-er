@@ -211,15 +211,9 @@ impl AppState {
     /// Non-imported (manually created) schedules are left untouched.
     pub fn apply_calendar_schedules(&self, imported: Vec<shared::models::Schedule>) {
         let mut inner = self.0.lock().unwrap();
-        // Remove previously imported schedules (identified by a naming convention
-        // or, in the future, a dedicated `source` field). For now we replace all
-        // schedules that share a name with an incoming one.
-        let incoming_names: std::collections::HashSet<_> =
-            imported.iter().map(|s| s.name.clone()).collect();
-        inner
-            .config
-            .schedules
-            .retain(|s| !incoming_names.contains(&s.name));
+        // Replace the imported slice atomically so stale imported entries
+        // (including those outside the visible week window) are eliminated.
+        inner.config.schedules.retain(|s| !s.imported);
         inner.config.schedules.extend(imported);
     }
 
