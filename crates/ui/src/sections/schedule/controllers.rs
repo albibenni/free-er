@@ -12,6 +12,75 @@ use super::geometry::{
 use super::week::week_monday_for_offset;
 use super::{ScheduleInput, ScheduleSection};
 
+fn create_drag_range(
+    sx: f64,
+    sy: f64,
+    cx: f64,
+    cy: f64,
+    w: f64,
+    h: f64,
+) -> Option<(usize, u32, u32)> {
+    let (col, s_min) = pixel_to_day_time(sx, sy, w, h)?;
+    let (_, e_min_raw) = pixel_to_day_time(cx, cy, w, h)?;
+    let (s, e) = if e_min_raw >= s_min {
+        (s_min, e_min_raw.max(s_min + 15))
+    } else {
+        (e_min_raw, s_min)
+    };
+    Some((col, snap15(s), snap15(e)))
+}
+
+fn move_drag_target(
+    cx: f64,
+    cy: f64,
+    w: f64,
+    h: f64,
+    duration_min: u32,
+    click_offset_min: i32,
+) -> (usize, u32, u32) {
+    let hour_h = (h - HEADER_H) / (END_HOUR - START_HOUR) as f64;
+    let col_w = (w - MARGIN_LEFT - MARGIN_RIGHT) / 7.0;
+    let new_col = if cx >= MARGIN_LEFT {
+        (((cx - MARGIN_LEFT) / col_w) as usize).min(6)
+    } else {
+        0
+    };
+    let top_y = cy - click_offset_min as f64 / 60.0 * hour_h;
+    let new_start_raw = if top_y >= HEADER_H {
+        let hour_frac = (top_y - HEADER_H) / hour_h;
+        snap15((START_HOUR as f64 * 60.0 + hour_frac * 60.0) as u32)
+    } else {
+        START_HOUR * 60
+    };
+    let new_start = new_start_raw.clamp(START_HOUR * 60, END_HOUR * 60);
+    let new_end = (new_start + duration_min).min(END_HOUR * 60);
+    let new_start = new_end.saturating_sub(duration_min);
+    (new_col, new_start, new_end)
+}
+
+fn resize_drag_target(
+    sx: f64,
+    cy: f64,
+    w: f64,
+    h: f64,
+    start_min: u32,
+    end_min: u32,
+    from_top: bool,
+) -> Option<(u32, u32)> {
+    let (_, raw_min) = pixel_to_day_time(sx, cy, w, h)?;
+    let snapped = snap15(raw_min);
+    let (new_start, new_end) = if from_top {
+        let s = snapped
+            .min(end_min.saturating_sub(15))
+            .max(START_HOUR * 60);
+        (s, end_min)
+    } else {
+        let e = snapped.max(start_min + 15).min(END_HOUR * 60);
+        (start_min, e)
+    };
+    Some((new_start, new_end))
+}
+
 pub(super) fn install_controllers(
     drawing_area: &gtk4::DrawingArea,
     draw_data: Rc<RefCell<DrawData>>,
@@ -94,26 +163,17 @@ fn install_drag_controller(
             let mut data = dd.borrow_mut();
             let w = da.width() as f64;
             let h = da.allocated_height() as f64;
-            let hour_h = (h - HEADER_H) / (END_HOUR - START_HOUR) as f64;
 
             match data.drag_mode.clone() {
                 DragMode::Create { .. } => {
                     if let Some((sx, sy)) = data.drag_start {
                         let cx = sx + off_x;
                         let cy = sy + off_y;
-                        if let (Some((col, s_min)), Some((_, e_min_raw))) = (
-                            pixel_to_day_time(sx, sy, w, h),
-                            pixel_to_day_time(cx, cy, w, h),
-                        ) {
-                            let (s, e) = if e_min_raw >= s_min {
-                                (s_min, e_min_raw.max(s_min + 15))
-                            } else {
-                                (e_min_raw, s_min)
-                            };
+                        if let Some((col, s, e)) = create_drag_range(sx, sy, cx, cy, w, h) {
                             data.drag_mode = DragMode::Create {
                                 col,
-                                start_min: snap15(s),
-                                end_min: snap15(e),
+                                start_min: s,
+                                end_min: e,
                             };
                         }
                     }
@@ -127,22 +187,14 @@ fn install_drag_controller(
                     if let Some((sx, sy)) = data.drag_start {
                         let cx = sx + off_x;
                         let cy = sy + off_y;
-                        let col_w = (w - MARGIN_LEFT - MARGIN_RIGHT) / 7.0;
-                        let new_col = if cx >= MARGIN_LEFT {
-                            (((cx - MARGIN_LEFT) / col_w) as usize).min(6)
-                        } else {
-                            0
-                        };
-                        let top_y = cy - click_offset_min as f64 / 60.0 * hour_h;
-                        let new_start_raw = if top_y >= HEADER_H {
-                            let hour_frac = (top_y - HEADER_H) / hour_h;
-                            snap15((START_HOUR as f64 * 60.0 + hour_frac * 60.0) as u32)
-                        } else {
-                            START_HOUR * 60
-                        };
-                        let new_start = new_start_raw.clamp(START_HOUR * 60, END_HOUR * 60);
-                        let new_end = (new_start + duration_min).min(END_HOUR * 60);
-                        let new_start = new_end.saturating_sub(duration_min);
+                        let (new_col, new_start, new_end) = move_drag_target(
+                            cx,
+                            cy,
+                            w,
+                            h,
+                            duration_min,
+                            click_offset_min,
+                        );
                         data.drag_mode = DragMode::Move {
                             id,
                             col: new_col,
@@ -162,17 +214,9 @@ fn install_drag_controller(
                 } => {
                     if let Some((sx, sy)) = data.drag_start {
                         let cy = sy + off_y;
-                        if let Some((_, raw_min)) = pixel_to_day_time(sx, cy, w, h) {
-                            let snapped = snap15(raw_min);
-                            let (new_start, new_end) = if from_top {
-                                let s = snapped
-                                    .min(end_min.saturating_sub(15))
-                                    .max(START_HOUR * 60);
-                                (s, end_min)
-                            } else {
-                                let e = snapped.max(start_min + 15).min(END_HOUR * 60);
-                                (start_min, e)
-                            };
+                        if let Some((new_start, new_end)) = resize_drag_target(
+                            sx, cy, w, h, start_min, end_min, from_top,
+                        ) {
                             data.drag_mode = DragMode::Resize {
                                 id,
                                 col,
@@ -303,6 +347,52 @@ fn install_drag_controller(
     }
 
     drawing_area.add_controller(drag);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_drag_range_snaps_and_orders() {
+        let w = 700.0;
+        let h = 900.0;
+        let sx = MARGIN_LEFT + 10.0;
+        let sy = HEADER_H + 60.0;
+        let cx = sx;
+        let cy = HEADER_H + 120.0;
+        let got = create_drag_range(sx, sy, cx, cy, w, h).unwrap();
+        assert_eq!(got.0, 0);
+        assert!(got.2 > got.1);
+        assert_eq!(got.1 % 15, 0);
+        assert_eq!(got.2 % 15, 0);
+    }
+
+    #[test]
+    fn move_drag_target_keeps_duration_and_bounds() {
+        let (col, start, end) = move_drag_target(
+            MARGIN_LEFT + 500.0,
+            HEADER_H + 200.0,
+            700.0,
+            900.0,
+            45,
+            10,
+        );
+        assert!(col <= 6);
+        assert_eq!(end - start, 45);
+        assert!(start >= START_HOUR * 60);
+        assert!(end <= END_HOUR * 60);
+    }
+
+    #[test]
+    fn resize_drag_target_enforces_min_block() {
+        let w = 700.0;
+        let h = 900.0;
+        let sx = MARGIN_LEFT + 20.0;
+        let cy = HEADER_H + 400.0;
+        let (s, e) = resize_drag_target(sx, cy, w, h, 9 * 60, 10 * 60, false).unwrap();
+        assert!(e >= s + 15);
+    }
 }
 
 fn install_motion_controller(

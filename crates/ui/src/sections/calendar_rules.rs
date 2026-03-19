@@ -25,6 +25,31 @@ pub enum CalendarRulesOutput {
     RemoveRule { keyword: String, schedule_type: ScheduleType },
 }
 
+fn normalize_keyword(raw: &str) -> Option<String> {
+    let kw = raw.trim().to_lowercase();
+    (!kw.is_empty()).then_some(kw)
+}
+
+fn split_rules(rules: Vec<ImportRuleSummary>) -> (Vec<String>, Vec<String>) {
+    let mut focus = Vec::new();
+    let mut brk = Vec::new();
+    for rule in rules {
+        match rule.schedule_type {
+            ScheduleType::Focus => {
+                if !focus.contains(&rule.keyword) {
+                    focus.push(rule.keyword);
+                }
+            }
+            ScheduleType::Break => {
+                if !brk.contains(&rule.keyword) {
+                    brk.push(rule.keyword);
+                }
+            }
+        }
+    }
+    (focus, brk)
+}
+
 #[relm4::component(pub)]
 impl Component for CalendarRulesSection {
     type Init = ();
@@ -154,8 +179,8 @@ impl Component for CalendarRulesSection {
     ) {
         match msg {
             CalendarRulesInput::AddFocusKeyword => {
-                let kw = self.focus_entry.text().trim().to_lowercase();
-                if kw.is_empty() || self.focus_keywords.contains(&kw) {
+                let Some(kw) = normalize_keyword(&self.focus_entry.text()) else { return };
+                if self.focus_keywords.contains(&kw) {
                     return;
                 }
                 self.focus_entry.set_text("");
@@ -170,8 +195,8 @@ impl Component for CalendarRulesSection {
                 });
             }
             CalendarRulesInput::AddBreakKeyword => {
-                let kw = self.break_entry.text().trim().to_lowercase();
-                if kw.is_empty() || self.break_keywords.contains(&kw) {
+                let Some(kw) = normalize_keyword(&self.break_entry.text()) else { return };
+                if self.break_keywords.contains(&kw) {
                     return;
                 }
                 self.break_entry.set_text("");
@@ -202,6 +227,7 @@ impl Component for CalendarRulesSection {
                 });
             }
             CalendarRulesInput::RulesUpdated(rules) => {
+                let (focus_keywords, break_keywords) = split_rules(rules);
                 // Clear and rebuild both lists
                 self.focus_keywords.clear();
                 self.break_keywords.clear();
@@ -211,27 +237,19 @@ impl Component for CalendarRulesSection {
                 while let Some(child) = widgets.break_list.first_child() {
                     widgets.break_list.remove(&child);
                 }
-                for rule in rules {
-                    match rule.schedule_type {
-                        ScheduleType::Focus => {
-                            if !self.focus_keywords.contains(&rule.keyword) {
-                                self.focus_keywords.push(rule.keyword.clone());
-                                append_keyword_row(&widgets.focus_list, &rule.keyword, {
-                                    let s = sender.clone();
-                                    move |k| s.input(CalendarRulesInput::RemoveFocusKeyword(k))
-                                });
-                            }
-                        }
-                        ScheduleType::Break => {
-                            if !self.break_keywords.contains(&rule.keyword) {
-                                self.break_keywords.push(rule.keyword.clone());
-                                append_keyword_row(&widgets.break_list, &rule.keyword, {
-                                    let s = sender.clone();
-                                    move |k| s.input(CalendarRulesInput::RemoveBreakKeyword(k))
-                                });
-                            }
-                        }
-                    }
+                for keyword in focus_keywords {
+                    self.focus_keywords.push(keyword.clone());
+                    append_keyword_row(&widgets.focus_list, &keyword, {
+                        let s = sender.clone();
+                        move |k| s.input(CalendarRulesInput::RemoveFocusKeyword(k))
+                    });
+                }
+                for keyword in break_keywords {
+                    self.break_keywords.push(keyword.clone());
+                    append_keyword_row(&widgets.break_list, &keyword, {
+                        let s = sender.clone();
+                        move |k| s.input(CalendarRulesInput::RemoveBreakKeyword(k))
+                    });
                 }
             }
         }
@@ -291,5 +309,31 @@ fn remove_keyword_row(list: &gtk4::ListBox, keyword: &str) {
             }
         }
         child = widget.next_sibling();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_keyword_trims_and_lowercases() {
+        assert_eq!(normalize_keyword("  Deep Work "), Some("deep work".to_string()));
+        assert_eq!(normalize_keyword(""), None);
+        assert_eq!(normalize_keyword("   "), None);
+    }
+
+    #[test]
+    fn split_rules_deduplicates_per_type() {
+        let rules = vec![
+            ImportRuleSummary { keyword: "deep work".into(), schedule_type: ScheduleType::Focus },
+            ImportRuleSummary { keyword: "deep work".into(), schedule_type: ScheduleType::Focus },
+            ImportRuleSummary { keyword: "lunch".into(), schedule_type: ScheduleType::Break },
+            ImportRuleSummary { keyword: "lunch".into(), schedule_type: ScheduleType::Break },
+            ImportRuleSummary { keyword: "meeting".into(), schedule_type: ScheduleType::Focus },
+        ];
+        let (focus, brk) = split_rules(rules);
+        assert_eq!(focus, vec!["deep work".to_string(), "meeting".to_string()]);
+        assert_eq!(brk, vec!["lunch".to_string()]);
     }
 }

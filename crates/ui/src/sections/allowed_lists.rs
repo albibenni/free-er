@@ -36,6 +36,24 @@ pub enum AllowedListsOutput {
     SetDefaultRuleSet(Uuid),
 }
 
+fn reconcile_selection(
+    sets: &[RuleSetSummary],
+    selected_id: Option<Uuid>,
+    default_id: Option<Uuid>,
+) -> (Option<Uuid>, Option<Uuid>) {
+    let selected = if selected_id.map_or(true, |id| !sets.iter().any(|s| s.id == id)) {
+        sets.first().map(|s| s.id)
+    } else {
+        selected_id
+    };
+    let default = if default_id.map_or(true, |id| !sets.iter().any(|s| s.id == id)) {
+        sets.first().map(|s| s.id)
+    } else {
+        default_id
+    };
+    (selected, default)
+}
+
 #[relm4::component(pub)]
 impl Component for AllowedListsSection {
     type Init = ();
@@ -223,13 +241,10 @@ impl Component for AllowedListsSection {
                 let _ = sender.output(AllowedListsOutput::RemoveUrl { rule_set_id, url });
             }
             AllowedListsInput::RuleSetsUpdated(sets) => {
-                // Keep selected_id valid; fall back to first entry
-                if self.selected_id.map_or(true, |id| !sets.iter().any(|s| s.id == id)) {
-                    self.selected_id = sets.first().map(|s| s.id);
-                }
-                if self.default_id.map_or(true, |id| !sets.iter().any(|s| s.id == id)) {
-                    self.default_id = sets.first().map(|s| s.id);
-                }
+                let (selected_id, default_id) =
+                    reconcile_selection(&sets, self.selected_id, self.default_id);
+                self.selected_id = selected_id;
+                self.default_id = default_id;
                 self.rule_sets = sets;
                 self.rebuild_combo(widgets);
                 self.rebuild_url_list(widgets, &sender);
@@ -370,5 +385,33 @@ mod tests {
         assert_eq!(extract_pattern("*.rust-lang.org"), "*.rust-lang.org");
         assert_eq!(extract_pattern("github.com"), "github.com");
         assert_eq!(extract_pattern("github.com/torvalds"), "github.com/torvalds");
+    }
+
+    fn mk_rule_set(name: &str) -> RuleSetSummary {
+        RuleSetSummary {
+            id: Uuid::new_v4(),
+            name: name.to_string(),
+            allowed_urls: vec![],
+        }
+    }
+
+    #[test]
+    fn reconcile_selection_falls_back_to_first_when_missing() {
+        let a = mk_rule_set("A");
+        let b = mk_rule_set("B");
+        let sets = vec![a.clone(), b];
+        let (selected, default) = reconcile_selection(&sets, Some(Uuid::new_v4()), Some(Uuid::new_v4()));
+        assert_eq!(selected, Some(a.id));
+        assert_eq!(default, Some(a.id));
+    }
+
+    #[test]
+    fn reconcile_selection_preserves_existing_ids() {
+        let a = mk_rule_set("A");
+        let b = mk_rule_set("B");
+        let sets = vec![a, b.clone()];
+        let (selected, default) = reconcile_selection(&sets, Some(b.id), Some(b.id));
+        assert_eq!(selected, Some(b.id));
+        assert_eq!(default, Some(b.id));
     }
 }

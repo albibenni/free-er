@@ -509,12 +509,15 @@ pub(super) fn resolve_rule_set(
     combo: &gtk4::ComboBoxText,
     rule_sets: &[RuleSetSummary],
 ) -> Option<uuid::Uuid> {
-    let idx = combo.active().unwrap_or(0) as usize;
-    if idx == 0 {
-        None
-    } else {
-        rule_sets.get(idx - 1).map(|r| r.id)
-    }
+    resolve_rule_set_index(combo.active(), rule_sets)
+}
+
+fn resolve_rule_set_index(
+    active: Option<u32>,
+    rule_sets: &[RuleSetSummary],
+) -> Option<uuid::Uuid> {
+    let idx = active.unwrap_or(0) as usize;
+    (idx != 0).then(|| rule_sets.get(idx - 1).map(|r| r.id)).flatten()
 }
 
 pub(super) fn parse_hhmm(s: &str) -> Option<u32> {
@@ -525,4 +528,44 @@ pub(super) fn parse_hhmm(s: &str) -> Option<u32> {
         return None;
     }
     Some(h * 60 + m)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_hhmm_accepts_valid_times() {
+        assert_eq!(parse_hhmm("00:00"), Some(0));
+        assert_eq!(parse_hhmm("09:30"), Some(570));
+        assert_eq!(parse_hhmm("23:59"), Some(1439));
+        assert_eq!(parse_hhmm(" 7 : 05 "), Some(425));
+    }
+
+    #[test]
+    fn parse_hhmm_rejects_invalid_times() {
+        assert_eq!(parse_hhmm("24:00"), None);
+        assert_eq!(parse_hhmm("10:60"), None);
+        assert_eq!(parse_hhmm("nope"), None);
+        assert_eq!(parse_hhmm("10"), None);
+    }
+
+    #[test]
+    fn resolve_rule_set_index_maps_combo_selection() {
+        let a = RuleSetSummary {
+            id: uuid::Uuid::new_v4(),
+            name: "A".into(),
+            allowed_urls: vec![],
+        };
+        let b = RuleSetSummary {
+            id: uuid::Uuid::new_v4(),
+            name: "B".into(),
+            allowed_urls: vec![],
+        };
+        let sets = vec![a.clone(), b.clone()];
+        assert_eq!(resolve_rule_set_index(Some(0), &sets), None);
+        assert_eq!(resolve_rule_set_index(Some(1), &sets), Some(a.id));
+        assert_eq!(resolve_rule_set_index(Some(2), &sets), Some(b.id));
+        assert_eq!(resolve_rule_set_index(Some(9), &sets), None);
+    }
 }

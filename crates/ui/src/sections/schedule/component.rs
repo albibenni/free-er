@@ -14,6 +14,47 @@ use super::week::{
     clamp_week_offset, week_label_text, week_monday_for_offset, MAX_WEEK_OFFSET, MIN_WEEK_OFFSET,
 };
 
+fn optional_rule_set_id(id: uuid::Uuid) -> Option<uuid::Uuid> {
+    (!id.is_nil()).then_some(id)
+}
+
+fn drag_move_output(
+    sched: &ScheduleSummary,
+    col: usize,
+    start_min: u32,
+    end_min: u32,
+    specific_date: Option<String>,
+) -> ScheduleOutput {
+    ScheduleOutput::UpdateSchedule {
+        id: sched.id,
+        name: sched.name.clone(),
+        days: vec![col as u8],
+        start_min,
+        end_min,
+        schedule_type: sched.schedule_type.clone(),
+        rule_set_id: optional_rule_set_id(sched.rule_set_id),
+        specific_date,
+    }
+}
+
+fn drag_resize_output(
+    sched: &ScheduleSummary,
+    col: usize,
+    start_min: u32,
+    end_min: u32,
+) -> ScheduleOutput {
+    ScheduleOutput::UpdateSchedule {
+        id: sched.id,
+        name: sched.name.clone(),
+        days: vec![col as u8],
+        start_min,
+        end_min,
+        schedule_type: sched.schedule_type.clone(),
+        rule_set_id: optional_rule_set_id(sched.rule_set_id),
+        specific_date: sched.specific_date.clone(),
+    }
+}
+
 pub struct ScheduleSection {
     week_offset: i32,
     draw_data: Rc<RefCell<DrawData>>,
@@ -461,21 +502,13 @@ impl Component for ScheduleSection {
                     .find(|s| s.id == id)
                     .cloned();
                 if let Some(sched) = sched {
-                    let rule_set_id = if sched.rule_set_id.is_nil() {
-                        None
-                    } else {
-                        Some(sched.rule_set_id)
-                    };
-                    let _ = sender.output(ScheduleOutput::UpdateSchedule {
-                        id,
-                        name: sched.name,
-                        days: vec![col as u8],
+                    let _ = sender.output(drag_move_output(
+                        &sched,
+                        col,
                         start_min,
                         end_min,
-                        schedule_type: sched.schedule_type,
-                        rule_set_id,
                         specific_date,
-                    });
+                    ));
                 }
             }
             ScheduleInput::CommitDragResize {
@@ -492,25 +525,90 @@ impl Component for ScheduleSection {
                     .find(|s| s.id == id)
                     .cloned();
                 if let Some(sched) = sched {
-                    let rule_set_id = if sched.rule_set_id.is_nil() {
-                        None
-                    } else {
-                        Some(sched.rule_set_id)
-                    };
-                    let _ = sender.output(ScheduleOutput::UpdateSchedule {
-                        id,
-                        name: sched.name,
-                        days: vec![col as u8],
-                        start_min,
-                        end_min,
-                        schedule_type: sched.schedule_type,
-                        rule_set_id,
-                        specific_date: sched.specific_date,
-                    });
+                    let _ = sender.output(drag_resize_output(&sched, col, start_min, end_min));
                 }
             }
         }
         widgets.drawing_area.queue_draw();
         self.update_view(widgets, sender);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shared::ipc::ScheduleType;
+
+    fn sample_sched(rule_set_id: uuid::Uuid) -> ScheduleSummary {
+        ScheduleSummary {
+            id: uuid::Uuid::new_v4(),
+            name: "Session".to_string(),
+            days: vec![0],
+            start_min: 9 * 60,
+            end_min: 10 * 60,
+            enabled: true,
+            imported: false,
+            imported_repeating: false,
+            specific_date: Some("2026-03-16".to_string()),
+            schedule_type: ScheduleType::Focus,
+            rule_set_id,
+        }
+    }
+
+    #[test]
+    fn optional_rule_set_id_maps_nil_to_none() {
+        assert_eq!(optional_rule_set_id(uuid::Uuid::nil()), None);
+        let id = uuid::Uuid::new_v4();
+        assert_eq!(optional_rule_set_id(id), Some(id));
+    }
+
+    #[test]
+    fn drag_move_output_uses_target_values() {
+        let sched = sample_sched(uuid::Uuid::new_v4());
+        let out = drag_move_output(
+            &sched,
+            3,
+            11 * 60,
+            12 * 60,
+            Some("2026-03-19".to_string()),
+        );
+        match out {
+            ScheduleOutput::UpdateSchedule {
+                id,
+                days,
+                start_min,
+                end_min,
+                specific_date,
+                ..
+            } => {
+                assert_eq!(id, sched.id);
+                assert_eq!(days, vec![3]);
+                assert_eq!(start_min, 11 * 60);
+                assert_eq!(end_min, 12 * 60);
+                assert_eq!(specific_date.as_deref(), Some("2026-03-19"));
+            }
+            _ => panic!("expected update"),
+        }
+    }
+
+    #[test]
+    fn drag_resize_output_keeps_existing_specific_date() {
+        let sched = sample_sched(uuid::Uuid::new_v4());
+        let out = drag_resize_output(&sched, 1, 8 * 60, 9 * 60);
+        match out {
+            ScheduleOutput::UpdateSchedule {
+                days,
+                start_min,
+                end_min,
+                specific_date,
+                ..
+            } => {
+                assert_eq!(days, vec![1]);
+                assert_eq!(start_min, 8 * 60);
+                assert_eq!(end_min, 9 * 60);
+                assert_eq!(specific_date, sched.specific_date);
+            }
+            _ => panic!("expected update"),
+        }
     }
 }

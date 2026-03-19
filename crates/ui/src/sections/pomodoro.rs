@@ -46,6 +46,21 @@ pub enum PomodoroOutput {
     Stop,
 }
 
+fn adjust_duration_secs(current_secs: u64, delta_min: i64, min_m: u64, max_m: u64) -> u64 {
+    let mins = (current_secs / 60) as i64;
+    let new_mins = (mins + delta_min).clamp(min_m as i64, max_m as i64) as u64;
+    new_mins * 60
+}
+
+fn restored_rule_set_id(
+    prev_id: Option<Uuid>,
+    sets: &[RuleSetSummary],
+) -> Option<Uuid> {
+    prev_id
+        .filter(|id| sets.iter().any(|s| s.id == *id))
+        .or_else(|| sets.first().map(|s| s.id))
+}
+
 #[relm4::component(pub)]
 impl Component for PomodoroSection {
     type Init = ();
@@ -427,15 +442,11 @@ impl Component for PomodoroSection {
                 self.ring_visual.borrow_mut().break_secs = self.break_secs;
             }
             PomodoroInput::AdjustFocus(delta_min) => {
-                let mins = (self.focus_secs / 60) as i64;
-                let new_mins = (mins + delta_min).clamp(5, 180) as u64;
-                self.focus_secs = new_mins * 60;
+                self.focus_secs = adjust_duration_secs(self.focus_secs, delta_min, 5, 180);
                 self.ring_visual.borrow_mut().focus_secs = self.focus_secs;
             }
             PomodoroInput::AdjustBreak(delta_min) => {
-                let mins = (self.break_secs / 60) as i64;
-                let new_mins = (mins + delta_min).clamp(1, 90) as u64;
-                self.break_secs = new_mins * 60;
+                self.break_secs = adjust_duration_secs(self.break_secs, delta_min, 1, 90);
                 self.ring_visual.borrow_mut().break_secs = self.break_secs;
             }
             PomodoroInput::DragFocusAt { x, y, w, h } => {
@@ -489,9 +500,7 @@ impl Component for PomodoroSection {
                         .append(Some(&rs.id.to_string()), &label);
                 }
 
-                let restore_id = prev_id
-                    .filter(|id| sets.iter().any(|s| s.id == *id))
-                    .or_else(|| sets.first().map(|s| s.id));
+                let restore_id = restored_rule_set_id(prev_id, &sets);
                 if let Some(id) = restore_id {
                     widgets.rule_set_combo.set_active_id(Some(&id.to_string()));
                     self.selected_rule_set_id = Some(id);
@@ -656,5 +665,31 @@ mod tests {
     fn minutes_from_ring_pos_left_is_three_quarters_turn() {
         let m = minutes_from_ring_pos(0.0, 100.0, 200.0, 200.0, 0, 120);
         assert!((88..=92).contains(&m));
+    }
+
+    #[test]
+    fn adjust_duration_secs_clamps_range() {
+        assert_eq!(adjust_duration_secs(45 * 60, -100, 5, 180), 5 * 60);
+        assert_eq!(adjust_duration_secs(45 * 60, 200, 5, 180), 180 * 60);
+        assert_eq!(adjust_duration_secs(45 * 60, 10, 5, 180), 55 * 60);
+    }
+
+    #[test]
+    fn restored_rule_set_prefers_existing_then_first() {
+        let a = RuleSetSummary {
+            id: Uuid::new_v4(),
+            name: "A".into(),
+            allowed_urls: vec![],
+        };
+        let b = RuleSetSummary {
+            id: Uuid::new_v4(),
+            name: "B".into(),
+            allowed_urls: vec![],
+        };
+        let sets = vec![a.clone(), b.clone()];
+        assert_eq!(restored_rule_set_id(Some(b.id), &sets), Some(b.id));
+        assert_eq!(restored_rule_set_id(Some(Uuid::new_v4()), &sets), Some(a.id));
+        assert_eq!(restored_rule_set_id(None, &sets), Some(a.id));
+        assert_eq!(restored_rule_set_id(None, &[]), None);
     }
 }

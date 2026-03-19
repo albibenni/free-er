@@ -32,7 +32,7 @@ impl Theme {
     pub fn from_widget(da: &gtk4::DrawingArea) -> Self {
         let fg = da.style_context().color();
         let lum = 0.299 * fg.red() as f64 + 0.587 * fg.green() as f64 + 0.114 * fg.blue() as f64;
-        if lum > 0.5 {
+        if use_dark_theme(lum) {
             Theme {
                 bg: (0.16, 0.16, 0.16),
                 text: (0.90, 0.90, 0.90),
@@ -52,6 +52,10 @@ impl Theme {
             }
         }
     }
+}
+
+fn use_dark_theme(luma: f64) -> bool {
+    luma > 0.5
 }
 
 // ── Main draw entry point ─────────────────────────────────────────────────────
@@ -103,16 +107,17 @@ fn draw_today_highlight(
     week_offset: i32,
     today: chrono::NaiveDate,
 ) -> Option<usize> {
-    if week_offset != 0 {
-        return None;
-    }
-    let col = today.weekday().num_days_from_monday() as usize;
+    let col = today_col_for_week(week_offset, today)?;
     let x = MARGIN_LEFT + col as f64 * col_w;
     let (r, g, b, a) = t.today_highlight;
     cr.set_source_rgba(r, g, b, a);
     cr.rectangle(x, 0.0, col_w, h);
     let _ = cr.fill();
     Some(col)
+}
+
+fn today_col_for_week(week_offset: i32, today: chrono::NaiveDate) -> Option<usize> {
+    (week_offset == 0).then_some(today.weekday().num_days_from_monday() as usize)
 }
 
 // ── Hour grid + labels ────────────────────────────────────────────────────────
@@ -226,10 +231,7 @@ fn draw_event_blocks(
         }
         let is_moving = matches!(&data.drag_mode, DragMode::Move { id, .. } if *id == sched.id);
 
-        let color_idx = sched
-            .name
-            .bytes()
-            .fold(0usize, |acc, b| acc.wrapping_add(b as usize));
+        let color_idx = event_color_index(&sched.name);
         let (r, g, b) = COLORS[color_idx % COLORS.len()];
         let fill_alpha = if is_moving { 0.25 } else { 0.80 };
 
@@ -358,10 +360,7 @@ fn draw_drag_preview(cr: &gtk4::cairo::Context, h: f64, col_w: f64, data: &DrawD
     let ye = HEADER_H + clamp_hour_frac(e_min as f64 / 60.0) * (h - HEADER_H);
     let bh = (ye - ys).max(4.0);
 
-    let (fill_a, stroke_a) = match &data.drag_mode {
-        DragMode::Create { .. } => (0.35, 0.85),
-        _ => (0.55, 0.95),
-    };
+    let (fill_a, stroke_a) = drag_preview_alphas(&data.drag_mode);
 
     cr.set_source_rgba(0.26, 0.54, 0.96, fill_a);
     rounded_rect(cr, x, ys, bw, bh, 4.0);
@@ -391,6 +390,18 @@ fn draw_drag_preview(cr: &gtk4::cairo::Context, h: f64, col_w: f64, data: &DrawD
             let _ = cr.show_text(&end_label);
         }
     }
+}
+
+fn drag_preview_alphas(mode: &DragMode) -> (f64, f64) {
+    match mode {
+        DragMode::Create { .. } => (0.35, 0.85),
+        _ => (0.55, 0.95),
+    }
+}
+
+fn event_color_index(name: &str) -> usize {
+    name.bytes()
+        .fold(0usize, |acc, b| acc.wrapping_add(b as usize))
 }
 
 // ── Current-time indicator ────────────────────────────────────────────────────
@@ -468,5 +479,45 @@ fn draw_calendar_icon(cr: &gtk4::cairo::Context, x: f64, y: f64, size: f64) {
     for &(dx, dy) in &[(col1, row1), (col2, row1), (col1, row2), (col2, row2)] {
         cr.arc(dx, dy, dot_r, 0.0, std::f64::consts::TAU);
         let _ = cr.fill();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    #[test]
+    fn dark_theme_threshold() {
+        assert!(!use_dark_theme(0.2));
+        assert!(!use_dark_theme(0.5));
+        assert!(use_dark_theme(0.51));
+    }
+
+    #[test]
+    fn today_col_only_current_week() {
+        let d = NaiveDate::from_ymd_opt(2026, 3, 19).unwrap(); // Thu
+        assert_eq!(today_col_for_week(0, d), Some(3));
+        assert_eq!(today_col_for_week(1, d), None);
+        assert_eq!(today_col_for_week(-1, d), None);
+    }
+
+    #[test]
+    fn drag_preview_alpha_depends_on_mode() {
+        assert_eq!(
+            drag_preview_alphas(&DragMode::Create {
+                col: 0,
+                start_min: 10,
+                end_min: 20
+            }),
+            (0.35, 0.85)
+        );
+        assert_eq!(drag_preview_alphas(&DragMode::None), (0.55, 0.95));
+    }
+
+    #[test]
+    fn event_color_index_is_stable() {
+        assert_eq!(event_color_index("abc"), event_color_index("abc"));
+        assert_ne!(event_color_index("abc"), event_color_index("abd"));
     }
 }
