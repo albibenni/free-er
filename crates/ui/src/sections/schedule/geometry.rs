@@ -47,36 +47,16 @@ pub(super) fn compute_layout(
                 continue;
             }
 
-            let break_count = group
-                .iter()
-                .filter(|&&i| schedules[i].schedule_type == ScheduleType::Break)
-                .count();
-            let has_mixed = break_count > 0 && break_count < group.len();
-
-            if has_mixed {
-                // Break + Focus: break wins full-width; focus events are hidden.
-                for &i in &group {
-                    let is_break = schedules[i].schedule_type == ScheduleType::Break;
-                    layouts.push(BlockLayout {
-                        sched_id: schedules[i].id,
-                        col,
-                        slot: 0,
-                        total_slots: 1,
-                        hidden: !is_break,
-                    });
-                }
-            } else {
-                // All same type (all Focus or all Break) → side by side.
-                let n = group.len();
-                for (slot, &i) in group.iter().enumerate() {
-                    layouts.push(BlockLayout {
-                        sched_id: schedules[i].id,
-                        col,
-                        slot,
-                        total_slots: n,
-                        hidden: false,
-                    });
-                }
+            // All overlapping events are shown side by side regardless of type.
+            let n = group.len();
+            for (slot, &i) in group.iter().enumerate() {
+                layouts.push(BlockLayout {
+                    sched_id: schedules[i].id,
+                    col,
+                    slot,
+                    total_slots: n,
+                    hidden: false,
+                });
             }
         }
     }
