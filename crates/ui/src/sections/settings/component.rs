@@ -25,6 +25,23 @@ pub struct SettingsSection {
 }
 
 impl SettingsSection {
+    fn new_model(strict_mode: bool) -> Self {
+        Self {
+            strict_mode,
+            allow_new_tab: true,
+            allow_ai_sites: false,
+            allow_search_engines: false,
+            whatsapp: false,
+            telegram: false,
+            discord: false,
+            spotify: false,
+            caldav_url: gtk4::EntryBuffer::default(),
+            caldav_user: gtk4::EntryBuffer::default(),
+            caldav_pass: gtk4::EntryBuffer::default(),
+            google_connected: false,
+        }
+    }
+
     fn settings_state(&self) -> SettingsState {
         SettingsState {
             strict_mode: self.strict_mode,
@@ -49,6 +66,14 @@ impl SettingsSection {
         self.discord = state.discord;
         self.spotify = state.spotify;
         self.google_connected = state.google_connected;
+    }
+
+    fn caldav_saved_output(&self) -> SettingsOutput {
+        SettingsOutput::CalDavSaved {
+            url: self.caldav_url.text().to_string(),
+            user: self.caldav_user.text().to_string(),
+            pass: self.caldav_pass.text().to_string(),
+        }
     }
 }
 
@@ -261,20 +286,7 @@ impl SimpleComponent for SettingsSection {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let model = SettingsSection {
-            strict_mode,
-            allow_new_tab: true,
-            allow_ai_sites: false,
-            allow_search_engines: false,
-            whatsapp: false,
-            telegram: false,
-            discord: false,
-            spotify: false,
-            caldav_url: gtk4::EntryBuffer::default(),
-            caldav_user: gtk4::EntryBuffer::default(),
-            caldav_pass: gtk4::EntryBuffer::default(),
-            google_connected: false,
-        };
+        let model = SettingsSection::new_model(strict_mode);
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -290,11 +302,7 @@ impl SimpleComponent for SettingsSection {
                     let _ = sender.output(output);
                 }
                 SettingsEffect::SaveCalDav => {
-                    let _ = sender.output(SettingsOutput::CalDavSaved {
-                        url: self.caldav_url.text().to_string(),
-                        user: self.caldav_user.text().to_string(),
-                        pass: self.caldav_pass.text().to_string(),
-                    });
+                    let _ = sender.output(self.caldav_saved_output());
                 }
             }
         }
@@ -307,20 +315,7 @@ mod tests {
 
     #[test]
     fn settings_state_roundtrip_applies_all_flags() {
-        let mut section = SettingsSection {
-            strict_mode: false,
-            allow_new_tab: true,
-            allow_ai_sites: false,
-            allow_search_engines: false,
-            whatsapp: false,
-            telegram: false,
-            discord: false,
-            spotify: false,
-            caldav_url: gtk4::EntryBuffer::default(),
-            caldav_user: gtk4::EntryBuffer::default(),
-            caldav_pass: gtk4::EntryBuffer::default(),
-            google_connected: false,
-        };
+        let mut section = SettingsSection::new_model(false);
 
         let next = SettingsState {
             strict_mode: true,
@@ -336,5 +331,36 @@ mod tests {
         section.apply_settings_state(next);
         let got = section.settings_state();
         assert_eq!(got, next);
+    }
+
+    #[test]
+    fn new_model_has_expected_defaults() {
+        let section = SettingsSection::new_model(true);
+        assert!(section.strict_mode);
+        assert!(section.allow_new_tab);
+        assert!(!section.allow_ai_sites);
+        assert!(!section.allow_search_engines);
+        assert!(!section.whatsapp);
+        assert!(!section.telegram);
+        assert!(!section.discord);
+        assert!(!section.spotify);
+        assert!(!section.google_connected);
+    }
+
+    #[test]
+    fn caldav_saved_output_uses_buffers() {
+        let section = SettingsSection::new_model(false);
+        section.caldav_url.set_text("https://example.com/calendar.ics");
+        section.caldav_user.set_text("alice");
+        section.caldav_pass.set_text("secret");
+
+        assert_eq!(
+            section.caldav_saved_output(),
+            SettingsOutput::CalDavSaved {
+                url: "https://example.com/calendar.ics".to_string(),
+                user: "alice".to_string(),
+                pass: "secret".to_string(),
+            }
+        );
     }
 }

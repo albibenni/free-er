@@ -99,7 +99,7 @@ pub(super) fn reduce_settings_input(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sections::settings::constants::{TELEGRAM, WHATSAPP};
+    use crate::sections::settings::constants::{SPOTIFY, TELEGRAM, WHATSAPP};
 
     fn mk_state() -> SettingsState {
         SettingsState {
@@ -217,5 +217,27 @@ mod tests {
             reduce_settings_input(&mut state, SettingsInput::SaveCalDav),
             Some(SettingsEffect::SaveCalDav)
         );
+    }
+
+    #[test]
+    fn reducer_can_disable_quick_url_after_enable() {
+        let mut state = mk_state();
+        assert_eq!(
+            reduce_settings_input(&mut state, SettingsInput::SetQuick(SPOTIFY, true)),
+            Some(SettingsEffect::Output(SettingsOutput::QuickUrlToggled {
+                url: SPOTIFY,
+                enabled: true
+            }))
+        );
+        assert!(state.spotify);
+
+        assert_eq!(
+            reduce_settings_input(&mut state, SettingsInput::SetQuick(SPOTIFY, false)),
+            Some(SettingsEffect::Output(SettingsOutput::QuickUrlToggled {
+                url: SPOTIFY,
+                enabled: false
+            }))
+        );
+        assert!(!state.spotify);
     }
 }

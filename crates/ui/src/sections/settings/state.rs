@@ -58,7 +58,7 @@ pub(super) fn apply_quick_toggle(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sections::settings::constants::WHATSAPP;
+    use crate::sections::settings::constants::{DISCORD, SPOTIFY, TELEGRAM, WHATSAPP};
 
     #[test]
     fn quick_url_state_detects_single_toggles_and_groups() {
@@ -93,6 +93,12 @@ mod tests {
         let mut state = QuickUrlState::default();
         assert!(apply_quick_toggle(&mut state, WHATSAPP, true));
         assert!(state.whatsapp);
+        assert!(apply_quick_toggle(&mut state, TELEGRAM, true));
+        assert!(state.telegram);
+        assert!(apply_quick_toggle(&mut state, DISCORD, true));
+        assert!(state.discord);
+        assert!(apply_quick_toggle(&mut state, SPOTIFY, true));
+        assert!(state.spotify);
         assert!(!apply_quick_toggle(&mut state, WHATSAPP, true));
         assert!(!apply_quick_toggle(&mut state, "unknown.site", true));
     }
