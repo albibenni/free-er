@@ -300,6 +300,11 @@ mod tests {
         panic!("switch row not found for label: {label}");
     }
 
+    fn activate_switch(root: &gtk4::Widget, label: &str) {
+        let sw = find_switch_by_row_label(root, label);
+        sw.emit_activate();
+    }
+
     fn find_button_by_label(root: &gtk4::Widget, label: &str) -> gtk4::Button {
         for w in all_widgets(root) {
             if let Ok(btn) = w.downcast::<gtk4::Button>() {
@@ -374,14 +379,14 @@ mod tests {
 
         let root: gtk4::Widget = controller.widget().clone().upcast();
 
-        find_switch_by_row_label(&root, "Strict mode").set_active(true);
-        find_switch_by_row_label(&root, "Allow new tab page").set_active(false);
-        find_switch_by_row_label(&root, "Search engines").set_active(true);
-        find_switch_by_row_label(&root, "AI web pages").set_active(true);
-        find_switch_by_row_label(&root, "WhatsApp Web").set_active(true);
-        find_switch_by_row_label(&root, "Telegram Web").set_active(true);
-        find_switch_by_row_label(&root, "Discord").set_active(true);
-        find_switch_by_row_label(&root, "Spotify").set_active(true);
+        activate_switch(&root, "Strict mode");
+        activate_switch(&root, "Allow new tab page");
+        activate_switch(&root, "Search engines");
+        activate_switch(&root, "AI web pages");
+        activate_switch(&root, "WhatsApp Web");
+        activate_switch(&root, "Telegram Web");
+        activate_switch(&root, "Discord");
+        activate_switch(&root, "Spotify");
         find_button_by_label(&root, "Connect").emit_clicked();
 
         let url_entry = find_entry_by_placeholder(&root, "Calendar URL (.ics or CalDAV)");
