@@ -1,4 +1,4 @@
-.PHONY: all build daemon ui extension test clean dev run stop help
+.PHONY: all build daemon ui extension test coverage clean dev run stop help
 
 all: build extension
 
@@ -22,6 +22,10 @@ extension-watch:
 
 test:
 	cargo test
+
+coverage:
+	@command -v cargo-llvm-cov >/dev/null 2>&1 || (echo "cargo-llvm-cov is required. Install with: cargo install cargo-llvm-cov"; exit 1)
+	cargo llvm-cov --workspace --all-features --html
 
 stop:
 	@pkill -f "target/debug/free-er$$" 2>/dev/null || true
@@ -61,5 +65,6 @@ help:
 	@echo "  stop              Kill any running daemon"
 	@echo "  dev               Build + start daemon in background + launch UI"
 	@echo "  test              Run all tests"
+	@echo "  coverage          Generate HTML coverage report with cargo-llvm-cov"
 	@echo "  clean             Remove build artifacts and extension/dist"
 	@echo "  help              Show this message"
