@@ -1,4 +1,4 @@
-.PHONY: all build daemon ui extension test coverage coverage-summary clean dev run stop help
+.PHONY: all build daemon ui extension test coverage clean dev run stop help
 
 all: build extension
 

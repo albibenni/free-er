@@ -91,7 +91,7 @@ make coverage
 | `make extension-watch` | Watch and rebuild extension on changes |
 | `make dev` | Build + start daemon in background + launch UI |
 | `make test` | Run all tests |
-| `make coverage` | Generate HTML coverage report (requires `cargo-llvm-cov`) |
+| `make coverage` | Print per-file + total coverage table in terminal |
 | `make clean` | Remove build artifacts and extension/dist |
 | `make help` | Show all available targets |
 
