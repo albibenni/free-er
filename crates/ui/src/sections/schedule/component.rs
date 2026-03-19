@@ -18,6 +18,7 @@ pub struct ScheduleSection {
     week_offset: i32,
     draw_data: Rc<RefCell<DrawData>>,
     rule_sets: Vec<RuleSetSummary>,
+    default_rule_set_id: Option<uuid::Uuid>,
 }
 
 #[derive(Debug)]
@@ -27,6 +28,7 @@ pub enum ScheduleInput {
     Today,
     SchedulesUpdated(Vec<ScheduleSummary>),
     RuleSetsUpdated(Vec<RuleSetSummary>),
+    DefaultRuleSetUpdated(Option<uuid::Uuid>),
     #[allow(dead_code)]
     DragBegin(f64, f64),
     #[allow(dead_code)]
@@ -207,6 +209,7 @@ impl Component for ScheduleSection {
             week_offset: 0,
             draw_data: draw_data.clone(),
             rule_sets: vec![],
+            default_rule_set_id: None,
         };
 
         let widgets = view_output!();
@@ -246,6 +249,9 @@ impl Component for ScheduleSection {
             ScheduleInput::SchedulesUpdated(schedules) => {
                 self.draw_data.borrow_mut().schedules = schedules;
                 widgets.drawing_area.queue_draw();
+            }
+            ScheduleInput::DefaultRuleSetUpdated(id) => {
+                self.default_rule_set_id = id;
             }
             ScheduleInput::DragBegin(..)
             | ScheduleInput::DragUpdate(..)
@@ -354,6 +360,7 @@ impl Component for ScheduleSection {
                     start_min,
                     end_min,
                     week_monday,
+                    self.default_rule_set_id,
                     self.rule_sets.clone(),
                     _root,
                     sender.clone(),

@@ -21,6 +21,7 @@ pub enum Command {
     AddUrlToRuleSet { rule_set_id: Uuid, url: String },
     RemoveUrlFromRuleSet { rule_set_id: Uuid, url: String },
     ListRuleSets,
+    SetDefaultRuleSet { id: Uuid },
     AddSchedule {
         name: String,
         /// Weekday indices 0=Mon..6=Sun
@@ -114,4 +115,5 @@ pub struct StatusResponse {
     pub seconds_remaining: Option<u64>,
     pub google_calendar_connected: bool,
     pub allow_new_tab: bool,
+    pub default_rule_set_id: Option<Uuid>,
 }

@@ -120,11 +120,7 @@ async fn oauth_google_callback(
     tokio::spawn(async move {
         if let Some(cfg) = sync_state.google_calendar_config() {
             let import_rules = sync_state.list_import_rules();
-            let default_id = sync_state
-                .list_rule_sets()
-                .first()
-                .map(|r| r.id)
-                .unwrap_or_else(uuid::Uuid::nil);
+            let default_id = sync_state.effective_default_rule_set_id();
             match crate::calendar::fetch_google_calendar_schedules(&cfg, &import_rules, default_id)
                 .await
             {

@@ -96,6 +96,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 }),
                 seconds_remaining: snap.seconds_remaining,
                 google_calendar_connected: snap.google_calendar_connected,
+                default_rule_set_id: snap.default_rule_set_id,
             };
             (serde_json::to_string(&resp).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
         }
@@ -135,6 +136,13 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 })
                 .collect();
             (serde_json::to_string(&rule_sets).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}") ), false)
+        }
+        Command::SetDefaultRuleSet { id } => {
+            if state.set_default_rule_set(id) {
+                ok(true)
+            } else {
+                (r#"{"error": "rule set not found"}"#.into(), false)
+            }
         }
         Command::AddSchedule { name, days, start_min, end_min, rule_set_id, specific_date, schedule_type } => {
             use chrono::NaiveTime;
@@ -264,8 +272,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 tokio::spawn(async move {
                     match crate::calendar::fetch_ics(&cfg).await {
                         Ok(ics) => {
-                            let default_id = s.list_rule_sets().first()
-                                .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
+                            let default_id = s.effective_default_rule_set_id();
                             let schedules = crate::calendar::parse_schedules(&ics, &rules, default_id);
                             tracing::info!("calendar sync (manual): imported {} schedules", schedules.len());
                             s.apply_calendar_schedules(schedules);
@@ -279,8 +286,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 let s = state.clone();
                 let rules = import_rules.clone();
                 tokio::spawn(async move {
-                    let default_id = s.list_rule_sets().first()
-                        .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
+                    let default_id = s.effective_default_rule_set_id();
                     match crate::calendar::fetch_google_calendar_schedules(&cfg, &rules, default_id).await {
                         Ok(schedules) => {
                             tracing::info!("Google Calendar sync (manual): imported {} schedules", schedules.len());

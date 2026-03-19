@@ -44,8 +44,7 @@ async fn main() -> Result<()> {
             if let Some(cfg) = cal_state.caldav_config() {
                 match calendar::fetch_ics(&cfg).await {
                     Ok(ics) => {
-                        let default_id = cal_state.list_rule_sets().first()
-                            .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
+                        let default_id = cal_state.effective_default_rule_set_id();
                         let import_rules = cal_state.list_import_rules();
                         let schedules = calendar::parse_schedules(&ics, &import_rules, default_id);
                         info!("calendar sync: imported {} schedules", schedules.len());
@@ -84,8 +83,7 @@ async fn main() -> Result<()> {
             } else { cfg };
 
             let import_rules = gcal_state.list_import_rules();
-            let default_id = gcal_state.list_rule_sets().first()
-                .map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
+            let default_id = gcal_state.effective_default_rule_set_id();
             match calendar::fetch_google_calendar_schedules(&cfg, &import_rules, default_id).await {
                 Ok(schedules) => {
                     info!("Google Calendar sync: imported {} schedules", schedules.len());

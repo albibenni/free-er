@@ -132,6 +132,8 @@ fn default_true() -> bool { true }
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     pub rule_sets: Vec<RuleSet>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_rule_set_id: Option<Uuid>,
     pub schedules: Vec<Schedule>,
     pub pomodoro: PomodoroConfig,
     pub caldav: Option<CalDavConfig>,

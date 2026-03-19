@@ -67,7 +67,12 @@ impl AppState {
     }
 
     pub fn add_rule_set(&self, rule_set: RuleSet) {
-        self.0.lock().unwrap().config.rule_sets.push(rule_set);
+        let mut inner = self.0.lock().unwrap();
+        let id = rule_set.id;
+        inner.config.rule_sets.push(rule_set);
+        if inner.config.default_rule_set_id.is_none() {
+            inner.config.default_rule_set_id = Some(id);
+        }
     }
 
     /// Called every second by the background tick loop.
@@ -102,6 +107,29 @@ impl AppState {
     pub fn remove_rule_set(&self, id: Uuid) {
         let mut inner = self.0.lock().unwrap();
         inner.config.rule_sets.retain(|r| r.id != id);
+        if inner.config.default_rule_set_id == Some(id) {
+            inner.config.default_rule_set_id = inner.config.rule_sets.first().map(|r| r.id);
+        }
+    }
+
+    pub fn set_default_rule_set(&self, id: Uuid) -> bool {
+        let mut inner = self.0.lock().unwrap();
+        if inner.config.rule_sets.iter().any(|r| r.id == id) {
+            inner.config.default_rule_set_id = Some(id);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn effective_default_rule_set_id(&self) -> Uuid {
+        let inner = self.0.lock().unwrap();
+        inner
+            .config
+            .default_rule_set_id
+            .filter(|id| inner.config.rule_sets.iter().any(|r| r.id == *id))
+            .or_else(|| inner.config.rule_sets.first().map(|r| r.id))
+            .unwrap_or_else(Uuid::nil)
     }
 
     pub fn list_rule_sets(&self) -> Vec<shared::models::RuleSet> {
@@ -346,6 +374,7 @@ impl AppState {
             pomodoro_phase,
             seconds_remaining,
             google_calendar_connected,
+            default_rule_set_id: inner.config.default_rule_set_id,
         }
     }
 }
@@ -359,4 +388,5 @@ pub struct StateSnapshot {
     pub pomodoro_phase: Option<crate::pomodoro::Phase>,
     pub seconds_remaining: Option<u64>,
     pub google_calendar_connected: bool,
+    pub default_rule_set_id: Option<Uuid>,
 }

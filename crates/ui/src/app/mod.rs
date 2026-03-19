@@ -68,6 +68,7 @@ pub enum AppMsg {
     },
     CreateRuleSet(String),
     DeleteRuleSet(Uuid),
+    ChooseDefaultRuleSet(Uuid),
     AiSitesToggled(bool),
     SearchEnginesToggled(bool),
     // Settings / integrations
@@ -196,9 +197,9 @@ impl Component for App {
                         gtk4::Box {
                             set_orientation: gtk4::Orientation::Horizontal,
                             set_spacing: 8,
-                            gtk4::Image { set_icon_name: Some("x-office-calendar-symbolic") },
+                            gtk4::Image { set_icon_name: Some("emblem-system-symbolic") },
                             #[name = "lbl_calendar"]
-                            gtk4::Label { set_label: "Calendar" },
+                            gtk4::Label { set_label: "Calendar Settings" },
                         },
                     },
 
@@ -266,7 +267,7 @@ impl Component for App {
                 }
                 AllowedListsOutput::CreateRuleSet(name) => AppMsg::CreateRuleSet(name),
                 AllowedListsOutput::DeleteRuleSet(id) => AppMsg::DeleteRuleSet(id),
-                AllowedListsOutput::SetDefaultRuleSet(id) => AppMsg::SetDefaultRuleSet(id),
+                AllowedListsOutput::SetDefaultRuleSet(id) => AppMsg::ChooseDefaultRuleSet(id),
             },
         );
 
@@ -462,6 +463,14 @@ impl Component for App {
             }
             AppMsg::CreateRuleSet(name) => url_handlers::create_rule_set(name, sender),
             AppMsg::DeleteRuleSet(id) => url_handlers::delete_rule_set(id, sender),
+            AppMsg::ChooseDefaultRuleSet(id) => {
+                let s = sender.clone();
+                relm4::spawn(async move {
+                    if crate::ipc_client::set_default_rule_set(id).await.is_ok() {
+                        s.input(AppMsg::SetDefaultRuleSet(id));
+                    }
+                });
+            }
             AppMsg::AiSitesToggled(enabled) => {
                 url_handlers::toggle_ai_sites(enabled, self.default_rule_set_id, sender);
             }
@@ -549,6 +558,11 @@ impl Component for App {
                 self.allowed_lists
                     .sender()
                     .emit(crate::sections::allowed_lists::AllowedListsInput::DefaultRuleSetUpdated(
+                        Some(id),
+                    ));
+                self.schedule
+                    .sender()
+                    .emit(crate::sections::schedule::ScheduleInput::DefaultRuleSetUpdated(
                         Some(id),
                     ));
             }

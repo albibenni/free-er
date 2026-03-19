@@ -140,6 +140,11 @@ pub async fn remove_rule_set(id: Uuid) -> Result<()> {
     Ok(())
 }
 
+pub async fn set_default_rule_set(id: Uuid) -> Result<()> {
+    send(&Command::SetDefaultRuleSet { id }).await?;
+    Ok(())
+}
+
 /// Create a new rule set and return its assigned UUID.
 pub async fn add_rule_set(name: &str) -> Result<Uuid> {
     let raw = send(&Command::AddRuleSet {

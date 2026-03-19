@@ -11,6 +11,7 @@ pub(super) fn show_create_dialog(
     start_min: u32,
     end_min: u32,
     week_monday: chrono::NaiveDate,
+    default_rule_set_id: Option<uuid::Uuid>,
     rule_sets: Vec<RuleSetSummary>,
     root: &gtk4::Box,
     sender: ComponentSender<ScheduleSection>,
@@ -31,9 +32,12 @@ pub(super) fn show_create_dialog(
 
     let (start_entry, end_entry) = append_time_row(&vbox, start_min, end_min);
 
-    let default_rule_set_id = rule_sets.first().map(|r| r.id).unwrap_or_else(uuid::Uuid::nil);
+    let initial_rule_set_id = default_rule_set_id
+        .filter(|id| rule_sets.iter().any(|r| r.id == *id))
+        .or_else(|| rule_sets.first().map(|r| r.id))
+        .unwrap_or_else(uuid::Uuid::nil);
     let (focus_btn, break_btn, list_combo) =
-        build_type_and_list_rows(&vbox, &ScheduleType::Focus, default_rule_set_id, &rule_sets);
+        build_type_and_list_rows(&vbox, &ScheduleType::Focus, initial_rule_set_id, &rule_sets);
     let date_str = date.format("%Y-%m-%d").to_string();
     let (repeat_btn, _once_btn, weekday_buttons) =
         append_recurrence_row(&vbox, &[col as u8], Some(date_str.clone()));

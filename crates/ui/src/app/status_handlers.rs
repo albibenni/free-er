@@ -34,6 +34,9 @@ pub(super) fn status_tick(
                 settings_sender
                     .emit(SettingsInput::GoogleStatusUpdated(status.google_calendar_connected));
                 settings_sender.emit(SettingsInput::AllowNewTabUpdated(status.allow_new_tab));
+                if let Some(default_id) = status.default_rule_set_id {
+                    sender.input(AppMsg::SetDefaultRuleSet(default_id));
+                }
             }
             Err(e) => warn!("status poll failed: {e}"),
         }
