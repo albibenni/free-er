@@ -15,3 +15,7 @@ pub async fn clear_blocked_domains() -> Result<()> {
     // TODO: remove managed section from /etc/hosts
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "blocking_tests.rs"]
+mod tests;

@@ -41,3 +41,7 @@ pub async fn save(config: &Config) -> Result<()> {
     fs::write(&path, raw).await?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "persistence_tests.rs"]
+mod tests;

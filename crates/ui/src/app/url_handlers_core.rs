@@ -147,6 +147,10 @@ pub(super) fn toggle_search_engines(
     });
 }
 
+#[cfg(test)]
+#[path = "url_handlers_tests.rs"]
+mod tests;
+
 async fn resolve_or_create_rule_set(
     existing: Option<Uuid>,
     sender: ComponentSender<App>,

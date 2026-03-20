@@ -145,6 +145,10 @@ async fn oauth_google_callback(
     )
 }
 
+#[cfg(test)]
+#[path = "local_server_tests.rs"]
+mod tests;
+
 pub async fn serve(state: AppState) -> Result<()> {
     // Allow the browser extension (any origin) to call /api/status
     let cors = CorsLayer::new()

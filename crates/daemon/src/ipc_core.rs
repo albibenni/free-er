@@ -408,3 +408,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
 fn ok(mutated: bool) -> (String, bool) {
     (r#"{"ok": true}"#.into(), mutated)
 }
+
+#[cfg(test)]
+#[path = "ipc_tests.rs"]
+mod tests;

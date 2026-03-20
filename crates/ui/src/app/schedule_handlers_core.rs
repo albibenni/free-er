@@ -102,3 +102,7 @@ pub(super) fn schedules_updated(
     use crate::sections::schedule::ScheduleInput;
     schedule_sender.emit(ScheduleInput::SchedulesUpdated(schedules));
 }
+
+#[cfg(test)]
+#[path = "schedule_handlers_tests.rs"]
+mod tests;
