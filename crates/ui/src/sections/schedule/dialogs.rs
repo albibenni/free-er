@@ -609,6 +609,97 @@ pub(super) fn parse_hhmm(s: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use relm4::{Component, ComponentController};
+
+    fn flush() {
+        let ctx = gtk4::glib::MainContext::default();
+        while ctx.pending() {
+            ctx.iteration(false);
+        }
+    }
+
+    fn walk_widgets(root: &gtk4::Widget, out: &mut Vec<gtk4::Widget>) {
+        out.push(root.clone());
+        let mut child = root.first_child();
+        while let Some(w) = child {
+            walk_widgets(&w, out);
+            child = w.next_sibling();
+        }
+    }
+
+    fn find_window_by_title(title: &str) -> gtk4::Window {
+        gtk4::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|w| w.downcast::<gtk4::Window>().ok())
+            .find(|win| win.title().as_deref() == Some(title))
+            .expect("window not found")
+    }
+
+    fn find_button_by_label(root: &gtk4::Widget, label: &str) -> gtk4::Button {
+        let mut all = Vec::new();
+        walk_widgets(root, &mut all);
+        let mut found = None;
+        for w in all {
+            if let Ok(btn) = w.downcast::<gtk4::Button>() {
+                if btn.label().as_deref() == Some(label) {
+                    found = Some(btn);
+                    break;
+                }
+            }
+        }
+        found.expect("button not found")
+    }
+
+    fn find_toggle_by_label(root: &gtk4::Widget, label: &str) -> gtk4::ToggleButton {
+        let mut all = Vec::new();
+        walk_widgets(root, &mut all);
+        let mut found = None;
+        for w in all {
+            if let Ok(btn) = w.downcast::<gtk4::ToggleButton>() {
+                if btn.label().as_deref() == Some(label) {
+                    found = Some(btn);
+                    break;
+                }
+            }
+        }
+        found.expect("toggle not found")
+    }
+
+    fn find_first_entry(root: &gtk4::Widget) -> gtk4::Entry {
+        let mut all = Vec::new();
+        walk_widgets(root, &mut all);
+        let mut found = None;
+        for w in all {
+            if let Ok(entry) = w.downcast::<gtk4::Entry>() {
+                found = Some(entry);
+                break;
+            }
+        }
+        found.expect("entry not found")
+    }
+
+    fn drag_controller(da: &gtk4::DrawingArea) -> gtk4::GestureDrag {
+        let ctrls = da.observe_controllers();
+        (0..ctrls.n_items())
+            .find_map(|i| ctrls.item(i).and_then(|obj| obj.downcast::<gtk4::GestureDrag>().ok()))
+            .expect("gesture drag controller not found")
+    }
+
+    fn sample_sched(rule_set_id: uuid::Uuid) -> shared::ipc::ScheduleSummary {
+        shared::ipc::ScheduleSummary {
+            id: uuid::Uuid::new_v4(),
+            name: "Session".to_string(),
+            days: vec![0],
+            start_min: 9 * 60,
+            end_min: 10 * 60,
+            enabled: true,
+            imported: false,
+            imported_repeating: false,
+            specific_date: Some("2026-03-16".to_string()),
+            schedule_type: ScheduleType::Focus,
+            rule_set_id,
+        }
+    }
 
     #[test]
     fn parse_hhmm_accepts_valid_times() {
@@ -624,6 +715,8 @@ mod tests {
         assert_eq!(parse_hhmm("10:60"), None);
         assert_eq!(parse_hhmm("nope"), None);
         assert_eq!(parse_hhmm("10"), None);
+        assert_eq!(parse_hhmm(":10"), None);
+        assert_eq!(parse_hhmm("10:aa"), None);
     }
 
     #[test]
@@ -929,13 +1022,91 @@ mod tests {
             None,
             Some("2026-03-19".into()),
         );
-        assert!(matches!(
+        let is_focus = matches!(
             out_focus,
             ScheduleInput::CommitEdit {
                 schedule_type: ScheduleType::Focus,
                 ..
             }
-        ));
+        );
+        assert!(is_focus);
     }
 
+    #[test]
+    fn gtk_dialog_paths_cover_cancel_and_invalid_save_flows() {
+        assert!(gtk4::init().is_ok(), "GTK init required for dialogs coverage test");
+
+        let controller = ScheduleSection::builder().launch(());
+        let host = gtk4::Window::new();
+        host.set_default_size(1100, 980);
+        host.set_child(Some(controller.widget()));
+        host.present();
+        flush();
+
+        let rule_set = RuleSetSummary {
+            id: uuid::Uuid::new_v4(),
+            name: "Default".into(),
+            allowed_urls: vec![],
+        };
+        let sched = sample_sched(rule_set.id);
+        controller.emit(ScheduleInput::RuleSetsUpdated(vec![rule_set]));
+        // Invalid default id forces create dialog to fall back to the first rule set.
+        controller.emit(ScheduleInput::DefaultRuleSetUpdated(Some(uuid::Uuid::new_v4())));
+        controller.emit(ScheduleInput::SchedulesUpdated(vec![sched.clone()]));
+        flush();
+
+        let da = controller.widgets().drawing_area.clone();
+        let gesture = drag_controller(&da);
+        let w = da.width() as f64;
+        let h = da.allocated_height() as f64;
+        let col_w = (w - 52.0 - 4.0) / 7.0;
+        let hour_h = (h - 40.0) / (23.0 - 6.0) as f64;
+
+        // Open create dialog from an empty column.
+        let sx = 52.0 + 2.0 * col_w + 10.0;
+        let sy = 40.0 + (13.0 - 6.0) * hour_h;
+        gesture.emit_by_name::<()>("drag-begin", &[&sx, &sy]);
+        gesture.emit_by_name::<()>("drag-update", &[&0.0_f64, &60.0_f64]);
+        gesture.emit_by_name::<()>("drag-end", &[&0.0_f64, &60.0_f64]);
+        flush();
+
+        let create_win = find_window_by_title("New Event");
+        let create_root: gtk4::Widget = create_win.clone().upcast();
+        find_toggle_by_label(&create_root, "Break").set_active(true);
+        find_toggle_by_label(&create_root, "Focus").set_active(true);
+        find_first_entry(&create_root).set_text("");
+        find_button_by_label(&create_root, "Save").emit_clicked();
+        flush();
+        find_button_by_label(&create_root, "Cancel").emit_clicked();
+        flush();
+
+        // Open edit dialog by clicking existing event.
+        let bx = 52.0 + col_w / 2.0;
+        let by = 40.0 + (9.5 - 6.0) * hour_h;
+        gesture.emit_by_name::<()>("drag-begin", &[&bx, &by]);
+        gesture.emit_by_name::<()>("drag-end", &[&0.0_f64, &0.0_f64]);
+        flush();
+        let edit_win = find_window_by_title("Edit Event");
+        let edit_root: gtk4::Widget = edit_win.clone().upcast();
+        find_first_entry(&edit_root).set_text("");
+        find_button_by_label(&edit_root, "Save").emit_clicked();
+        flush();
+        find_button_by_label(&edit_root, "Cancel").emit_clicked();
+        flush();
+
+        // Make event imported and open read-only view dialog.
+        let mut imported = sched;
+        imported.imported = true;
+        controller.emit(ScheduleInput::SchedulesUpdated(vec![imported]));
+        flush();
+        gesture.emit_by_name::<()>("drag-begin", &[&bx, &by]);
+        gesture.emit_by_name::<()>("drag-end", &[&0.0_f64, &0.0_f64]);
+        flush();
+        let view_win = find_window_by_title("Calendar Event");
+        let view_root: gtk4::Widget = view_win.clone().upcast();
+        find_button_by_label(&view_root, "Cancel").emit_clicked();
+        flush();
+
+        host.close();
+    }
 }
