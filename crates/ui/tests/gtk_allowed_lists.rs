@@ -58,11 +58,23 @@ fn allowed_lists_component_emits_outputs_for_actions() {
         .launch(())
         .connect_receiver(move |_, out| captured.borrow_mut().push(out));
 
-    controller.emit(AllowedListsInput::RuleSetsUpdated(vec![rs1.clone(), rs2.clone()]));
+    let host = gtk4::Window::new();
+    host.set_default_size(900, 700);
+    host.set_child(Some(controller.widget()));
+    host.present();
+    flush();
+
+    controller.emit(AllowedListsInput::RuleSetsUpdated(vec![
+        rs1.clone(),
+        rs2.clone(),
+    ]));
     controller.emit(AllowedListsInput::DefaultRuleSetUpdated(Some(rs1.id)));
     flush();
 
-    controller.widgets().list_combo.set_active_id(Some(&rs2.id.to_string()));
+    controller
+        .widgets()
+        .list_combo
+        .set_active_id(Some(&rs2.id.to_string()));
     controller.emit(AllowedListsInput::ComboChanged);
     controller.emit(AllowedListsInput::SetSelectedAsDefault);
     controller.emit(AllowedListsInput::DeleteSelectedList);
@@ -73,11 +85,8 @@ fn allowed_lists_component_emits_outputs_for_actions() {
     flush();
 
     let root: gtk4::Widget = controller.widget().clone().upcast();
-    find_entry_by_placeholder(
-        &root,
-        "github.com/user/repo, *.domain.com, or full URL",
-    )
-    .set_text("https://example.com/path");
+    find_entry_by_placeholder(&root, "github.com/user/repo, *.domain.com, or full URL")
+        .set_text("https://example.com/path");
     controller.emit(AllowedListsInput::AddUrl);
 
     controller.emit(AllowedListsInput::ShowNewListEntry);

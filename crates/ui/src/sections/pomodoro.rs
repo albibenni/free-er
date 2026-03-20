@@ -27,22 +27,44 @@ pub struct PomodoroSection {
 
 #[derive(Debug)]
 pub enum PomodoroInput {
-    SelectPreset { focus_secs: u64, break_secs: u64 },
-    SetQuickBreak { break_secs: u64 },
+    SelectPreset {
+        focus_secs: u64,
+        break_secs: u64,
+    },
+    SetQuickBreak {
+        break_secs: u64,
+    },
     AdjustFocus(i64),
     AdjustBreak(i64),
-    DragFocusAt { x: f64, y: f64, w: f64, h: f64 },
-    DragBreakAt { x: f64, y: f64, w: f64, h: f64 },
+    DragFocusAt {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    },
+    DragBreakAt {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    },
     Start,
     Stop,
     RuleSetChanged,
-    StatusUpdated { phase: Option<String>, seconds_remaining: Option<u64> },
+    StatusUpdated {
+        phase: Option<String>,
+        seconds_remaining: Option<u64>,
+    },
     RuleSetsUpdated(Vec<RuleSetSummary>),
 }
 
 #[derive(Debug)]
 pub enum PomodoroOutput {
-    Start { focus_secs: u64, break_secs: u64, rule_set_id: Option<Uuid> },
+    Start {
+        focus_secs: u64,
+        break_secs: u64,
+        rule_set_id: Option<Uuid>,
+    },
     Stop,
 }
 
@@ -52,10 +74,7 @@ fn adjust_duration_secs(current_secs: u64, delta_min: i64, min_m: u64, max_m: u6
     new_mins * 60
 }
 
-fn restored_rule_set_id(
-    prev_id: Option<Uuid>,
-    sets: &[RuleSetSummary],
-) -> Option<Uuid> {
+fn restored_rule_set_id(prev_id: Option<Uuid>, sets: &[RuleSetSummary]) -> Option<Uuid> {
     prev_id
         .filter(|id| sets.iter().any(|s| s.id == *id))
         .or_else(|| sets.first().map(|s| s.id))
@@ -588,25 +607,6 @@ fn minutes_from_ring_pos(x: f64, y: f64, w: f64, h: f64, min_m: u64, max_m: u64)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use relm4::ComponentController;
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
-    fn ensure_gtk() -> Option<std::sync::MutexGuard<'static, ()>> {
-        let guard = crate::sections::test_support::GTK_TEST_LOCK.lock().unwrap();
-        if gtk4::init().is_ok() {
-            Some(guard)
-        } else {
-            None
-        }
-    }
-
-    fn flush() {
-        let ctx = gtk4::glib::MainContext::default();
-        while ctx.pending() {
-            ctx.iteration(false);
-        }
-    }
 
     #[test]
     fn focus_fraction_uses_remaining_when_active() {
@@ -712,7 +712,10 @@ mod tests {
         };
         let sets = vec![a.clone(), b.clone()];
         assert_eq!(restored_rule_set_id(Some(b.id), &sets), Some(b.id));
-        assert_eq!(restored_rule_set_id(Some(Uuid::new_v4()), &sets), Some(a.id));
+        assert_eq!(
+            restored_rule_set_id(Some(Uuid::new_v4()), &sets),
+            Some(a.id)
+        );
         assert_eq!(restored_rule_set_id(None, &sets), Some(a.id));
         assert_eq!(restored_rule_set_id(None, &[]), None);
     }
@@ -750,64 +753,5 @@ mod tests {
             seconds_remaining: Some(999),
         };
         assert_eq!(break_fraction(&break_high), 1.0);
-    }
-
-    #[test]
-    #[ignore = "requires GTK runtime stability"]
-    fn integration_component_emits_start_and_stop() {
-        let Some(_gtk_guard) = ensure_gtk() else { return; };
-        let outputs: Rc<RefCell<Vec<PomodoroOutput>>> = Rc::new(RefCell::new(Vec::new()));
-        let captured = outputs.clone();
-        let controller = PomodoroSection::builder()
-            .launch(())
-            .connect_receiver(move |_, out| captured.borrow_mut().push(out));
-
-        let rs1 = RuleSetSummary {
-            id: Uuid::new_v4(),
-            name: "Default".into(),
-            allowed_urls: vec![],
-        };
-        let rs2 = RuleSetSummary {
-            id: Uuid::new_v4(),
-            name: "Study".into(),
-            allowed_urls: vec![],
-        };
-
-        controller.emit(PomodoroInput::RuleSetsUpdated(vec![rs1.clone(), rs2.clone()]));
-        controller.widgets().rule_set_combo.set_active_id(Some(&rs2.id.to_string()));
-        controller.emit(PomodoroInput::RuleSetChanged);
-        controller.emit(PomodoroInput::SelectPreset {
-            focus_secs: 25 * 60,
-            break_secs: 5 * 60,
-        });
-        controller.emit(PomodoroInput::SetQuickBreak { break_secs: 15 * 60 });
-        controller.emit(PomodoroInput::AdjustFocus(10));
-        controller.emit(PomodoroInput::AdjustBreak(-3));
-        controller.emit(PomodoroInput::DragFocusAt {
-            x: 180.0,
-            y: 90.0,
-            w: 200.0,
-            h: 200.0,
-        });
-        controller.emit(PomodoroInput::DragBreakAt {
-            x: 160.0,
-            y: 120.0,
-            w: 200.0,
-            h: 200.0,
-        });
-        controller.emit(PomodoroInput::StatusUpdated {
-            phase: Some("Focus".into()),
-            seconds_remaining: Some(1200),
-        });
-        controller.emit(PomodoroInput::Start);
-        controller.emit(PomodoroInput::Stop);
-        flush();
-
-        let out = outputs.borrow();
-        assert!(out.iter().any(|o| matches!(
-            o,
-            PomodoroOutput::Start { rule_set_id, .. } if *rule_set_id == Some(rs2.id)
-        )));
-        assert!(out.iter().any(|o| matches!(o, PomodoroOutput::Stop)));
     }
 }

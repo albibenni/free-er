@@ -2,7 +2,7 @@ use shared::ipc::ScheduleSummary;
 
 /// Tracks what kind of drag gesture is in progress.
 #[derive(Debug, Clone, Default)]
-pub(super) enum DragMode {
+pub enum DragMode {
     #[default]
     None,
     /// Dragging on empty space to create a new event.
@@ -34,9 +34,9 @@ pub(super) enum DragMode {
 
 /// Shared state passed to the Cairo draw function via `Rc<RefCell<_>>`.
 #[derive(Debug, Default)]
-pub(super) struct DrawData {
-    pub(super) schedules: Vec<ScheduleSummary>,
-    pub(super) week_offset: i32,
-    pub(super) drag_start: Option<(f64, f64)>,
-    pub(super) drag_mode: DragMode,
+pub struct DrawData {
+    pub schedules: Vec<ScheduleSummary>,
+    pub week_offset: i32,
+    pub drag_start: Option<(f64, f64)>,
+    pub drag_mode: DragMode,
 }

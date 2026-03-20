@@ -1,8 +1,8 @@
 mod component;
 mod controllers;
 mod dialogs;
-mod draw_data;
-mod drawing;
+pub mod draw_data;
+pub mod drawing;
 mod geometry;
 mod week;
 

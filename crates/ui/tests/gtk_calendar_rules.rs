@@ -46,6 +46,12 @@ fn calendar_rules_component_adds_and_removes_rules() {
         .launch(())
         .connect_receiver(move |_, out| captured.borrow_mut().push(out));
 
+    let host = gtk4::Window::new();
+    host.set_default_size(900, 700);
+    host.set_child(Some(controller.widget()));
+    host.present();
+    flush();
+
     let root: gtk4::Widget = controller.widget().clone().upcast();
     find_entry_by_placeholder(&root, "e.g. Deep Work").set_text(" Deep Work ");
     controller.emit(CalendarRulesInput::AddFocusKeyword);

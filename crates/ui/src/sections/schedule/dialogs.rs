@@ -78,8 +78,12 @@ pub(super) fn show_create_dialog(
         if name.is_empty() {
             return;
         }
-        let Some(s_min) = parse_hhmm(&start_entry.text()) else { return };
-        let Some(e_min) = parse_hhmm(&end_entry.text()) else { return };
+        let Some(s_min) = parse_hhmm(&start_entry.text()) else {
+            return;
+        };
+        let Some(e_min) = parse_hhmm(&end_entry.text()) else {
+            return;
+        };
         if e_min <= s_min {
             return;
         }
@@ -184,8 +188,12 @@ pub(super) fn show_edit_dialog(
         if name.is_empty() {
             return;
         }
-        let Some(s_min) = parse_hhmm(&start_entry.text()) else { return };
-        let Some(e_min) = parse_hhmm(&end_entry.text()) else { return };
+        let Some(s_min) = parse_hhmm(&start_entry.text()) else {
+            return;
+        };
+        let Some(e_min) = parse_hhmm(&end_entry.text()) else {
+            return;
+        };
         if e_min <= s_min {
             return;
         }
@@ -244,9 +252,7 @@ pub(super) fn show_view_dialog(
     let dialog = build_dialog("Calendar Event", root);
     let vbox = dialog_vbox();
 
-    let badge = gtk4::Label::new(Some(
-        "Imported from calendar — name and time are read-only",
-    ));
+    let badge = gtk4::Label::new(Some("Imported from calendar — name and time are read-only"));
     badge.add_css_class("caption");
     badge.set_halign(gtk4::Align::Start);
     badge.set_opacity(0.6);
@@ -284,7 +290,11 @@ pub(super) fn show_view_dialog(
     let (repeat_btn, once_btn, weekday_buttons) = append_recurrence_row(
         &vbox,
         &recurrence_days,
-        if imported_repeating { None } else { Some(date.format("%Y-%m-%d").to_string()) },
+        if imported_repeating {
+            None
+        } else {
+            Some(date.format("%Y-%m-%d").to_string())
+        },
     );
     set_recurrence_read_only(&repeat_btn, &once_btn, &weekday_buttons);
 
@@ -329,10 +339,7 @@ fn build_dialog(title: &str, root: &gtk4::Box) -> gtk4::Window {
         .default_width(340)
         .resizable(false)
         .build();
-    if let Some(top) = root
-        .root()
-        .and_then(|r| r.downcast::<gtk4::Window>().ok())
-    {
+    if let Some(top) = root.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
         dialog.set_transient_for(Some(&top));
     }
     dialog
@@ -344,11 +351,7 @@ fn dialog_vbox() -> gtk4::Box {
     vbox
 }
 
-fn append_time_row(
-    vbox: &gtk4::Box,
-    start_min: u32,
-    end_min: u32,
-) -> (gtk4::Entry, gtk4::Entry) {
+fn append_time_row(vbox: &gtk4::Box, start_min: u32, end_min: u32) -> (gtk4::Entry, gtk4::Entry) {
     let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
     let start_entry = gtk4::Entry::new();
     start_entry.set_text(&format!("{:02}:{:02}", start_min / 60, start_min % 60));
@@ -434,7 +437,11 @@ fn append_recurrence_row(
     vbox: &gtk4::Box,
     initial_days: &[u8],
     specific_date: Option<String>,
-) -> (gtk4::ToggleButton, gtk4::ToggleButton, Vec<gtk4::ToggleButton>) {
+) -> (
+    gtk4::ToggleButton,
+    gtk4::ToggleButton,
+    Vec<gtk4::ToggleButton>,
+) {
     let mode_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
     let mode_lbl = gtk4::Label::new(Some("Repeat:"));
     mode_lbl.set_width_chars(8);
@@ -512,12 +519,11 @@ pub(super) fn resolve_rule_set(
     resolve_rule_set_index(combo.active(), rule_sets)
 }
 
-fn resolve_rule_set_index(
-    active: Option<u32>,
-    rule_sets: &[RuleSetSummary],
-) -> Option<uuid::Uuid> {
+fn resolve_rule_set_index(active: Option<u32>, rule_sets: &[RuleSetSummary]) -> Option<uuid::Uuid> {
     let idx = active.unwrap_or(0) as usize;
-    (idx != 0).then(|| rule_sets.get(idx - 1).map(|r| r.id)).flatten()
+    (idx != 0)
+        .then(|| rule_sets.get(idx - 1).map(|r| r.id))
+        .flatten()
 }
 
 pub(super) fn parse_hhmm(s: &str) -> Option<u32> {
@@ -533,15 +539,6 @@ pub(super) fn parse_hhmm(s: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn ensure_gtk() -> Option<std::sync::MutexGuard<'static, ()>> {
-        let guard = crate::sections::test_support::GTK_TEST_LOCK.lock().unwrap();
-        if gtk4::init().is_ok() {
-            Some(guard)
-        } else {
-            None
-        }
-    }
 
     #[test]
     fn parse_hhmm_accepts_valid_times() {
@@ -582,32 +579,5 @@ mod tests {
     fn resolve_rule_set_index_handles_none_and_empty_sets() {
         assert_eq!(resolve_rule_set_index(None, &[]), None);
         assert_eq!(resolve_rule_set_index(Some(1), &[]), None);
-    }
-
-    #[test]
-    #[ignore = "requires GTK runtime stability"]
-    fn recurrence_helpers_select_and_lock_days() {
-        let Some(_gtk_guard) = ensure_gtk() else { return; };
-        let vbox = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        let (repeat_btn, once_btn, buttons) =
-            append_recurrence_row(&vbox, &[1, 3], None);
-        assert!(repeat_btn.is_active());
-        assert!(!once_btn.is_active());
-        assert_eq!(selected_weekdays(&buttons), vec![1, 3]);
-
-        set_recurrence_read_only(&repeat_btn, &once_btn, &buttons);
-        assert!(!repeat_btn.is_sensitive());
-        assert!(!once_btn.is_sensitive());
-        assert!(buttons.iter().all(|b| !b.is_sensitive()));
-    }
-
-    #[test]
-    #[ignore = "requires GTK runtime stability"]
-    fn recurrence_defaults_first_day_when_empty() {
-        let Some(_gtk_guard) = ensure_gtk() else { return; };
-        let vbox = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        let (_repeat, _once, buttons) =
-            append_recurrence_row(&vbox, &[], Some("2026-03-16".into()));
-        assert_eq!(selected_weekdays(&buttons), vec![0]);
     }
 }

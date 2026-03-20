@@ -21,8 +21,14 @@ pub enum CalendarRulesInput {
 
 #[derive(Debug)]
 pub enum CalendarRulesOutput {
-    AddRule { keyword: String, schedule_type: ScheduleType },
-    RemoveRule { keyword: String, schedule_type: ScheduleType },
+    AddRule {
+        keyword: String,
+        schedule_type: ScheduleType,
+    },
+    RemoveRule {
+        keyword: String,
+        schedule_type: ScheduleType,
+    },
 }
 
 fn normalize_keyword(raw: &str) -> Option<String> {
@@ -179,7 +185,9 @@ impl Component for CalendarRulesSection {
     ) {
         match msg {
             CalendarRulesInput::AddFocusKeyword => {
-                let Some(kw) = normalize_keyword(&self.focus_entry.text()) else { return };
+                let Some(kw) = normalize_keyword(&self.focus_entry.text()) else {
+                    return;
+                };
                 if self.focus_keywords.contains(&kw) {
                     return;
                 }
@@ -195,7 +203,9 @@ impl Component for CalendarRulesSection {
                 });
             }
             CalendarRulesInput::AddBreakKeyword => {
-                let Some(kw) = normalize_keyword(&self.break_entry.text()) else { return };
+                let Some(kw) = normalize_keyword(&self.break_entry.text()) else {
+                    return;
+                };
                 if self.break_keywords.contains(&kw) {
                     return;
                 }
@@ -257,11 +267,7 @@ impl Component for CalendarRulesSection {
 }
 
 /// Append a keyword row with a delete button to a ListBox.
-fn append_keyword_row(
-    list: &gtk4::ListBox,
-    keyword: &str,
-    on_remove: impl Fn(String) + 'static,
-) {
+fn append_keyword_row(list: &gtk4::ListBox, keyword: &str, on_remove: impl Fn(String) + 'static) {
     let row = gtk4::ListBoxRow::new();
     row.set_activatable(false);
 
@@ -315,51 +321,13 @@ fn remove_keyword_row(list: &gtk4::ListBox, keyword: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use relm4::ComponentController;
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
-    fn ensure_gtk() -> Option<std::sync::MutexGuard<'static, ()>> {
-        let guard = crate::sections::test_support::GTK_TEST_LOCK.lock().unwrap();
-        if gtk4::init().is_ok() {
-            Some(guard)
-        } else {
-            None
-        }
-    }
-
-    fn flush() {
-        let ctx = gtk4::glib::MainContext::default();
-        while ctx.pending() {
-            ctx.iteration(false);
-        }
-    }
-
-    fn walk_widgets(root: &gtk4::Widget, out: &mut Vec<gtk4::Widget>) {
-        out.push(root.clone());
-        let mut child = root.first_child();
-        while let Some(w) = child {
-            walk_widgets(&w, out);
-            child = w.next_sibling();
-        }
-    }
-
-    fn find_entry_by_placeholder(root: &gtk4::Widget, placeholder: &str) -> gtk4::Entry {
-        let mut all = Vec::new();
-        walk_widgets(root, &mut all);
-        for w in all {
-            if let Ok(e) = w.downcast::<gtk4::Entry>() {
-                if e.placeholder_text().as_deref() == Some(placeholder) {
-                    return e;
-                }
-            }
-        }
-        panic!("entry not found: {placeholder}");
-    }
 
     #[test]
     fn normalize_keyword_trims_and_lowercases() {
-        assert_eq!(normalize_keyword("  Deep Work "), Some("deep work".to_string()));
+        assert_eq!(
+            normalize_keyword("  Deep Work "),
+            Some("deep work".to_string())
+        );
         assert_eq!(normalize_keyword(""), None);
         assert_eq!(normalize_keyword("   "), None);
     }
@@ -367,11 +335,26 @@ mod tests {
     #[test]
     fn split_rules_deduplicates_per_type() {
         let rules = vec![
-            ImportRuleSummary { keyword: "deep work".into(), schedule_type: ScheduleType::Focus },
-            ImportRuleSummary { keyword: "deep work".into(), schedule_type: ScheduleType::Focus },
-            ImportRuleSummary { keyword: "lunch".into(), schedule_type: ScheduleType::Break },
-            ImportRuleSummary { keyword: "lunch".into(), schedule_type: ScheduleType::Break },
-            ImportRuleSummary { keyword: "meeting".into(), schedule_type: ScheduleType::Focus },
+            ImportRuleSummary {
+                keyword: "deep work".into(),
+                schedule_type: ScheduleType::Focus,
+            },
+            ImportRuleSummary {
+                keyword: "deep work".into(),
+                schedule_type: ScheduleType::Focus,
+            },
+            ImportRuleSummary {
+                keyword: "lunch".into(),
+                schedule_type: ScheduleType::Break,
+            },
+            ImportRuleSummary {
+                keyword: "lunch".into(),
+                schedule_type: ScheduleType::Break,
+            },
+            ImportRuleSummary {
+                keyword: "meeting".into(),
+                schedule_type: ScheduleType::Focus,
+            },
         ];
         let (focus, brk) = split_rules(rules);
         assert_eq!(focus, vec!["deep work".to_string(), "meeting".to_string()]);
@@ -393,59 +376,5 @@ mod tests {
         let (focus, brk) = split_rules(rules);
         assert_eq!(focus, vec!["sync".to_string()]);
         assert_eq!(brk, vec!["sync".to_string()]);
-    }
-
-    #[test]
-    #[ignore = "requires GTK runtime stability"]
-    fn integration_component_adds_and_removes_rules() {
-        let Some(_gtk_guard) = ensure_gtk() else { return; };
-        let outputs: Rc<RefCell<Vec<CalendarRulesOutput>>> = Rc::new(RefCell::new(Vec::new()));
-        let captured = outputs.clone();
-        let controller = CalendarRulesSection::builder()
-            .launch(())
-            .connect_receiver(move |_, out| captured.borrow_mut().push(out));
-
-        let root: gtk4::Widget = controller.widget().clone().upcast();
-        find_entry_by_placeholder(&root, "e.g. Deep Work").set_text(" Deep Work ");
-        controller.emit(CalendarRulesInput::AddFocusKeyword);
-        find_entry_by_placeholder(&root, "e.g. Lunch").set_text("Lunch");
-        controller.emit(CalendarRulesInput::AddBreakKeyword);
-
-        controller.emit(CalendarRulesInput::RemoveFocusKeyword("deep work".into()));
-        controller.emit(CalendarRulesInput::RemoveBreakKeyword("lunch".into()));
-
-        controller.emit(CalendarRulesInput::RulesUpdated(vec![
-            ImportRuleSummary {
-                keyword: "meeting".into(),
-                schedule_type: ScheduleType::Focus,
-            },
-            ImportRuleSummary {
-                keyword: "pause".into(),
-                schedule_type: ScheduleType::Break,
-            },
-        ]));
-        flush();
-
-        let out = outputs.borrow();
-        assert!(out.iter().any(|o| matches!(
-            o,
-            CalendarRulesOutput::AddRule { keyword, schedule_type }
-            if keyword == "deep work" && *schedule_type == ScheduleType::Focus
-        )));
-        assert!(out.iter().any(|o| matches!(
-            o,
-            CalendarRulesOutput::AddRule { keyword, schedule_type }
-            if keyword == "lunch" && *schedule_type == ScheduleType::Break
-        )));
-        assert!(out.iter().any(|o| matches!(
-            o,
-            CalendarRulesOutput::RemoveRule { keyword, schedule_type }
-            if keyword == "deep work" && *schedule_type == ScheduleType::Focus
-        )));
-        assert!(out.iter().any(|o| matches!(
-            o,
-            CalendarRulesOutput::RemoveRule { keyword, schedule_type }
-            if keyword == "lunch" && *schedule_type == ScheduleType::Break
-        )));
     }
 }
