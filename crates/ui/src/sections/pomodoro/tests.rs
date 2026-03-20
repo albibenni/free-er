@@ -1,4 +1,5 @@
 use super::*;
+use super::super::ring::{break_fraction, focus_fraction, minutes_from_ring_pos, RingVisualState};
 
 #[test]
 fn focus_fraction_uses_remaining_when_active() {
