@@ -2,11 +2,22 @@ use crate::ipc_client;
 use shared::ipc::Command;
 use tracing::error;
 
+fn open_url_in_browser(url: &str) {
+    #[cfg(not(test))]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+    }
+    #[cfg(test)]
+    {
+        let _ = url;
+    }
+}
+
 pub(super) fn connect_google() {
     tokio::spawn(async {
         match ipc_client::start_google_oauth().await {
             Ok(url) => {
-                let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                open_url_in_browser(&url);
             }
             Err(e) => error!("Google OAuth failed: {e}"),
         }
