@@ -35,11 +35,11 @@
 - [x] resync button to resync with google calendar
 - [x] import from calendar previous week and next week only
   - [x] clean schedule out of time - 2 weeks ago and 2 weeks in the future
-  - [ ] check if weekly could affect it
+  - [x] check if weekly could affect it
 - [x] allow creating inside repeating task
 - [x] modify repeating days
 - [x] see repreating days in calendar imports too - but blocked from modifying them
-- [ ] change default allowed list from settings
+- [x] change default allowed list from settings
 - [ ] import from open websites
 - [x] rules for import
   - [x] personalized list
@@ -49,7 +49,7 @@
 
 ### POMODORO
 
-- [ ] pomodoro timer clock
+- [x] pomodoro timer clock
 - [ ] break timer clock - connected to the pomodoro end
 - [ ] race condition between pomodoro and calendar task - pomodoro is above calendar task, but when pomodoro ends, calendar task should come back
 
@@ -61,3 +61,7 @@
 - [ ] why clone on sender in app.rs
 - [x] save schedule doesn't save the schedule on the calendar
 - [ ] break isn't actual break - it is still in focus
+
+## OPTIMIZATION
+
+- [ ] pomodoro.rs refactor - too much code, should be split into smaller functions
