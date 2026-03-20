@@ -7,21 +7,42 @@ pub use crate::models::ScheduleType;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "cmd")]
 pub enum Command {
-    StartFocus { rule_set_id: Uuid },
+    StartFocus {
+        rule_set_id: Uuid,
+    },
     StopFocus,
-    TakeBreak { duration_secs: u64 },
-    StartPomodoro { focus_secs: u64, break_secs: u64, rule_set_id: Option<Uuid> },
+    TakeBreak {
+        duration_secs: u64,
+    },
+    StartPomodoro {
+        focus_secs: u64,
+        break_secs: u64,
+        rule_set_id: Option<Uuid>,
+    },
     StopPomodoro,
     /// Skip the current break and go straight to the next focus phase.
     /// Rejected by the daemon if strict_breaks is enabled.
     SkipBreak,
     GetStatus,
-    AddRuleSet { name: String, allowed_urls: Vec<String> },
-    RemoveRuleSet { id: Uuid },
-    AddUrlToRuleSet { rule_set_id: Uuid, url: String },
-    RemoveUrlFromRuleSet { rule_set_id: Uuid, url: String },
+    AddRuleSet {
+        name: String,
+        allowed_urls: Vec<String>,
+    },
+    RemoveRuleSet {
+        id: Uuid,
+    },
+    AddUrlToRuleSet {
+        rule_set_id: Uuid,
+        url: String,
+    },
+    RemoveUrlFromRuleSet {
+        rule_set_id: Uuid,
+        url: String,
+    },
     ListRuleSets,
-    SetDefaultRuleSet { id: Uuid },
+    SetDefaultRuleSet {
+        id: Uuid,
+    },
     AddSchedule {
         name: String,
         /// Weekday indices 0=Mon..6=Sun
@@ -33,7 +54,9 @@ pub enum Command {
         specific_date: Option<String>,
         schedule_type: ScheduleType,
     },
-    RemoveSchedule { id: Uuid },
+    RemoveSchedule {
+        id: Uuid,
+    },
     UpdateSchedule {
         id: Uuid,
         name: String,
@@ -47,16 +70,30 @@ pub enum Command {
         schedule_type: ScheduleType,
     },
     ListSchedules,
-    SetStrictMode { enabled: bool },
-    SetAllowNewTab { enabled: bool },
-    SetCalDav { url: String, username: String, password: String },
+    SetStrictMode {
+        enabled: bool,
+    },
+    SetAllowNewTab {
+        enabled: bool,
+    },
+    SetCalDav {
+        url: String,
+        username: String,
+        password: String,
+    },
     StartGoogleOAuth,
     RevokeGoogleCalendar,
     SyncCalendar,
     /// Add a global calendar import rule.
-    AddImportRule { keyword: String, schedule_type: ScheduleType },
+    AddImportRule {
+        keyword: String,
+        schedule_type: ScheduleType,
+    },
     /// Remove a global calendar import rule by keyword + type.
-    RemoveImportRule { keyword: String, schedule_type: ScheduleType },
+    RemoveImportRule {
+        keyword: String,
+        schedule_type: ScheduleType,
+    },
     /// List all global calendar import rules.
     ListImportRules,
 }

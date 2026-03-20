@@ -95,8 +95,14 @@ pub enum AppMsg {
     RefreshSchedules,
     ResyncCalendar,
     // Calendar import rules
-    AddImportRule { keyword: String, schedule_type: shared::ipc::ScheduleType },
-    RemoveImportRule { keyword: String, schedule_type: shared::ipc::ScheduleType },
+    AddImportRule {
+        keyword: String,
+        schedule_type: shared::ipc::ScheduleType,
+    },
+    RemoveImportRule {
+        keyword: String,
+        schedule_type: shared::ipc::ScheduleType,
+    },
     // Status / refresh
     StatusTick,
     RefreshRuleSets,

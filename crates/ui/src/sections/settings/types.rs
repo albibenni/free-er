@@ -19,7 +19,10 @@ pub enum SettingsOutput {
     AllowNewTabChanged(bool),
     AiSitesToggled(bool),
     SearchEnginesToggled(bool),
-    QuickUrlToggled { url: &'static str, enabled: bool },
+    QuickUrlToggled {
+        url: &'static str,
+        enabled: bool,
+    },
     CalDavSaved {
         url: String,
         user: String,

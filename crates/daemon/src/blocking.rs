@@ -2,7 +2,6 @@
 ///
 /// Phase 1 default is browser-extension-only blocking (Option B from the plan),
 /// so this module is a no-op stub. Option A (/etc/hosts) will be implemented later.
-
 use anyhow::Result;
 
 #[allow(dead_code)]

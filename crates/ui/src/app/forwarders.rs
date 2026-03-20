@@ -38,7 +38,9 @@ pub(super) fn launch_pomodoro(sender: &ComponentSender<App>) -> Controller<Pomod
         })
 }
 
-pub(super) fn launch_allowed_lists(sender: &ComponentSender<App>) -> Controller<AllowedListsSection> {
+pub(super) fn launch_allowed_lists(
+    sender: &ComponentSender<App>,
+) -> Controller<AllowedListsSection> {
     AllowedListsSection::builder()
         .launch(())
         .forward(sender.input_sender(), |out| match out {
@@ -99,16 +101,26 @@ pub(super) fn launch_schedule(sender: &ComponentSender<App>) -> Controller<Sched
         })
 }
 
-pub(super) fn launch_calendar_rules(sender: &ComponentSender<App>) -> Controller<CalendarRulesSection> {
+pub(super) fn launch_calendar_rules(
+    sender: &ComponentSender<App>,
+) -> Controller<CalendarRulesSection> {
     CalendarRulesSection::builder()
         .launch(())
         .forward(sender.input_sender(), |out| match out {
-            CalendarRulesOutput::AddRule { keyword, schedule_type } => {
-                AppMsg::AddImportRule { keyword, schedule_type }
-            }
-            CalendarRulesOutput::RemoveRule { keyword, schedule_type } => {
-                AppMsg::RemoveImportRule { keyword, schedule_type }
-            }
+            CalendarRulesOutput::AddRule {
+                keyword,
+                schedule_type,
+            } => AppMsg::AddImportRule {
+                keyword,
+                schedule_type,
+            },
+            CalendarRulesOutput::RemoveRule {
+                keyword,
+                schedule_type,
+            } => AppMsg::RemoveImportRule {
+                keyword,
+                schedule_type,
+            },
         })
 }
 
@@ -127,7 +139,9 @@ pub(super) fn launch_settings(sender: &ComponentSender<App>) -> Controller<Setti
                     AppMsg::RemoveUrl(url.to_string())
                 }
             }
-            SettingsOutput::CalDavSaved { url, user, pass } => AppMsg::SaveCalDav { url, user, pass },
+            SettingsOutput::CalDavSaved { url, user, pass } => {
+                AppMsg::SaveCalDav { url, user, pass }
+            }
             SettingsOutput::ConnectGoogleRequested => AppMsg::ConnectGoogle,
             SettingsOutput::DisconnectGoogleRequested => AppMsg::DisconnectGoogle,
         })

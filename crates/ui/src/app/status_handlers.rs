@@ -31,8 +31,9 @@ pub(super) fn status_tick(
                     phase: status.pomodoro_phase.map(|p| format!("{p:?}")),
                     seconds_remaining: status.seconds_remaining,
                 });
-                settings_sender
-                    .emit(SettingsInput::GoogleStatusUpdated(status.google_calendar_connected));
+                settings_sender.emit(SettingsInput::GoogleStatusUpdated(
+                    status.google_calendar_connected,
+                ));
                 settings_sender.emit(SettingsInput::AllowNewTabUpdated(status.allow_new_tab));
                 if let Some(default_id) = status.default_rule_set_id {
                     sender.input(AppMsg::SetDefaultRuleSet(default_id));
@@ -49,7 +50,7 @@ pub(super) fn status_tick(
             default_rule_set_id,
             &sender,
         )
-            .await;
+        .await;
 
         match ipc_client::list_schedules().await {
             Ok(schedules) => sender.input(AppMsg::SchedulesUpdated(schedules)),
@@ -63,7 +64,11 @@ pub(super) fn status_tick(
     });
 }
 
-pub(super) fn refresh_rule_sets(app: &App, default_rule_set_id: Option<uuid::Uuid>, sender: ComponentSender<App>) {
+pub(super) fn refresh_rule_sets(
+    app: &App,
+    default_rule_set_id: Option<uuid::Uuid>,
+    sender: ComponentSender<App>,
+) {
     let lists_sender = app.allowed_lists.sender().clone();
     let pom_sender = app.pomodoro.sender().clone();
     let sched_sender = app.schedule.sender().clone();
@@ -95,8 +100,7 @@ async fn push_rule_sets(
             lists_sender.emit(AllowedListsInput::RuleSetsUpdated(sets.clone()));
             pom_sender.emit(PomodoroInput::RuleSetsUpdated(sets.clone()));
             sched_sender.emit(ScheduleInput::RuleSetsUpdated(sets.clone()));
-            let all_urls: Vec<String> =
-                sets.iter().flat_map(|s| s.allowed_urls.clone()).collect();
+            let all_urls: Vec<String> = sets.iter().flat_map(|s| s.allowed_urls.clone()).collect();
             settings_sender.emit(SettingsInput::QuickUrlsUpdated(all_urls));
             let next_default = current_default_rule_set_id
                 .filter(|id| sets.iter().any(|s| s.id == *id))

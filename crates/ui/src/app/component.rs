@@ -1,8 +1,10 @@
+use super::types::{App, AppMsg, Page};
+use super::{
+    focus_handlers, forwarders, schedule_handlers, settings_handlers, status_handlers, url_handlers,
+};
 use gtk4::prelude::*;
 use relm4::prelude::*;
 use relm4::ComponentController;
-use super::{focus_handlers, forwarders, schedule_handlers, settings_handlers, status_handlers, url_handlers};
-use super::types::{App, AppMsg, Page};
 
 #[relm4::component(pub)]
 impl Component for App {
@@ -324,33 +326,39 @@ impl Component for App {
             AppMsg::ResyncCalendar => schedule_handlers::resync_calendar(sender),
 
             // ── Calendar import rules ────────────────────────────────────
-            AppMsg::AddImportRule { keyword, schedule_type } => {
+            AppMsg::AddImportRule {
+                keyword,
+                schedule_type,
+            } => {
                 relm4::spawn(async move {
                     let _ = crate::ipc_client::add_import_rule(&keyword, schedule_type).await;
                 });
             }
-            AppMsg::RemoveImportRule { keyword, schedule_type } => {
+            AppMsg::RemoveImportRule {
+                keyword,
+                schedule_type,
+            } => {
                 relm4::spawn(async move {
                     let _ = crate::ipc_client::remove_import_rule(&keyword, schedule_type).await;
                 });
             }
             // ── Status / refresh ─────────────────────────────────────────
-            AppMsg::StatusTick => status_handlers::status_tick(self, self.default_rule_set_id, sender),
+            AppMsg::StatusTick => {
+                status_handlers::status_tick(self, self.default_rule_set_id, sender)
+            }
             AppMsg::RefreshRuleSets => {
                 status_handlers::refresh_rule_sets(self, self.default_rule_set_id, sender)
             }
             AppMsg::SetDefaultRuleSet(id) => {
                 self.default_rule_set_id = Some(id);
-                self.allowed_lists
-                    .sender()
-                    .emit(crate::sections::allowed_lists::AllowedListsInput::DefaultRuleSetUpdated(
-                        Some(id),
-                    ));
-                self.schedule
-                    .sender()
-                    .emit(crate::sections::schedule::ScheduleInput::DefaultRuleSetUpdated(
-                        Some(id),
-                    ));
+                self.allowed_lists.sender().emit(
+                    crate::sections::allowed_lists::AllowedListsInput::DefaultRuleSetUpdated(Some(
+                        id,
+                    )),
+                );
+                self.schedule.sender().emit(
+                    crate::sections::schedule::ScheduleInput::DefaultRuleSetUpdated(Some(id)),
+                );
             }
         }
     }

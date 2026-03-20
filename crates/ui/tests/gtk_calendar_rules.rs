@@ -120,8 +120,12 @@ fn calendar_rules_component_adds_and_removes_rules() {
     flush();
 
     // Remove missing rows while lists are populated to drive full row-traversal.
-    controller.emit(CalendarRulesInput::RemoveFocusKeyword("does-not-exist".into()));
-    controller.emit(CalendarRulesInput::RemoveBreakKeyword("does-not-exist".into()));
+    controller.emit(CalendarRulesInput::RemoveFocusKeyword(
+        "does-not-exist".into(),
+    ));
+    controller.emit(CalendarRulesInput::RemoveBreakKeyword(
+        "does-not-exist".into(),
+    ));
     flush();
 
     // Remove from rows created by RulesUpdated (closure paths).

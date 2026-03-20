@@ -7,11 +7,18 @@ use uuid::Uuid;
 
 use super::{App, AppMsg};
 
-pub(super) fn add_url(url: String, default_rule_set_id: Option<Uuid>, sender: ComponentSender<App>) {
+pub(super) fn add_url(
+    url: String,
+    default_rule_set_id: Option<Uuid>,
+    sender: ComponentSender<App>,
+) {
     tokio::spawn(async move {
         if let Some(id) = default_rule_set_id {
-            if let Err(e) =
-                ipc_client::send(&Command::AddUrlToRuleSet { rule_set_id: id, url }).await
+            if let Err(e) = ipc_client::send(&Command::AddUrlToRuleSet {
+                rule_set_id: id,
+                url,
+            })
+            .await
             {
                 error!("AddUrlToRuleSet IPC failed: {e}");
             }
@@ -19,8 +26,11 @@ pub(super) fn add_url(url: String, default_rule_set_id: Option<Uuid>, sender: Co
             match ipc_client::add_rule_set("Default").await {
                 Ok(id) => {
                     sender.input(AppMsg::RefreshRuleSets);
-                    if let Err(e) =
-                        ipc_client::send(&Command::AddUrlToRuleSet { rule_set_id: id, url }).await
+                    if let Err(e) = ipc_client::send(&Command::AddUrlToRuleSet {
+                        rule_set_id: id,
+                        url,
+                    })
+                    .await
                     {
                         error!("AddUrlToRuleSet IPC failed: {e}");
                     }
@@ -34,8 +44,11 @@ pub(super) fn add_url(url: String, default_rule_set_id: Option<Uuid>, sender: Co
 pub(super) fn remove_url(url: String, default_rule_set_id: Option<Uuid>) {
     if let Some(id) = default_rule_set_id {
         tokio::spawn(async move {
-            if let Err(e) =
-                ipc_client::send(&Command::RemoveUrlFromRuleSet { rule_set_id: id, url }).await
+            if let Err(e) = ipc_client::send(&Command::RemoveUrlFromRuleSet {
+                rule_set_id: id,
+                url,
+            })
+            .await
             {
                 error!("RemoveUrlFromRuleSet IPC failed: {e}");
             }
@@ -45,9 +58,7 @@ pub(super) fn remove_url(url: String, default_rule_set_id: Option<Uuid>) {
 
 pub(super) fn add_url_to_list(rule_set_id: Uuid, url: String) {
     tokio::spawn(async move {
-        if let Err(e) =
-            ipc_client::send(&Command::AddUrlToRuleSet { rule_set_id, url }).await
-        {
+        if let Err(e) = ipc_client::send(&Command::AddUrlToRuleSet { rule_set_id, url }).await {
             error!("AddUrlToRuleSet IPC failed: {e}");
         }
     });
@@ -55,8 +66,7 @@ pub(super) fn add_url_to_list(rule_set_id: Uuid, url: String) {
 
 pub(super) fn remove_url_from_list(rule_set_id: Uuid, url: String) {
     tokio::spawn(async move {
-        if let Err(e) =
-            ipc_client::send(&Command::RemoveUrlFromRuleSet { rule_set_id, url }).await
+        if let Err(e) = ipc_client::send(&Command::RemoveUrlFromRuleSet { rule_set_id, url }).await
         {
             error!("RemoveUrlFromRuleSet IPC failed: {e}");
         }
@@ -92,9 +102,15 @@ pub(super) fn toggle_ai_sites(
         };
         for url in AI_SITES {
             let cmd = if enabled {
-                Command::AddUrlToRuleSet { rule_set_id: id, url: url.to_string() }
+                Command::AddUrlToRuleSet {
+                    rule_set_id: id,
+                    url: url.to_string(),
+                }
             } else {
-                Command::RemoveUrlFromRuleSet { rule_set_id: id, url: url.to_string() }
+                Command::RemoveUrlFromRuleSet {
+                    rule_set_id: id,
+                    url: url.to_string(),
+                }
             };
             if let Err(e) = ipc_client::send(&cmd).await {
                 error!("AI sites toggle IPC failed: {e}");
@@ -114,9 +130,15 @@ pub(super) fn toggle_search_engines(
         };
         for url in SEARCH_ENGINES {
             let cmd = if enabled {
-                Command::AddUrlToRuleSet { rule_set_id: id, url: url.to_string() }
+                Command::AddUrlToRuleSet {
+                    rule_set_id: id,
+                    url: url.to_string(),
+                }
             } else {
-                Command::RemoveUrlFromRuleSet { rule_set_id: id, url: url.to_string() }
+                Command::RemoveUrlFromRuleSet {
+                    rule_set_id: id,
+                    url: url.to_string(),
+                }
             };
             if let Err(e) = ipc_client::send(&cmd).await {
                 error!("Search engines toggle IPC failed: {e}");

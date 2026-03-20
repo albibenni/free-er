@@ -1,8 +1,10 @@
 use anyhow::Result;
-use shared::ipc::{Command, ImportRuleSummary, RuleSetSummary, ScheduleSummary, ScheduleType, StatusResponse};
-use uuid::Uuid;
+use shared::ipc::{
+    Command, ImportRuleSummary, RuleSetSummary, ScheduleSummary, ScheduleType, StatusResponse,
+};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
+use uuid::Uuid;
 
 const SOCKET_PATH: &str = "/tmp/free-er.sock";
 
@@ -37,7 +39,8 @@ pub async fn start_google_oauth() -> Result<String> {
     if let Some(err) = v["error"].as_str() {
         return Err(anyhow::anyhow!("{err}"));
     }
-    Ok(v["auth_url"].as_str()
+    Ok(v["auth_url"]
+        .as_str()
         .ok_or_else(|| anyhow::anyhow!("no auth_url in response"))?
         .to_string())
 }
@@ -76,9 +79,12 @@ pub async fn add_schedule(
         rule_set_id,
         specific_date,
         schedule_type,
-    }).await?;
+    })
+    .await?;
     let v: serde_json::Value = serde_json::from_str(&raw)?;
-    let id = v["id"].as_str().ok_or_else(|| anyhow::anyhow!("no id in response"))?;
+    let id = v["id"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("no id in response"))?;
     Ok(id.parse()?)
 }
 
@@ -101,7 +107,8 @@ pub async fn update_schedule(
         rule_set_id,
         specific_date,
         schedule_type,
-    }).await?;
+    })
+    .await?;
     Ok(())
 }
 
@@ -121,7 +128,8 @@ pub async fn add_import_rule(keyword: &str, schedule_type: ScheduleType) -> Resu
     send(&Command::AddImportRule {
         keyword: keyword.to_string(),
         schedule_type,
-    }).await?;
+    })
+    .await?;
     Ok(())
 }
 
@@ -130,7 +138,8 @@ pub async fn remove_import_rule(keyword: &str, schedule_type: ScheduleType) -> R
     send(&Command::RemoveImportRule {
         keyword: keyword.to_string(),
         schedule_type,
-    }).await?;
+    })
+    .await?;
     Ok(())
 }
 
@@ -153,6 +162,8 @@ pub async fn add_rule_set(name: &str) -> Result<Uuid> {
     })
     .await?;
     let v: serde_json::Value = serde_json::from_str(&raw)?;
-    let id = v["id"].as_str().ok_or_else(|| anyhow::anyhow!("no id in response"))?;
+    let id = v["id"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("no id in response"))?;
     Ok(id.parse()?)
 }

@@ -1,6 +1,6 @@
 mod component;
-mod forwarders;
 mod focus_handlers;
+mod forwarders;
 mod schedule_handlers;
 mod settings_handlers;
 mod status_handlers;
