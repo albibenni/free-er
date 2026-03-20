@@ -1,18 +1,12 @@
+mod ring;
+use ring::{break_fraction, draw_ring, focus_fraction, minutes_from_ring_pos, RingVisualState};
+
 use gtk4::prelude::*;
 use relm4::prelude::*;
 use shared::ipc::RuleSetSummary;
 use std::cell::RefCell;
-use std::f64::consts::{FRAC_PI_2, PI};
 use std::rc::Rc;
 use uuid::Uuid;
-
-#[derive(Debug, Default)]
-struct RingVisualState {
-    focus_secs: u64,
-    break_secs: u64,
-    phase: Option<String>,
-    seconds_remaining: Option<u64>,
-}
 
 #[derive(Debug)]
 pub struct PomodoroSection {
@@ -69,15 +63,47 @@ pub enum PomodoroOutput {
 }
 
 fn adjust_duration_secs(current_secs: u64, delta_min: i64, min_m: u64, max_m: u64) -> u64 {
-    let mins = (current_secs / 60) as i64;
-    let new_mins = (mins + delta_min).clamp(min_m as i64, max_m as i64) as u64;
-    new_mins * 60
+    let new_mins = ((current_secs / 60) as i64 + delta_min).clamp(min_m as i64, max_m as i64);
+    new_mins as u64 * 60
 }
 
 fn restored_rule_set_id(prev_id: Option<Uuid>, sets: &[RuleSetSummary]) -> Option<Uuid> {
     prev_id
         .filter(|id| sets.iter().any(|s| s.id == *id))
         .or_else(|| sets.first().map(|s| s.id))
+}
+
+fn attach_ring_drag<F>(
+    ring: &gtk4::DrawingArea,
+    sender: ComponentSender<PomodoroSection>,
+    make_msg: F,
+) where
+    F: Fn(f64, f64, f64, f64) -> PomodoroInput + Clone + 'static,
+{
+    let start = Rc::new(RefCell::new((0.0_f64, 0.0_f64)));
+    let drag = gtk4::GestureDrag::new();
+
+    let s = sender.clone();
+    let da = ring.clone();
+    let start_begin = start.clone();
+    let make_begin = make_msg.clone();
+    drag.connect_drag_begin(move |_, x, y| {
+        *start_begin.borrow_mut() = (x, y);
+        s.input(make_begin(x, y, da.width() as f64, da.allocated_height() as f64));
+    });
+
+    let da = ring.clone();
+    drag.connect_drag_update(move |_, off_x, off_y| {
+        let (sx, sy) = *start.borrow();
+        sender.input(make_msg(
+            sx + off_x,
+            sy + off_y,
+            da.width() as f64,
+            da.allocated_height() as f64,
+        ));
+    });
+
+    ring.add_controller(drag);
 }
 
 #[relm4::component(pub)]
@@ -293,9 +319,7 @@ impl Component for PomodoroSection {
                         #[watch]
                         set_label: &match (model.phase.as_deref(), model.seconds_remaining) {
                             (Some(phase), Some(secs)) => {
-                                let m = secs / 60;
-                                let s = secs % 60;
-                                format!("{phase} - {m:02}:{s:02}")
+                                format!("{phase} - {:02}:{:02}", secs / 60, secs % 60)
                             }
                             _ => "Inactive".into(),
                         },
@@ -353,88 +377,26 @@ impl Component for PomodoroSection {
             })),
         };
         let widgets = view_output!();
-        {
-            let start = Rc::new(RefCell::new((0.0_f64, 0.0_f64)));
-            let s = _sender.clone();
-            let da = widgets.focus_ring.clone();
-            let start_begin = start.clone();
-            let drag = gtk4::GestureDrag::new();
-            drag.connect_drag_begin(move |_, x, y| {
-                *start_begin.borrow_mut() = (x, y);
-                s.input(PomodoroInput::DragFocusAt {
-                    x,
-                    y,
-                    w: da.width() as f64,
-                    h: da.allocated_height() as f64,
-                });
-            });
-            let s = _sender.clone();
-            let da = widgets.focus_ring.clone();
-            drag.connect_drag_update(move |_, off_x, off_y| {
-                let (sx, sy) = *start.borrow();
-                s.input(PomodoroInput::DragFocusAt {
-                    x: sx + off_x,
-                    y: sy + off_y,
-                    w: da.width() as f64,
-                    h: da.allocated_height() as f64,
-                });
-            });
-            widgets.focus_ring.add_controller(drag);
-        }
-        {
-            let start = Rc::new(RefCell::new((0.0_f64, 0.0_f64)));
-            let s = _sender.clone();
-            let da = widgets.break_ring.clone();
-            let start_begin = start.clone();
-            let drag = gtk4::GestureDrag::new();
-            drag.connect_drag_begin(move |_, x, y| {
-                *start_begin.borrow_mut() = (x, y);
-                s.input(PomodoroInput::DragBreakAt {
-                    x,
-                    y,
-                    w: da.width() as f64,
-                    h: da.allocated_height() as f64,
-                });
-            });
-            let s = _sender.clone();
-            let da = widgets.break_ring.clone();
-            drag.connect_drag_update(move |_, off_x, off_y| {
-                let (sx, sy) = *start.borrow();
-                s.input(PomodoroInput::DragBreakAt {
-                    x: sx + off_x,
-                    y: sy + off_y,
-                    w: da.width() as f64,
-                    h: da.allocated_height() as f64,
-                });
-            });
-            widgets.break_ring.add_controller(drag);
-        }
-        {
-            let ring = model.ring_visual.clone();
-            widgets.focus_ring.set_draw_func(move |_, cr, w, h| {
-                let s = ring.borrow();
-                draw_ring(
-                    cr,
-                    w as f64,
-                    h as f64,
-                    focus_fraction(&s),
-                    (0.12, 0.55, 0.95),
-                );
-            });
-        }
-        {
-            let ring = model.ring_visual.clone();
-            widgets.break_ring.set_draw_func(move |_, cr, w, h| {
-                let s = ring.borrow();
-                draw_ring(
-                    cr,
-                    w as f64,
-                    h as f64,
-                    break_fraction(&s),
-                    (0.98, 0.60, 0.18),
-                );
-            });
-        }
+
+        attach_ring_drag(&widgets.focus_ring, _sender.clone(), |x, y, w, h| {
+            PomodoroInput::DragFocusAt { x, y, w, h }
+        });
+        attach_ring_drag(&widgets.break_ring, _sender, |x, y, w, h| {
+            PomodoroInput::DragBreakAt { x, y, w, h }
+        });
+
+        let ring = model.ring_visual.clone();
+        widgets.focus_ring.set_draw_func(move |_, cr, w, h| {
+            let s = ring.borrow();
+            draw_ring(cr, w as f64, h as f64, focus_fraction(&s), (0.12, 0.55, 0.95));
+        });
+
+        let ring = model.ring_visual.clone();
+        widgets.break_ring.set_draw_func(move |_, cr, w, h| {
+            let s = ring.borrow();
+            draw_ring(cr, w as f64, h as f64, break_fraction(&s), (0.98, 0.60, 0.18));
+        });
+
         ComponentParts { model, widgets }
     }
 
@@ -452,31 +414,21 @@ impl Component for PomodoroSection {
             } => {
                 self.focus_secs = focus_secs;
                 self.break_secs = break_secs;
-                let mut s = self.ring_visual.borrow_mut();
-                s.focus_secs = self.focus_secs;
-                s.break_secs = self.break_secs;
             }
             PomodoroInput::SetQuickBreak { break_secs } => {
                 self.break_secs = break_secs;
-                self.ring_visual.borrow_mut().break_secs = self.break_secs;
             }
             PomodoroInput::AdjustFocus(delta_min) => {
                 self.focus_secs = adjust_duration_secs(self.focus_secs, delta_min, 5, 180);
-                self.ring_visual.borrow_mut().focus_secs = self.focus_secs;
             }
             PomodoroInput::AdjustBreak(delta_min) => {
                 self.break_secs = adjust_duration_secs(self.break_secs, delta_min, 1, 90);
-                self.ring_visual.borrow_mut().break_secs = self.break_secs;
             }
             PomodoroInput::DragFocusAt { x, y, w, h } => {
-                let mins = minutes_from_ring_pos(x, y, w, h, 5, 180);
-                self.focus_secs = mins * 60;
-                self.ring_visual.borrow_mut().focus_secs = self.focus_secs;
+                self.focus_secs = minutes_from_ring_pos(x, y, w, h, 5, 180) * 60;
             }
             PomodoroInput::DragBreakAt { x, y, w, h } => {
-                let mins = minutes_from_ring_pos(x, y, w, h, 1, 90);
-                self.break_secs = mins * 60;
-                self.ring_visual.borrow_mut().break_secs = self.break_secs;
+                self.break_secs = minutes_from_ring_pos(x, y, w, h, 1, 90) * 60;
             }
             PomodoroInput::Start => {
                 let _ = sender.output(PomodoroOutput::Start {
@@ -498,15 +450,10 @@ impl Component for PomodoroSection {
                 phase,
                 seconds_remaining,
             } => {
-                self.phase = phase.clone();
+                self.phase = phase;
                 self.seconds_remaining = seconds_remaining;
-                let mut s = self.ring_visual.borrow_mut();
-                s.phase = phase;
-                s.seconds_remaining = self.seconds_remaining;
             }
             PomodoroInput::RuleSetsUpdated(sets) => {
-                let prev_id = self.selected_rule_set_id;
-
                 widgets.rule_set_combo.remove_all();
                 for (i, rs) in sets.iter().enumerate() {
                     let label = if i == 0 {
@@ -518,8 +465,7 @@ impl Component for PomodoroSection {
                         .rule_set_combo
                         .append(Some(&rs.id.to_string()), &label);
                 }
-
-                let restore_id = restored_rule_set_id(prev_id, &sets);
+                let restore_id = restored_rule_set_id(self.selected_rule_set_id, &sets);
                 if let Some(id) = restore_id {
                     widgets.rule_set_combo.set_active_id(Some(&id.to_string()));
                     self.selected_rule_set_id = Some(id);
@@ -529,75 +475,22 @@ impl Component for PomodoroSection {
                 self.rule_sets = sets;
             }
         }
+
+        // Keep ring_visual in sync with model so draw callbacks see current state.
+        {
+            let mut rv = self.ring_visual.borrow_mut();
+            rv.focus_secs = self.focus_secs;
+            rv.break_secs = self.break_secs;
+            rv.phase = self.phase.clone();
+            rv.seconds_remaining = self.seconds_remaining;
+        }
+
         widgets.focus_ring.queue_draw();
         widgets.break_ring.queue_draw();
         self.update_view(widgets, sender);
     }
 }
 
-fn focus_fraction(state: &RingVisualState) -> f64 {
-    if state.phase.as_deref() == Some("Focus") {
-        if let Some(rem) = state.seconds_remaining {
-            return (rem as f64 / state.focus_secs.max(1) as f64).clamp(0.05, 1.0);
-        }
-    }
-    ((state.focus_secs as f64 / 60.0) / 90.0).clamp(0.15, 0.95)
-}
-
-fn break_fraction(state: &RingVisualState) -> f64 {
-    if state.phase.as_deref() == Some("Break") {
-        if let Some(rem) = state.seconds_remaining {
-            return (rem as f64 / state.break_secs.max(1) as f64).clamp(0.05, 1.0);
-        }
-    }
-    ((state.break_secs as f64 / 60.0) / 30.0).clamp(0.10, 0.95)
-}
-
-fn draw_ring(
-    cr: &gtk4::cairo::Context,
-    width: f64,
-    height: f64,
-    fraction: f64,
-    color: (f64, f64, f64),
-) {
-    let cx = width / 2.0;
-    let cy = height / 2.0;
-    let radius = (width.min(height) / 2.0) - 10.0;
-    let start = -FRAC_PI_2;
-    let sweep = 2.0 * PI * fraction.clamp(0.0, 1.0);
-    let end = start + sweep;
-
-    cr.set_line_width(12.0);
-    cr.set_source_rgb(0.22, 0.22, 0.24);
-    cr.arc(cx, cy, radius, 0.0, 2.0 * PI);
-    let _ = cr.stroke();
-
-    cr.set_source_rgb(color.0, color.1, color.2);
-    cr.arc(cx, cy, radius, start, end);
-    let _ = cr.stroke();
-
-    let hx = cx + radius * end.cos();
-    let hy = cy + radius * end.sin();
-    cr.set_source_rgb(color.0, color.1, color.2);
-    cr.arc(hx, hy, 5.5, 0.0, 2.0 * PI);
-    let _ = cr.fill();
-
-    cr.set_source_rgb(0.92, 0.92, 0.92);
-    cr.arc(hx, hy, 3.5, 0.0, 2.0 * PI);
-    let _ = cr.fill();
-}
-
-fn minutes_from_ring_pos(x: f64, y: f64, w: f64, h: f64, min_m: u64, max_m: u64) -> u64 {
-    let cx = w / 2.0;
-    let cy = h / 2.0;
-    let angle = (y - cy).atan2(x - cx);
-    let start = -FRAC_PI_2;
-    let t = ((angle - start) / (2.0 * PI)).rem_euclid(1.0);
-    let span = (max_m - min_m) as f64;
-    let mins = min_m as f64 + t * span;
-    mins.round().clamp(min_m as f64, max_m as f64) as u64
-}
-
 #[cfg(test)]
-#[path = "pomodoro_tests.rs"]
+#[path = "tests.rs"]
 mod tests;
