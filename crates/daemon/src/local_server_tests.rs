@@ -83,3 +83,17 @@ async fn oauth_callback_invalid_state_token_returns_error_html() {
     let resp = oauth_google_callback(State(state), Query(params)).await;
     assert!(resp.0.contains("Error: invalid or expired OAuth state"));
 }
+
+// ── serve ─────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn serve_binds_and_responds() {
+    let state = make_state();
+    let task = tokio::spawn(serve(state));
+    // Give the listener a moment to bind.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let resp = reqwest::get("http://127.0.0.1:10000/api/status").await;
+    task.abort();
+    let _ = task.await;
+    assert!(resp.is_ok());
+}

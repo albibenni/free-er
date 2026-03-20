@@ -10,14 +10,20 @@ mod rule_matcher;
 use anyhow::Result;
 use tracing::{info, warn};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+/// Initialise the global tracing subscriber.  Uses `try_init` so that test
+/// binaries (which may call this multiple times) never panic.
+fn setup_tracing() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive("free_er=debug".parse()?),
         )
-        .init();
+        .try_init()
+        .map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+async fn run_daemon() -> Result<()> {
+    let _ = setup_tracing();
 
     info!("free-er daemon starting");
 
@@ -124,3 +130,12 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    run_daemon().await
+}
+
+#[cfg(test)]
+#[path = "main_tests.rs"]
+mod tests;

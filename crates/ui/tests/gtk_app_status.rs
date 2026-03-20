@@ -1,6 +1,9 @@
 use gtk4::prelude::*;
 use relm4::{Component, ComponentController};
-use shared::ipc::{Command, ImportRuleSummary, RuleSetSummary, ScheduleSummary, StatusResponse};
+use shared::ipc::{
+    Command, ImportRuleSummary, RuleSetSummary, ScheduleSummary, ScheduleType, StatusResponse,
+};
+use uuid::Uuid;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
@@ -128,6 +131,29 @@ fn status_handlers_cover_all_paths() {
         // --- Phase 1: daemon active → Ok(...) branches ---
         sender.emit(AppMsg::StatusTick);
         sender.emit(AppMsg::RefreshRuleSets);
+        sender.emit(AppMsg::RefreshSchedules);
+        sender.emit(AppMsg::ResyncCalendar);
+        sender.emit(AppMsg::CreateSchedule {
+            name: "Morning".into(),
+            days: vec![0, 1, 2, 3, 4],
+            start_min: 9 * 60,
+            end_min: 11 * 60,
+            specific_date: None,
+            rule_set_id: None,
+            schedule_type: ScheduleType::Focus,
+        });
+        sender.emit(AppMsg::UpdateSchedule {
+            id: Uuid::new_v4(),
+            name: "Morning Updated".into(),
+            days: vec![0],
+            start_min: 10 * 60,
+            end_min: 12 * 60,
+            rule_set_id: None,
+            specific_date: None,
+            schedule_type: ScheduleType::Focus,
+        });
+        sender.emit(AppMsg::DeleteSchedule(Uuid::new_v4()));
+        sender.emit(AppMsg::SchedulesUpdated(vec![]));
 
         // After 250 ms, stop the daemon and enter phase 2.
         let sender2 = sender.clone();
@@ -139,6 +165,28 @@ fn status_handlers_cover_all_paths() {
             // --- Phase 2: no daemon → Err(...)/warn! branches ---
             sender2.emit(AppMsg::StatusTick);
             sender2.emit(AppMsg::RefreshRuleSets);
+            sender2.emit(AppMsg::RefreshSchedules);
+            sender2.emit(AppMsg::ResyncCalendar);
+            sender2.emit(AppMsg::CreateSchedule {
+                name: "Fail".into(),
+                days: vec![],
+                start_min: 0,
+                end_min: 60,
+                specific_date: None,
+                rule_set_id: None,
+                schedule_type: ScheduleType::Focus,
+            });
+            sender2.emit(AppMsg::UpdateSchedule {
+                id: Uuid::new_v4(),
+                name: "Fail".into(),
+                days: vec![],
+                start_min: 0,
+                end_min: 60,
+                rule_set_id: None,
+                specific_date: None,
+                schedule_type: ScheduleType::Focus,
+            });
+            sender2.emit(AppMsg::DeleteSchedule(Uuid::new_v4()));
         });
 
         // Quit after all async tasks have had time to complete.
