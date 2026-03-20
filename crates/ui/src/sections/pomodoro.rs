@@ -592,13 +592,7 @@ fn minutes_from_ring_pos(x: f64, y: f64, w: f64, h: f64, min_m: u64, max_m: u64)
     let cy = h / 2.0;
     let angle = (y - cy).atan2(x - cx);
     let start = -FRAC_PI_2;
-    let mut t = (angle - start) / (2.0 * PI);
-    while t < 0.0 {
-        t += 1.0;
-    }
-    while t >= 1.0 {
-        t -= 1.0;
-    }
+    let t = ((angle - start) / (2.0 * PI)).rem_euclid(1.0);
     let span = (max_m - min_m) as f64;
     let mins = min_m as f64 + t * span;
     mins.round().clamp(min_m as f64, max_m as f64) as u64
@@ -645,11 +639,35 @@ mod tests {
     }
 
     #[test]
+    fn focus_fraction_with_focus_phase_and_no_remaining_uses_fallback() {
+        let s = RingVisualState {
+            focus_secs: 30 * 60,
+            break_secs: 15 * 60,
+            phase: Some("Focus".into()),
+            seconds_remaining: None,
+        };
+        let f = focus_fraction(&s);
+        assert!((0.15..=0.95).contains(&f));
+    }
+
+    #[test]
     fn break_fraction_fallback_stays_in_bounds() {
         let s = RingVisualState {
             focus_secs: 45 * 60,
             break_secs: 15 * 60,
             phase: None,
+            seconds_remaining: None,
+        };
+        let f = break_fraction(&s);
+        assert!((0.10..=0.95).contains(&f));
+    }
+
+    #[test]
+    fn break_fraction_with_break_phase_and_no_remaining_uses_fallback() {
+        let s = RingVisualState {
+            focus_secs: 30 * 60,
+            break_secs: 15 * 60,
+            phase: Some("Break".into()),
             seconds_remaining: None,
         };
         let f = break_fraction(&s);

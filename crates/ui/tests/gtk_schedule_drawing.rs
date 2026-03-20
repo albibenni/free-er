@@ -105,6 +105,14 @@ fn draw_calendar_handles_all_drag_modes_and_mixed_schedules() {
     };
     draw_calendar(&da, &cr, 960, 980, &data);
 
+    // Tiny preview block: exercises branch where only start label is considered.
+    data.drag_mode = DragMode::Create {
+        col: 0,
+        start_min: 9 * 60,
+        end_min: 9 * 60 + 15,
+    };
+    draw_calendar(&da, &cr, 960, 980, &data);
+
     data.drag_mode = DragMode::Move {
         id: focus.id,
         col: 1,

@@ -214,13 +214,11 @@ fn draw_event_blocks(
     let layouts = compute_layout(&data.schedules, week_monday);
 
     for layout in &layouts {
-        if layout.hidden {
-            continue;
-        }
-        let sched = match data.schedules.iter().find(|s| s.id == layout.sched_id) {
-            Some(s) => s,
-            None => continue,
-        };
+        let sched = data
+            .schedules
+            .iter()
+            .find(|s| s.id == layout.sched_id)
+            .expect("layout must reference an existing schedule");
         if !sched.enabled {
             continue;
         }

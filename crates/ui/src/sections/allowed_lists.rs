@@ -328,11 +328,13 @@ impl AllowedListsSection {
             widgets.list_box.remove(&child);
         }
         let Some(id) = self.selected_id else { return };
-        let Some(rs) = self.rule_sets.iter().find(|s| s.id == id) else {
-            return;
-        };
-
-        for url in &rs.allowed_urls {
+        for url in self
+            .rule_sets
+            .iter()
+            .find(|s| s.id == id)
+            .into_iter()
+            .flat_map(|rs| rs.allowed_urls.iter())
+        {
             let row = gtk4::ListBoxRow::new();
             let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
 

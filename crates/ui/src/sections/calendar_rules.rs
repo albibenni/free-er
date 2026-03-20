@@ -298,23 +298,30 @@ fn append_keyword_row(list: &gtk4::ListBox, keyword: &str, on_remove: impl Fn(St
 fn remove_keyword_row(list: &gtk4::ListBox, keyword: &str) {
     let mut child = list.first_child();
     while let Some(widget) = child {
-        let row = widget.clone().downcast::<gtk4::ListBoxRow>().ok();
-        if let Some(row) = row {
-            // The child is a Box → Label
-            if let Some(hbox) = row.child().and_then(|w| w.downcast::<gtk4::Box>().ok()) {
-                let mut item = hbox.first_child();
-                while let Some(w) = item {
-                    if let Ok(lbl) = w.clone().downcast::<gtk4::Label>() {
-                        if lbl.text() == keyword {
-                            list.remove(&row);
-                            return;
+        let next = widget.next_sibling();
+        if let Ok(row) = widget.clone().downcast::<gtk4::ListBoxRow>() {
+            let has_keyword = row
+                .child()
+                .and_then(|w| w.downcast::<gtk4::Box>().ok())
+                .map(|hbox| {
+                    let mut item = hbox.first_child();
+                    while let Some(w) = item {
+                        if let Ok(lbl) = w.clone().downcast::<gtk4::Label>() {
+                            if lbl.text() == keyword {
+                                return true;
+                            }
                         }
+                        item = w.next_sibling();
                     }
-                    item = w.next_sibling();
-                }
+                    false
+                })
+                .unwrap_or(false);
+            if has_keyword {
+                list.remove(&row);
+                return;
             }
         }
-        child = widget.next_sibling();
+        child = next;
     }
 }
 
@@ -377,4 +384,5 @@ mod tests {
         assert_eq!(focus, vec!["sync".to_string()]);
         assert_eq!(brk, vec!["sync".to_string()]);
     }
+
 }

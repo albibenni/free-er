@@ -34,6 +34,30 @@ fn find_entry_by_placeholder(root: &gtk4::Widget, placeholder: &str) -> gtk4::En
     panic!("entry not found: {placeholder}");
 }
 
+fn click_first_keyword_remove_button(list_box: &gtk4::ListBox) {
+    let Some(row_widget) = list_box.first_child() else {
+        panic!("no keyword row found");
+    };
+    let Ok(row) = row_widget.downcast::<gtk4::ListBoxRow>() else {
+        panic!("first keyword row is not a ListBoxRow");
+    };
+    let Some(row_child) = row.child() else {
+        panic!("keyword row has no child");
+    };
+    let Ok(row_box) = row_child.downcast::<gtk4::Box>() else {
+        panic!("keyword row child is not a Box");
+    };
+    let mut child = row_box.first_child();
+    while let Some(widget) = child {
+        if let Ok(btn) = widget.clone().downcast::<gtk4::Button>() {
+            btn.emit_clicked();
+            return;
+        }
+        child = widget.next_sibling();
+    }
+    panic!("keyword remove button not found");
+}
+
 #[test]
 fn calendar_rules_component_adds_and_removes_rules() {
     if gtk4::init().is_err() {
@@ -53,13 +77,35 @@ fn calendar_rules_component_adds_and_removes_rules() {
     flush();
 
     let root: gtk4::Widget = controller.widget().clone().upcast();
+    find_entry_by_placeholder(&root, "e.g. Deep Work").set_text("   ");
+    controller.emit(CalendarRulesInput::AddFocusKeyword); // empty -> ignored
+    flush();
     find_entry_by_placeholder(&root, "e.g. Deep Work").set_text(" Deep Work ");
     controller.emit(CalendarRulesInput::AddFocusKeyword);
+    flush();
+    find_entry_by_placeholder(&root, "e.g. Deep Work").set_text("deep work");
+    controller.emit(CalendarRulesInput::AddFocusKeyword); // duplicate -> ignored
+    flush();
+
+    find_entry_by_placeholder(&root, "e.g. Lunch").set_text("  ");
+    controller.emit(CalendarRulesInput::AddBreakKeyword); // empty -> ignored
+    flush();
     find_entry_by_placeholder(&root, "e.g. Lunch").set_text("Lunch");
     controller.emit(CalendarRulesInput::AddBreakKeyword);
+    flush();
+    find_entry_by_placeholder(&root, "e.g. Lunch").set_text("lunch");
+    controller.emit(CalendarRulesInput::AddBreakKeyword); // duplicate -> ignored
+    flush();
 
-    controller.emit(CalendarRulesInput::RemoveFocusKeyword("deep work".into()));
-    controller.emit(CalendarRulesInput::RemoveBreakKeyword("lunch".into()));
+    click_first_keyword_remove_button(&controller.widgets().focus_list);
+    click_first_keyword_remove_button(&controller.widgets().break_list);
+    flush();
+
+    // Re-add to ensure RulesUpdated has rows to clear.
+    find_entry_by_placeholder(&root, "e.g. Deep Work").set_text("meeting");
+    controller.emit(CalendarRulesInput::AddFocusKeyword);
+    find_entry_by_placeholder(&root, "e.g. Lunch").set_text("pause");
+    controller.emit(CalendarRulesInput::AddBreakKeyword);
 
     controller.emit(CalendarRulesInput::RulesUpdated(vec![
         ImportRuleSummary {
@@ -71,6 +117,16 @@ fn calendar_rules_component_adds_and_removes_rules() {
             schedule_type: ScheduleType::Break,
         },
     ]));
+    flush();
+
+    // Remove missing rows while lists are populated to drive full row-traversal.
+    controller.emit(CalendarRulesInput::RemoveFocusKeyword("does-not-exist".into()));
+    controller.emit(CalendarRulesInput::RemoveBreakKeyword("does-not-exist".into()));
+    flush();
+
+    // Remove from rows created by RulesUpdated (closure paths).
+    click_first_keyword_remove_button(&controller.widgets().focus_list);
+    click_first_keyword_remove_button(&controller.widgets().break_list);
     flush();
 
     let out = outputs.borrow();

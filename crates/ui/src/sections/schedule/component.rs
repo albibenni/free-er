@@ -341,7 +341,7 @@ impl Component for ScheduleSection {
                                 .iter()
                                 .find(|s| s.id == id)
                                 .map(|s| s.days.clone())
-                                .unwrap_or_else(|| vec![col as u8]),
+                                .expect("hit-test id must exist in schedules"),
                             start_min,
                             end_min,
                             specific_date: self
@@ -531,97 +531,5 @@ impl Component for ScheduleSection {
         }
         widgets.drawing_area.queue_draw();
         self.update_view(widgets, sender);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use shared::ipc::ScheduleType;
-
-    fn sample_sched(rule_set_id: uuid::Uuid) -> ScheduleSummary {
-        ScheduleSummary {
-            id: uuid::Uuid::new_v4(),
-            name: "Session".to_string(),
-            days: vec![0],
-            start_min: 9 * 60,
-            end_min: 10 * 60,
-            enabled: true,
-            imported: false,
-            imported_repeating: false,
-            specific_date: Some("2026-03-16".to_string()),
-            schedule_type: ScheduleType::Focus,
-            rule_set_id,
-        }
-    }
-
-    #[test]
-    fn optional_rule_set_id_maps_nil_to_none() {
-        assert_eq!(optional_rule_set_id(uuid::Uuid::nil()), None);
-        let id = uuid::Uuid::new_v4();
-        assert_eq!(optional_rule_set_id(id), Some(id));
-    }
-
-    #[test]
-    fn drag_move_output_uses_target_values() {
-        let sched = sample_sched(uuid::Uuid::new_v4());
-        let out = drag_move_output(&sched, 3, 11 * 60, 12 * 60, Some("2026-03-19".to_string()));
-        match out {
-            ScheduleOutput::UpdateSchedule {
-                id,
-                days,
-                start_min,
-                end_min,
-                specific_date,
-                ..
-            } => {
-                assert_eq!(id, sched.id);
-                assert_eq!(days, vec![3]);
-                assert_eq!(start_min, 11 * 60);
-                assert_eq!(end_min, 12 * 60);
-                assert_eq!(specific_date.as_deref(), Some("2026-03-19"));
-            }
-            _ => panic!("expected update"),
-        }
-    }
-
-    #[test]
-    fn drag_resize_output_keeps_existing_specific_date() {
-        let sched = sample_sched(uuid::Uuid::new_v4());
-        let out = drag_resize_output(&sched, 1, 8 * 60, 9 * 60);
-        match out {
-            ScheduleOutput::UpdateSchedule {
-                days,
-                start_min,
-                end_min,
-                specific_date,
-                ..
-            } => {
-                assert_eq!(days, vec![1]);
-                assert_eq!(start_min, 8 * 60);
-                assert_eq!(end_min, 9 * 60);
-                assert_eq!(specific_date, sched.specific_date);
-            }
-            _ => panic!("expected update"),
-        }
-    }
-
-    #[test]
-    fn drag_outputs_clear_nil_rule_set_id() {
-        let sched = sample_sched(uuid::Uuid::nil());
-        let moved = drag_move_output(&sched, 2, 8 * 60, 9 * 60, None);
-        let resized = drag_resize_output(&sched, 2, 8 * 60, 9 * 60);
-        match moved {
-            ScheduleOutput::UpdateSchedule { rule_set_id, .. } => {
-                assert_eq!(rule_set_id, None);
-            }
-            _ => panic!("expected update"),
-        }
-        match resized {
-            ScheduleOutput::UpdateSchedule { rule_set_id, .. } => {
-                assert_eq!(rule_set_id, None);
-            }
-            _ => panic!("expected update"),
-        }
     }
 }

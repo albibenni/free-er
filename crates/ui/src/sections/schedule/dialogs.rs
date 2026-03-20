@@ -6,6 +6,159 @@ use super::{ScheduleInput, ScheduleSection};
 
 // ── Public dialog entry points ────────────────────────────────────────────────
 
+fn initial_days_or_col(days: Vec<u8>, col: usize) -> Vec<u8> {
+    if days.is_empty() {
+        vec![col as u8]
+    } else {
+        days
+    }
+}
+
+fn specific_date_for_view(imported_repeating: bool, date: chrono::NaiveDate) -> Option<String> {
+    (!imported_repeating).then(|| date.format("%Y-%m-%d").to_string())
+}
+
+fn maybe_focus_session_name(current: &str) -> Option<&'static str> {
+    (current == "Break Session" || current.is_empty()).then_some("Focus Session")
+}
+
+fn maybe_break_session_name(current: &str) -> Option<&'static str> {
+    (current == "Focus Session" || current.is_empty()).then_some("Break Session")
+}
+
+fn build_create_commit(
+    name: String,
+    start_text: &str,
+    end_text: &str,
+    focus_active: bool,
+    repeat_active: bool,
+    selected_days: Vec<u8>,
+    col: usize,
+    date_str: &str,
+    rule_set_id: Option<uuid::Uuid>,
+) -> Option<ScheduleInput> {
+    if name.is_empty() {
+        return None;
+    }
+    let s_min = parse_hhmm(start_text)?;
+    let e_min = parse_hhmm(end_text)?;
+    if e_min <= s_min {
+        return None;
+    }
+    let schedule_type = if focus_active {
+        ScheduleType::Focus
+    } else {
+        ScheduleType::Break
+    };
+    let days = if repeat_active {
+        selected_days
+    } else {
+        vec![col as u8]
+    };
+    let specific_date = if repeat_active {
+        None
+    } else {
+        Some(date_str.to_string())
+    };
+    Some(ScheduleInput::CommitCreate {
+        name,
+        days,
+        start_min: s_min,
+        end_min: e_min,
+        specific_date,
+        schedule_type,
+        rule_set_id,
+    })
+}
+
+fn build_edit_commit(
+    id: uuid::Uuid,
+    name: String,
+    start_text: &str,
+    end_text: &str,
+    focus_active: bool,
+    repeat_active: bool,
+    selected_days: Vec<u8>,
+    col: usize,
+    specific_date: Option<String>,
+    rule_set_id: Option<uuid::Uuid>,
+) -> Option<ScheduleInput> {
+    if name.is_empty() {
+        return None;
+    }
+    let s_min = parse_hhmm(start_text)?;
+    let e_min = parse_hhmm(end_text)?;
+    if e_min <= s_min {
+        return None;
+    }
+    let schedule_type = if focus_active {
+        ScheduleType::Focus
+    } else {
+        ScheduleType::Break
+    };
+    let days = if repeat_active {
+        let selected = selected_days;
+        if selected.is_empty() {
+            vec![col as u8]
+        } else {
+            selected
+        }
+    } else {
+        vec![col as u8]
+    };
+    let specific_date = if repeat_active { None } else { specific_date };
+    Some(ScheduleInput::CommitEdit {
+        id,
+        name,
+        days,
+        start_min: s_min,
+        end_min: e_min,
+        specific_date,
+        schedule_type,
+        rule_set_id,
+    })
+}
+
+fn build_view_commit(
+    id: uuid::Uuid,
+    name: &str,
+    col: usize,
+    start_min: u32,
+    end_min: u32,
+    focus_active: bool,
+    rule_set_id: Option<uuid::Uuid>,
+    specific_date: Option<String>,
+) -> ScheduleInput {
+    ScheduleInput::CommitEdit {
+        id,
+        name: name.to_string(),
+        days: vec![col as u8],
+        start_min,
+        end_min,
+        specific_date,
+        schedule_type: if focus_active {
+            ScheduleType::Focus
+        } else {
+            ScheduleType::Break
+        },
+        rule_set_id,
+    }
+}
+
+fn sync_list_row_visibility(
+    list_row: &gtk4::Box,
+    break_btn: &gtk4::ToggleButton,
+    focus_active: bool,
+) {
+    list_row.set_visible(focus_active);
+    let _ = break_btn.is_active();
+}
+
+fn set_day_row_state(day_row: &gtk4::Box, active: bool) {
+    day_row.set_sensitive(active);
+    day_row.set_opacity(if active { 1.0 } else { 0.45 });
+}
+
 pub(super) fn show_create_dialog(
     col: usize,
     start_min: u32,
@@ -47,9 +200,8 @@ pub(super) fn show_create_dialog(
         let ne = name_entry.clone();
         focus_btn.connect_toggled(move |btn| {
             if btn.is_active() {
-                let t = ne.text();
-                if t == "Break Session" || t.is_empty() {
-                    ne.set_text("Focus Session");
+                if let Some(next) = maybe_focus_session_name(&ne.text()) {
+                    ne.set_text(next);
                 }
             }
         });
@@ -58,9 +210,8 @@ pub(super) fn show_create_dialog(
         let ne = name_entry.clone();
         break_btn.connect_toggled(move |btn| {
             if btn.is_active() {
-                let t = ne.text();
-                if t == "Focus Session" || t.is_empty() {
-                    ne.set_text("Break Session");
+                if let Some(next) = maybe_break_session_name(&ne.text()) {
+                    ne.set_text(next);
                 }
             }
         });
@@ -74,45 +225,20 @@ pub(super) fn show_create_dialog(
 
     let d = dialog.clone();
     save_btn.connect_clicked(move |_| {
-        let name = name_entry.text().to_string();
-        if name.is_empty() {
-            return;
+        if let Some(input) = build_create_commit(
+            name_entry.text().to_string(),
+            &start_entry.text(),
+            &end_entry.text(),
+            focus_btn.is_active(),
+            repeat_btn.is_active(),
+            selected_weekdays(&weekday_buttons),
+            col,
+            &date_str,
+            resolve_rule_set(&list_combo, &rule_sets),
+        ) {
+            sender.input(input);
+            d.close();
         }
-        let Some(s_min) = parse_hhmm(&start_entry.text()) else {
-            return;
-        };
-        let Some(e_min) = parse_hhmm(&end_entry.text()) else {
-            return;
-        };
-        if e_min <= s_min {
-            return;
-        }
-        let stype = if focus_btn.is_active() {
-            ScheduleType::Focus
-        } else {
-            ScheduleType::Break
-        };
-        let rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
-        let days = if repeat_btn.is_active() {
-            selected_weekdays(&weekday_buttons)
-        } else {
-            vec![col as u8]
-        };
-        let specific_date = if repeat_btn.is_active() {
-            None
-        } else {
-            Some(date_str.clone())
-        };
-        sender.input(ScheduleInput::CommitCreate {
-            name,
-            days,
-            start_min: s_min,
-            end_min: e_min,
-            specific_date,
-            schedule_type: stype,
-            rule_set_id,
-        });
-        d.close();
     });
 
     dialog.present();
@@ -144,11 +270,7 @@ pub(super) fn show_edit_dialog(
 
     let (focus_btn, _break_btn, list_combo) =
         build_type_and_list_rows(&vbox, &schedule_type, rule_set_id, &rule_sets);
-    let initial_days = if days.is_empty() {
-        vec![col as u8]
-    } else {
-        days
-    };
+    let initial_days = initial_days_or_col(days, col);
     let (repeat_btn, _once_btn, weekday_buttons) =
         append_recurrence_row(&vbox, &initial_days, specific_date.clone());
 
@@ -184,51 +306,21 @@ pub(super) fn show_edit_dialog(
 
     let d = dialog.clone();
     save_btn.connect_clicked(move |_| {
-        let name = name_entry.text().to_string();
-        if name.is_empty() {
-            return;
-        }
-        let Some(s_min) = parse_hhmm(&start_entry.text()) else {
-            return;
-        };
-        let Some(e_min) = parse_hhmm(&end_entry.text()) else {
-            return;
-        };
-        if e_min <= s_min {
-            return;
-        }
-        let stype = if focus_btn.is_active() {
-            ScheduleType::Focus
-        } else {
-            ScheduleType::Break
-        };
-        let rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
-        let days = if repeat_btn.is_active() {
-            let selected = selected_weekdays(&weekday_buttons);
-            if selected.is_empty() {
-                vec![col as u8]
-            } else {
-                selected
-            }
-        } else {
-            vec![col as u8]
-        };
-        let specific_date = if repeat_btn.is_active() {
-            None
-        } else {
-            specific_date.clone()
-        };
-        sender.input(ScheduleInput::CommitEdit {
+        if let Some(input) = build_edit_commit(
             id,
-            name,
-            days,
-            start_min: s_min,
-            end_min: e_min,
-            specific_date,
-            schedule_type: stype,
-            rule_set_id,
-        });
-        d.close();
+            name_entry.text().to_string(),
+            &start_entry.text(),
+            &end_entry.text(),
+            focus_btn.is_active(),
+            repeat_btn.is_active(),
+            selected_weekdays(&weekday_buttons),
+            col,
+            specific_date.clone(),
+            resolve_rule_set(&list_combo, &rule_sets),
+        ) {
+            sender.input(input);
+            d.close();
+        }
     });
 
     dialog.present();
@@ -282,19 +374,11 @@ pub(super) fn show_view_dialog(
 
     let (focus_btn, _break_btn, list_combo) =
         build_type_and_list_rows(&vbox, &schedule_type, rule_set_id, &rule_sets);
-    let recurrence_days = if days.is_empty() {
-        vec![col as u8]
-    } else {
-        days
-    };
+    let recurrence_days = initial_days_or_col(days, col);
     let (repeat_btn, once_btn, weekday_buttons) = append_recurrence_row(
         &vbox,
         &recurrence_days,
-        if imported_repeating {
-            None
-        } else {
-            Some(date.format("%Y-%m-%d").to_string())
-        },
+        specific_date_for_view(imported_repeating, date),
     );
     set_recurrence_read_only(&repeat_btn, &once_btn, &weekday_buttons);
 
@@ -308,22 +392,16 @@ pub(super) fn show_view_dialog(
     let name_owned = name.to_string();
     let specific_date = Some(date.format("%Y-%m-%d").to_string());
     save_btn.connect_clicked(move |_| {
-        let stype = if focus_btn.is_active() {
-            ScheduleType::Focus
-        } else {
-            ScheduleType::Break
-        };
-        let new_rule_set_id = resolve_rule_set(&list_combo, &rule_sets);
-        sender.input(ScheduleInput::CommitEdit {
+        sender.input(build_view_commit(
             id,
-            name: name_owned.clone(),
-            days: vec![col as u8],
+            &name_owned,
+            col,
             start_min,
             end_min,
-            specific_date: specific_date.clone(),
-            schedule_type: stype,
-            rule_set_id: new_rule_set_id,
-        });
+            focus_btn.is_active(),
+            resolve_rule_set(&list_combo, &rule_sets),
+            specific_date.clone(),
+        ));
         d.close();
     });
 
@@ -425,8 +503,7 @@ pub(super) fn build_type_and_list_rows(
         let list_row = list_row.clone();
         let bb = break_btn.clone();
         focus_btn.connect_toggled(move |fb| {
-            list_row.set_visible(fb.is_active());
-            let _ = bb.is_active();
+            sync_list_row_visibility(&list_row, &bb, fb.is_active());
         });
     }
 
@@ -471,21 +548,14 @@ fn append_recurrence_row(
         day_row.append(&btn);
         day_buttons.push(btn);
     }
-    if initial_days.is_empty() {
-        if let Some(first) = day_buttons.first() {
-            first.set_active(true);
-        }
-    }
-    day_row.set_sensitive(is_repeating);
-    day_row.set_opacity(if is_repeating { 1.0 } else { 0.45 });
+    set_day_row_state(&day_row, is_repeating);
     vbox.append(&day_row);
 
     {
         let day_row = day_row.clone();
         repeat_btn.connect_toggled(move |btn| {
             let active = btn.is_active();
-            day_row.set_sensitive(active);
-            day_row.set_opacity(if active { 1.0 } else { 0.45 });
+            set_day_row_state(&day_row, active);
         });
     }
 
@@ -580,4 +650,292 @@ mod tests {
         assert_eq!(resolve_rule_set_index(None, &[]), None);
         assert_eq!(resolve_rule_set_index(Some(1), &[]), None);
     }
+
+    #[test]
+    fn session_name_autofill_helpers_only_replace_expected_values() {
+        assert_eq!(maybe_focus_session_name("Break Session"), Some("Focus Session"));
+        assert_eq!(maybe_focus_session_name(""), Some("Focus Session"));
+        assert_eq!(maybe_focus_session_name("Custom"), None);
+
+        assert_eq!(maybe_break_session_name("Focus Session"), Some("Break Session"));
+        assert_eq!(maybe_break_session_name(""), Some("Break Session"));
+        assert_eq!(maybe_break_session_name("Custom"), None);
+    }
+
+    #[test]
+    fn initial_days_and_view_specific_date_helpers() {
+        assert_eq!(initial_days_or_col(vec![], 3), vec![3]);
+        assert_eq!(initial_days_or_col(vec![1, 2], 3), vec![1, 2]);
+
+        let d = chrono::NaiveDate::from_ymd_opt(2026, 3, 19).unwrap();
+        assert_eq!(specific_date_for_view(false, d), Some("2026-03-19".into()));
+        assert_eq!(specific_date_for_view(true, d), None);
+    }
+
+    #[test]
+    fn build_create_commit_validates_and_builds_payloads() {
+        assert!(build_create_commit(
+            "".into(),
+            "09:00",
+            "10:00",
+            true,
+            false,
+            vec![1],
+            2,
+            "2026-03-19",
+            None
+        )
+        .is_none());
+        assert!(build_create_commit(
+            "Focus Session".into(),
+            "bad",
+            "10:00",
+            true,
+            false,
+            vec![1],
+            2,
+            "2026-03-19",
+            None
+        )
+        .is_none());
+        assert!(build_create_commit(
+            "Focus Session".into(),
+            "09:00",
+            "bad",
+            true,
+            false,
+            vec![1],
+            2,
+            "2026-03-19",
+            None
+        )
+        .is_none());
+        assert!(build_create_commit(
+            "Focus Session".into(),
+            "10:00",
+            "09:00",
+            true,
+            false,
+            vec![1],
+            2,
+            "2026-03-19",
+            None
+        )
+        .is_none());
+
+        let once = build_create_commit(
+            "Focus Session".into(),
+            "09:00",
+            "10:00",
+            true,
+            false,
+            vec![1],
+            2,
+            "2026-03-19",
+            Some(uuid::Uuid::nil()),
+        )
+        .unwrap();
+        assert!(matches!(
+            once,
+            ScheduleInput::CommitCreate {
+                days,
+                specific_date: Some(_),
+                schedule_type: ScheduleType::Focus,
+                ..
+            } if days == vec![2]
+        ));
+
+        let weekly = build_create_commit(
+            "Break Session".into(),
+            "09:00",
+            "10:00",
+            false,
+            true,
+            vec![1, 3],
+            2,
+            "2026-03-19",
+            None,
+        )
+        .unwrap();
+        assert!(matches!(
+            weekly,
+            ScheduleInput::CommitCreate {
+                days,
+                specific_date: None,
+                schedule_type: ScheduleType::Break,
+                ..
+            } if days == vec![1, 3]
+        ));
+    }
+
+    #[test]
+    fn build_edit_commit_validates_and_builds_payloads() {
+        let id = uuid::Uuid::new_v4();
+        assert!(build_edit_commit(
+            id,
+            "".into(),
+            "09:00",
+            "10:00",
+            true,
+            false,
+            vec![1],
+            2,
+            Some("2026-03-19".into()),
+            None
+        )
+        .is_none());
+        assert!(build_edit_commit(
+            id,
+            "x".into(),
+            "bad",
+            "10:00",
+            true,
+            false,
+            vec![1],
+            2,
+            Some("2026-03-19".into()),
+            None
+        )
+        .is_none());
+        assert!(build_edit_commit(
+            id,
+            "x".into(),
+            "09:00",
+            "bad",
+            true,
+            false,
+            vec![1],
+            2,
+            Some("2026-03-19".into()),
+            None
+        )
+        .is_none());
+        assert!(build_edit_commit(
+            id,
+            "x".into(),
+            "10:00",
+            "09:00",
+            true,
+            false,
+            vec![1],
+            2,
+            Some("2026-03-19".into()),
+            None
+        )
+        .is_none());
+
+        let weekly_empty = build_edit_commit(
+            id,
+            "x".into(),
+            "09:00",
+            "10:00",
+            true,
+            true,
+            vec![],
+            4,
+            Some("2026-03-19".into()),
+            None,
+        )
+        .unwrap();
+        assert!(matches!(
+            weekly_empty,
+            ScheduleInput::CommitEdit {
+                days,
+                specific_date: None,
+                schedule_type: ScheduleType::Focus,
+                ..
+            } if days == vec![4]
+        ));
+
+        let weekly_selected = build_edit_commit(
+            id,
+            "x".into(),
+            "09:00",
+            "10:00",
+            true,
+            true,
+            vec![1, 3],
+            4,
+            Some("2026-03-19".into()),
+            None,
+        )
+        .unwrap();
+        assert!(matches!(
+            weekly_selected,
+            ScheduleInput::CommitEdit {
+                days,
+                specific_date: None,
+                schedule_type: ScheduleType::Focus,
+                ..
+            } if days == vec![1, 3]
+        ));
+
+        let once_break = build_edit_commit(
+            id,
+            "x".into(),
+            "09:00",
+            "10:00",
+            false,
+            false,
+            vec![1, 2],
+            4,
+            Some("2026-03-19".into()),
+            None,
+        )
+        .unwrap();
+        assert!(matches!(
+            once_break,
+            ScheduleInput::CommitEdit {
+                days,
+                specific_date: Some(_),
+                schedule_type: ScheduleType::Break,
+                ..
+            } if days == vec![4]
+        ));
+    }
+
+    #[test]
+    fn build_view_commit_uses_focus_toggle_and_specific_date() {
+        let id = uuid::Uuid::new_v4();
+        let out_break = build_view_commit(
+            id,
+            "Imported Event",
+            3,
+            540,
+            600,
+            false,
+            None,
+            Some("2026-03-19".into()),
+        );
+        assert!(matches!(
+            out_break,
+            ScheduleInput::CommitEdit {
+                id: got_id,
+                name,
+                days,
+                schedule_type: ScheduleType::Break,
+                specific_date: Some(_),
+                ..
+            } if got_id == id && name == "Imported Event" && days == vec![3]
+        ));
+
+        let out_focus = build_view_commit(
+            id,
+            "Imported Event",
+            3,
+            540,
+            600,
+            true,
+            None,
+            Some("2026-03-19".into()),
+        );
+        assert!(matches!(
+            out_focus,
+            ScheduleInput::CommitEdit {
+                schedule_type: ScheduleType::Focus,
+                ..
+            }
+        ));
+    }
+
 }

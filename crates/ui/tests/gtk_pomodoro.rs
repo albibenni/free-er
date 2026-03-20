@@ -90,12 +90,18 @@ fn pomodoro_component_emits_start_and_stop() {
     });
     controller.emit(PomodoroInput::Start);
     controller.emit(PomodoroInput::Stop);
+    controller.emit(PomodoroInput::RuleSetsUpdated(vec![]));
+    controller.emit(PomodoroInput::Start);
     flush();
 
     let out = outputs.borrow();
     assert!(out.iter().any(|o| matches!(
         o,
         PomodoroOutput::Start { rule_set_id, .. } if *rule_set_id == Some(rs1.id)
+    )));
+    assert!(out.iter().any(|o| matches!(
+        o,
+        PomodoroOutput::Start { rule_set_id, .. } if rule_set_id.is_none()
     )));
     assert!(out.iter().any(|o| matches!(o, PomodoroOutput::Stop)));
 }

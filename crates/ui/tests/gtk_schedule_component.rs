@@ -68,6 +68,19 @@ fn find_button_by_label(root: &gtk4::Widget, label: &str) -> gtk4::Button {
     panic!("button not found: {label}");
 }
 
+fn find_toggle_by_label(root: &gtk4::Widget, label: &str) -> gtk4::ToggleButton {
+    let mut all = Vec::new();
+    walk_widgets(root, &mut all);
+    for w in all {
+        if let Ok(btn) = w.downcast::<gtk4::ToggleButton>() {
+            if btn.label().as_deref() == Some(label) {
+                return btn;
+            }
+        }
+    }
+    panic!("toggle button not found: {label}");
+}
+
 fn find_window_by_title(title: &str) -> gtk4::Window {
     for w in gtk4::Window::list_toplevels() {
         if let Ok(win) = w.downcast::<gtk4::Window>() {
@@ -152,6 +165,10 @@ fn schedule_component_emits_schedule_outputs() {
     controller.emit(ScheduleInput::PrevWeek);
     controller.emit(ScheduleInput::NextWeek);
     controller.emit(ScheduleInput::Today);
+    controller.emit(ScheduleInput::DragBegin(10.0, 10.0));
+    controller.emit(ScheduleInput::DragUpdate(10.0, 10.0, 20.0, 20.0));
+    controller.emit(ScheduleInput::DragEnd(10.0, 10.0, 20.0, 20.0));
+    controller.emit(ScheduleInput::ClickAt(1.0, 1.0, 100.0, 100.0));
 
     controller.emit(ScheduleInput::CommitCreate {
         name: "A".into(),
@@ -185,6 +202,19 @@ fn schedule_component_emits_schedule_outputs() {
         col: 4,
         start_min: 900,
         end_min: 960,
+    });
+    controller.emit(ScheduleInput::CommitDragMove {
+        id: uuid::Uuid::new_v4(),
+        col: 0,
+        start_min: 600,
+        end_min: 660,
+        specific_date: None,
+    });
+    controller.emit(ScheduleInput::CommitDragResize {
+        id: uuid::Uuid::new_v4(),
+        col: 0,
+        start_min: 600,
+        end_min: 660,
     });
     controller.emit(ScheduleInput::ResyncCalendar);
     flush();
@@ -224,16 +254,31 @@ fn schedule_component_emits_schedule_outputs() {
 
     let create_win = find_window_by_title("New Event");
     let create_root: gtk4::Widget = create_win.clone().upcast();
+    find_toggle_by_label(&create_root, "Break").set_active(true);
+    find_toggle_by_label(&create_root, "Focus").set_active(true);
+    find_toggle_by_label(&create_root, "Weekly").set_active(true);
+    find_toggle_by_label(&create_root, "This date").set_active(true);
     find_button_by_label(&create_root, "Save").emit_clicked();
     flush();
 
-    // Click existing block to open edit dialog, then delete.
+    // Click existing block to open edit dialog, then save.
     let bx = 52.0 + col_w / 2.0;
     let by = 40.0 + (9.5 - 6.0) * hour_h;
     gesture.emit_by_name::<()>("drag-begin", &[&bx, &by]);
     gesture.emit_by_name::<()>("drag-end", &[&0.0_f64, &0.0_f64]);
     flush();
 
+    let edit_win = find_window_by_title("Edit Event");
+    let edit_root: gtk4::Widget = edit_win.clone().upcast();
+    find_toggle_by_label(&edit_root, "Weekly").set_active(true);
+    find_toggle_by_label(&edit_root, "This date").set_active(true);
+    find_button_by_label(&edit_root, "Save").emit_clicked();
+    flush();
+
+    // Re-open edit dialog and delete.
+    gesture.emit_by_name::<()>("drag-begin", &[&bx, &by]);
+    gesture.emit_by_name::<()>("drag-end", &[&0.0_f64, &0.0_f64]);
+    flush();
     let edit_win = find_window_by_title("Edit Event");
     let edit_root: gtk4::Widget = edit_win.clone().upcast();
     find_button_by_label(&edit_root, "Delete").emit_clicked();

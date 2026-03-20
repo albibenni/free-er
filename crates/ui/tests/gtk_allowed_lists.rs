@@ -35,6 +35,30 @@ fn find_entry_by_placeholder(root: &gtk4::Widget, placeholder: &str) -> gtk4::En
     panic!("entry not found: {placeholder}");
 }
 
+fn click_first_url_delete_button(list_box: &gtk4::ListBox) {
+    let Some(row_widget) = list_box.first_child() else {
+        panic!("no url row found");
+    };
+    let Ok(row) = row_widget.downcast::<gtk4::ListBoxRow>() else {
+        panic!("first url row is not a ListBoxRow");
+    };
+    let Some(row_child) = row.child() else {
+        panic!("url row has no child");
+    };
+    let Ok(row_box) = row_child.downcast::<gtk4::Box>() else {
+        panic!("url row child is not a Box");
+    };
+    let mut child = row_box.first_child();
+    while let Some(widget) = child {
+        if let Ok(btn) = widget.clone().downcast::<gtk4::Button>() {
+            btn.emit_clicked();
+            return;
+        }
+        child = widget.next_sibling();
+    }
+    panic!("url delete button not found");
+}
+
 #[test]
 fn allowed_lists_component_emits_outputs_for_actions() {
     if gtk4::init().is_err() {
@@ -88,6 +112,17 @@ fn allowed_lists_component_emits_outputs_for_actions() {
     find_entry_by_placeholder(&root, "github.com/user/repo, *.domain.com, or full URL")
         .set_text("https://example.com/path");
     controller.emit(AllowedListsInput::AddUrl);
+    controller.emit(AllowedListsInput::RuleSetsUpdated(vec![
+        rs1.clone(),
+        RuleSetSummary {
+            id: rs2.id,
+            name: rs2.name.clone(),
+            allowed_urls: vec!["example.com/path".into()],
+        },
+    ]));
+    flush();
+    click_first_url_delete_button(&controller.widgets().list_box);
+    flush();
 
     controller.emit(AllowedListsInput::ShowNewListEntry);
     flush();
@@ -111,6 +146,11 @@ fn allowed_lists_component_emits_outputs_for_actions() {
         o,
         AllowedListsOutput::RemoveUrl { rule_set_id, url }
         if *rule_set_id == rs1.id && url == "github.com"
+    )));
+    assert!(out.iter().any(|o| matches!(
+        o,
+        AllowedListsOutput::RemoveUrl { rule_set_id, url }
+        if *rule_set_id == rs2.id && url == "example.com/path"
     )));
     assert!(out.iter().any(|o| matches!(
         o,
