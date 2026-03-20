@@ -49,3 +49,7 @@ pub(super) fn stop_pomodoro() {
         }
     });
 }
+
+#[cfg(test)]
+#[path = "focus_handlers_tests.rs"]
+mod tests;

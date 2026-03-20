@@ -15,3 +15,8 @@ fn runtime_builder_creates_runtime() {
     let got = rt.block_on(handle).unwrap();
     assert_eq!(got, 4);
 }
+
+#[test]
+fn tracing_init_runs() {
+    init_tracing();
+}

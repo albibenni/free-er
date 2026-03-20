@@ -1,4 +1,3 @@
-
 use super::*;
 use shared::models::CalendarImportRule;
 

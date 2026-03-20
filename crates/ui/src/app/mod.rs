@@ -8,3 +8,6 @@ mod types;
 mod url_handlers;
 
 pub use types::{App, AppMsg};
+
+#[cfg(test)]
+pub(crate) mod test_support;

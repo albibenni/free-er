@@ -50,3 +50,7 @@ pub(super) fn save_caldav(url: String, user: String, pass: String) {
         }
     });
 }
+
+#[cfg(test)]
+#[path = "settings_handlers_tests.rs"]
+mod tests;
