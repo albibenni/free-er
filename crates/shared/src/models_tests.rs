@@ -95,7 +95,7 @@ fn schedule_is_active_false_at_exact_end_time() {
 #[test]
 fn is_active_now_with_specific_date_matching_today() {
     let today = chrono::Local::now().date_naive();
-    let now_time = chrono::Local::now().naive_local().time();
+    let _now_time = chrono::Local::now().naive_local().time();
 
     let schedule = Schedule {
         id: Uuid::new_v4(),

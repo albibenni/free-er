@@ -1,7 +1,5 @@
-use super::*;
 use crate::app::test_support::{lock_ipc, MockDaemon};
 use shared::ipc::{Command, ScheduleSummary, ScheduleType};
-use std::time::Duration;
 use uuid::Uuid;
 
 // schedules_updated is the only function in this module that doesn't require

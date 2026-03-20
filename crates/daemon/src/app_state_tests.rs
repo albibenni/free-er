@@ -199,7 +199,7 @@ fn stop_pomodoro_clears_pomodoro_but_not_focus() {
 
 #[test]
 fn tick_advances_expired_pomodoro() {
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
     let state = AppState::new(Config::default());
     state.start_pomodoro(1, 300, None); // 1-second focus phase
 
@@ -409,10 +409,10 @@ fn snapshot_google_connected_false_when_access_token_missing() {
 
 #[test]
 fn apply_schedule_starts_focus_when_active_focus_schedule() {
-    use chrono::{Local, NaiveTime, Weekday};
+    use chrono::{Local, NaiveTime};
     let now = Local::now();
     let today = now.date_naive().weekday();
-    let time = now.naive_local().time();
+    let _time = now.naive_local().time();
 
     // Create a focus schedule that's active right now
     let start = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
