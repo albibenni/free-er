@@ -72,34 +72,34 @@ fn restored_rule_set_id(prev_id: Option<Uuid>, sets: &[RuleSetSummary]) -> Optio
         .or_else(|| sets.first().map(|s| s.id))
 }
 
+/// Attaches a drag gesture to `ring`.
+///
+/// `dims` is a shared cell written by the draw callback so that the gesture
+/// uses the exact same `(w, h)` as the draw function — guaranteeing that the
+/// centre point used for angle calculation matches the visual centre of the arc.
 fn attach_ring_drag<F>(
     ring: &gtk4::DrawingArea,
     sender: ComponentSender<PomodoroSection>,
+    dims: Rc<RefCell<(f64, f64)>>,
     make_msg: F,
 ) where
     F: Fn(f64, f64, f64, f64) -> PomodoroInput + Clone + 'static,
 {
-    let start = Rc::new(RefCell::new((0.0_f64, 0.0_f64)));
     let drag = gtk4::GestureDrag::new();
 
     let s = sender.clone();
-    let da = ring.clone();
-    let start_begin = start.clone();
+    let d = dims.clone();
     let make_begin = make_msg.clone();
     drag.connect_drag_begin(move |_, x, y| {
-        *start_begin.borrow_mut() = (x, y);
-        s.input(make_begin(x, y, da.width() as f64, da.allocated_height() as f64));
+        let (w, h) = *d.borrow();
+        s.input(make_begin(x, y, w, h));
     });
 
-    let da = ring.clone();
-    drag.connect_drag_update(move |_, off_x, off_y| {
-        let (sx, sy) = *start.borrow();
-        sender.input(make_msg(
-            sx + off_x,
-            sy + off_y,
-            da.width() as f64,
-            da.allocated_height() as f64,
-        ));
+    drag.connect_drag_update(move |gesture, off_x, off_y| {
+        let (w, h) = *dims.borrow();
+        if let Some((sx, sy)) = gesture.start_point() {
+            sender.input(make_msg(sx + off_x, sy + off_y, w, h));
+        }
     });
 
     ring.add_controller(drag);
@@ -345,6 +345,8 @@ impl Component for PomodoroSection {
                             set_label: "Start Focus Session",
                             add_css_class: "suggested-action",
                             set_hexpand: true,
+                            #[watch]
+                            set_sensitive: model.phase.is_none(),
                             connect_clicked => PomodoroInput::Start,
                         },
                         gtk4::Button {
@@ -377,23 +379,31 @@ impl Component for PomodoroSection {
         };
         let widgets = view_output!();
 
-        attach_ring_drag(&widgets.focus_ring, _sender.clone(), |x, y, w, h| {
+        // Shared draw dimensions — written by the draw callback, read by the
+        // gesture handler, so both always use the same (w, h) and thus the
+        // same arc centre.
+        let focus_dims: Rc<RefCell<(f64, f64)>> = Rc::new(RefCell::new((180.0, 180.0)));
+        let break_dims: Rc<RefCell<(f64, f64)>> = Rc::new(RefCell::new((180.0, 180.0)));
+
+        let ring = model.ring_visual.clone();
+        let fd = focus_dims.clone();
+        widgets.focus_ring.set_draw_func(move |_, cr, w, h| {
+            *fd.borrow_mut() = (w as f64, h as f64);
+            draw_ring(cr, w as f64, h as f64, focus_fraction(&ring.borrow()), (0.12, 0.55, 0.95));
+        });
+
+        let ring = model.ring_visual.clone();
+        let bd = break_dims.clone();
+        widgets.break_ring.set_draw_func(move |_, cr, w, h| {
+            *bd.borrow_mut() = (w as f64, h as f64);
+            draw_ring(cr, w as f64, h as f64, break_fraction(&ring.borrow()), (0.98, 0.60, 0.18));
+        });
+
+        attach_ring_drag(&widgets.focus_ring, _sender.clone(), focus_dims, |x, y, w, h| {
             PomodoroInput::DragFocusAt { x, y, w, h }
         });
-        attach_ring_drag(&widgets.break_ring, _sender, |x, y, w, h| {
+        attach_ring_drag(&widgets.break_ring, _sender, break_dims, |x, y, w, h| {
             PomodoroInput::DragBreakAt { x, y, w, h }
-        });
-
-        let ring = model.ring_visual.clone();
-        widgets.focus_ring.set_draw_func(move |_, cr, w, h| {
-            let s = ring.borrow();
-            draw_ring(cr, w as f64, h as f64, focus_fraction(&s), (0.12, 0.55, 0.95));
-        });
-
-        let ring = model.ring_visual.clone();
-        widgets.break_ring.set_draw_func(move |_, cr, w, h| {
-            let s = ring.borrow();
-            draw_ring(cr, w as f64, h as f64, break_fraction(&s), (0.98, 0.60, 0.18));
         });
 
         ComponentParts { model, widgets }
@@ -424,10 +434,12 @@ impl Component for PomodoroSection {
                 self.break_secs = adjust_duration_secs(self.break_secs, delta_min, 1, 90);
             }
             PomodoroInput::DragFocusAt { x, y, w, h } => {
-                self.focus_secs = minutes_from_ring_pos(x, y, w, h, 5, 180) * 60;
+                // Use the same display normalisation as focus_fraction (0–90 min).
+                self.focus_secs = minutes_from_ring_pos(x, y, w, h, 0, 90).max(5) * 60;
             }
             PomodoroInput::DragBreakAt { x, y, w, h } => {
-                self.break_secs = minutes_from_ring_pos(x, y, w, h, 1, 90) * 60;
+                // Use the same display normalisation as break_fraction (0–30 min).
+                self.break_secs = minutes_from_ring_pos(x, y, w, h, 0, 30).max(1) * 60;
             }
             PomodoroInput::Start => {
                 let _ = sender.output(PomodoroOutput::Start {

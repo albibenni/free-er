@@ -38,7 +38,7 @@ pub fn draw_ring(
     let radius = (width.min(height) / 2.0) - 10.0;
     let start = -FRAC_PI_2;
     let sweep = 2.0 * PI * fraction.clamp(0.0, 1.0);
-    let end = start + sweep;
+    let end = start - sweep; // counter-clockwise: subtract sweep
 
     cr.set_line_width(12.0);
     cr.set_source_rgb(0.22, 0.22, 0.24);
@@ -46,7 +46,7 @@ pub fn draw_ring(
     let _ = cr.stroke();
 
     cr.set_source_rgb(color.0, color.1, color.2);
-    cr.arc(cx, cy, radius, start, end);
+    cr.arc_negative(cx, cy, radius, start, end); // counter-clockwise arc
     let _ = cr.stroke();
 
     let hx = cx + radius * end.cos();
@@ -62,7 +62,8 @@ pub fn draw_ring(
 
 pub fn minutes_from_ring_pos(x: f64, y: f64, w: f64, h: f64, min_m: u64, max_m: u64) -> u64 {
     let angle = (y - h / 2.0).atan2(x - w / 2.0);
-    let t = ((angle - (-FRAC_PI_2)) / (2.0 * PI)).rem_euclid(1.0);
+    // Counter-clockwise from top: negate angle before subtracting start
+    let t = ((-angle - FRAC_PI_2) / (2.0 * PI)).rem_euclid(1.0);
     let mins = min_m as f64 + t * (max_m - min_m) as f64;
     mins.round().clamp(min_m as f64, max_m as f64) as u64
 }
