@@ -43,7 +43,7 @@ pub enum PomodoroInput {
     },
     Start,
     Stop,
-    RuleSetChanged,
+    RuleSetRowSelected(i32),
     StatusUpdated {
         phase: Option<String>,
         seconds_remaining: Option<u64>,
@@ -140,8 +140,8 @@ impl Component for PomodoroSection {
                         // Left rail: presets + quick break
                         gtk4::Box {
                             set_orientation: gtk4::Orientation::Vertical,
-                            set_spacing: 8,
-                            set_width_request: 130,
+                            set_spacing: 6,
+                            set_width_request: 110,
 
                             gtk4::Label {
                                 set_label: "PRESETS",
@@ -149,27 +149,27 @@ impl Component for PomodoroSection {
                                 set_halign: gtk4::Align::Start,
                             },
                             gtk4::Button {
-                                set_label: "25 / 5",
+                                set_label: "25/5",
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 25 * 60, break_secs: 5 * 60 },
                             },
                             gtk4::Button {
-                                set_label: "45 / 15",
+                                set_label: "45/15",
                                 add_css_class: "suggested-action",
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 45 * 60, break_secs: 15 * 60 },
                             },
                             gtk4::Button {
-                                set_label: "50 / 10",
+                                set_label: "50/10",
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 50 * 60, break_secs: 10 * 60 },
                             },
                             gtk4::Button {
-                                set_label: "90 / 20",
+                                set_label: "90/20",
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 90 * 60, break_secs: 20 * 60 },
                             },
 
                             gtk4::Separator {
                                 set_orientation: gtk4::Orientation::Horizontal,
-                                set_margin_top: 6,
-                                set_margin_bottom: 4,
+                                set_margin_top: 4,
+                                set_margin_bottom: 2,
                             },
 
                             gtk4::Label {
@@ -198,116 +198,112 @@ impl Component for PomodoroSection {
                             set_halign: gtk4::Align::Center,
                             set_hexpand: true,
 
-                            gtk4::Frame {
-                                set_width_request: 220,
-                                gtk4::Box {
-                                    set_orientation: gtk4::Orientation::Vertical,
-                                    set_spacing: 8,
-                                    set_margin_all: 12,
+                            // FOCUS ring (no inner frame)
+                            gtk4::Box {
+                                set_orientation: gtk4::Orientation::Vertical,
+                                set_spacing: 8,
+                                set_halign: gtk4::Align::Center,
 
-                                    gtk4::Label {
-                                        set_label: "FOCUS",
-                                        add_css_class: "dim-label",
-                                        set_halign: gtk4::Align::Center,
+                                gtk4::Label {
+                                    set_label: "FOCUS",
+                                    add_css_class: "dim-label",
+                                    set_halign: gtk4::Align::Center,
+                                },
+                                gtk4::Overlay {
+                                    set_halign: gtk4::Align::Center,
+                                    set_valign: gtk4::Align::Center,
+
+                                    #[name = "focus_ring"]
+                                    gtk4::DrawingArea {
+                                        set_content_width: 200,
+                                        set_content_height: 200,
                                     },
-                                    gtk4::Overlay {
+
+                                    add_overlay = &gtk4::Box {
+                                        set_orientation: gtk4::Orientation::Vertical,
                                         set_halign: gtk4::Align::Center,
                                         set_valign: gtk4::Align::Center,
+                                        set_spacing: 4,
 
-                                        #[name = "focus_ring"]
-                                        gtk4::DrawingArea {
-                                            set_content_width: 180,
-                                            set_content_height: 180,
-                                        },
-
-                                        add_overlay = &gtk4::Box {
-                                            set_orientation: gtk4::Orientation::Vertical,
+                                        gtk4::Label {
+                                            set_use_markup: true,
+                                            set_markup: "<span size='20480'>🍃</span>",
                                             set_halign: gtk4::Align::Center,
-                                            set_valign: gtk4::Align::Center,
-                                            set_spacing: 4,
-
-                                            gtk4::Image {
-                                                set_icon_name: Some("weather-clear-symbolic"),
-                                                set_pixel_size: 28,
-                                                set_halign: gtk4::Align::Center,
-                                            },
-                                            gtk4::Label {
-                                                #[watch]
-                                                set_label: &format!("{}m", model.focus_secs / 60),
-                                                add_css_class: "title-1",
-                                                set_halign: gtk4::Align::Center,
-                                            },
+                                        },
+                                        gtk4::Label {
+                                            #[watch]
+                                            set_label: &format!("{}m", model.focus_secs / 60),
+                                            add_css_class: "title-1",
+                                            set_halign: gtk4::Align::Center,
                                         },
                                     },
-                                    gtk4::Box {
-                                        set_orientation: gtk4::Orientation::Horizontal,
-                                        set_halign: gtk4::Align::Center,
-                                        set_spacing: 6,
-                                        gtk4::Button {
-                                            set_label: "−",
-                                            connect_clicked => PomodoroInput::AdjustFocus(-5),
-                                        },
-                                        gtk4::Button {
-                                            set_label: "+",
-                                            connect_clicked => PomodoroInput::AdjustFocus(5),
-                                        },
+                                },
+                                gtk4::Box {
+                                    set_orientation: gtk4::Orientation::Horizontal,
+                                    set_halign: gtk4::Align::Center,
+                                    set_spacing: 6,
+                                    gtk4::Button {
+                                        set_label: "−",
+                                        connect_clicked => PomodoroInput::AdjustFocus(-5),
+                                    },
+                                    gtk4::Button {
+                                        set_label: "+",
+                                        connect_clicked => PomodoroInput::AdjustFocus(5),
                                     },
                                 },
                             },
 
-                            gtk4::Frame {
-                                set_width_request: 220,
-                                gtk4::Box {
-                                    set_orientation: gtk4::Orientation::Vertical,
-                                    set_spacing: 8,
-                                    set_margin_all: 12,
+                            // BREAK ring (no inner frame)
+                            gtk4::Box {
+                                set_orientation: gtk4::Orientation::Vertical,
+                                set_spacing: 8,
+                                set_halign: gtk4::Align::Center,
 
-                                    gtk4::Label {
-                                        set_label: "BREAK",
-                                        add_css_class: "dim-label",
-                                        set_halign: gtk4::Align::Center,
+                                gtk4::Label {
+                                    set_label: "BREAK",
+                                    add_css_class: "dim-label",
+                                    set_halign: gtk4::Align::Center,
+                                },
+                                gtk4::Overlay {
+                                    set_halign: gtk4::Align::Center,
+                                    set_valign: gtk4::Align::Center,
+
+                                    #[name = "break_ring"]
+                                    gtk4::DrawingArea {
+                                        set_content_width: 200,
+                                        set_content_height: 200,
                                     },
-                                    gtk4::Overlay {
+
+                                    add_overlay = &gtk4::Box {
+                                        set_orientation: gtk4::Orientation::Vertical,
                                         set_halign: gtk4::Align::Center,
                                         set_valign: gtk4::Align::Center,
+                                        set_spacing: 4,
 
-                                        #[name = "break_ring"]
-                                        gtk4::DrawingArea {
-                                            set_content_width: 180,
-                                            set_content_height: 180,
-                                        },
-
-                                        add_overlay = &gtk4::Box {
-                                            set_orientation: gtk4::Orientation::Vertical,
+                                        gtk4::Label {
+                                            set_use_markup: true,
+                                            set_markup: "<span size='20480'>☕</span>",
                                             set_halign: gtk4::Align::Center,
-                                            set_valign: gtk4::Align::Center,
-                                            set_spacing: 4,
-
-                                            gtk4::Image {
-                                                set_icon_name: Some("emblem-favorite-symbolic"),
-                                                set_pixel_size: 28,
-                                                set_halign: gtk4::Align::Center,
-                                            },
-                                            gtk4::Label {
-                                                #[watch]
-                                                set_label: &format!("{}m", model.break_secs / 60),
-                                                add_css_class: "title-1",
-                                                set_halign: gtk4::Align::Center,
-                                            },
+                                        },
+                                        gtk4::Label {
+                                            #[watch]
+                                            set_label: &format!("{}m", model.break_secs / 60),
+                                            add_css_class: "title-1",
+                                            set_halign: gtk4::Align::Center,
                                         },
                                     },
-                                    gtk4::Box {
-                                        set_orientation: gtk4::Orientation::Horizontal,
-                                        set_halign: gtk4::Align::Center,
-                                        set_spacing: 6,
-                                        gtk4::Button {
-                                            set_label: "−",
-                                            connect_clicked => PomodoroInput::AdjustBreak(-5),
-                                        },
-                                        gtk4::Button {
-                                            set_label: "+",
-                                            connect_clicked => PomodoroInput::AdjustBreak(5),
-                                        },
+                                },
+                                gtk4::Box {
+                                    set_orientation: gtk4::Orientation::Horizontal,
+                                    set_halign: gtk4::Align::Center,
+                                    set_spacing: 6,
+                                    gtk4::Button {
+                                        set_label: "−",
+                                        connect_clicked => PomodoroInput::AdjustBreak(-5),
+                                    },
+                                    gtk4::Button {
+                                        set_label: "+",
+                                        connect_clicked => PomodoroInput::AdjustBreak(5),
                                     },
                                 },
                             },
@@ -332,10 +328,11 @@ impl Component for PomodoroSection {
                         set_halign: gtk4::Align::Start,
                     },
 
-                    #[name = "rule_set_combo"]
-                    gtk4::ComboBoxText {
+                    #[name = "rule_set_list"]
+                    gtk4::ListBox {
+                        set_selection_mode: gtk4::SelectionMode::Single,
                         set_hexpand: true,
-                        connect_changed => PomodoroInput::RuleSetChanged,
+                        add_css_class: "boxed-list",
                     },
 
                     gtk4::Box {
@@ -379,11 +376,20 @@ impl Component for PomodoroSection {
         };
         let widgets = view_output!();
 
+        {
+            let s = _sender.clone();
+            widgets.rule_set_list.connect_row_selected(move |_, row| {
+                s.input(PomodoroInput::RuleSetRowSelected(
+                    row.map(|r| r.index()).unwrap_or(-1),
+                ));
+            });
+        }
+
         // Shared draw dimensions — written by the draw callback, read by the
         // gesture handler, so both always use the same (w, h) and thus the
         // same arc centre.
-        let focus_dims: Rc<RefCell<(f64, f64)>> = Rc::new(RefCell::new((180.0, 180.0)));
-        let break_dims: Rc<RefCell<(f64, f64)>> = Rc::new(RefCell::new((180.0, 180.0)));
+        let focus_dims: Rc<RefCell<(f64, f64)>> = Rc::new(RefCell::new((200.0, 200.0)));
+        let break_dims: Rc<RefCell<(f64, f64)>> = Rc::new(RefCell::new((200.0, 200.0)));
 
         let ring = model.ring_visual.clone();
         let fd = focus_dims.clone();
@@ -451,11 +457,12 @@ impl Component for PomodoroSection {
             PomodoroInput::Stop => {
                 let _ = sender.output(PomodoroOutput::Stop);
             }
-            PomodoroInput::RuleSetChanged => {
-                self.selected_rule_set_id = widgets
-                    .rule_set_combo
-                    .active_id()
-                    .and_then(|id| id.parse::<Uuid>().ok());
+            PomodoroInput::RuleSetRowSelected(idx) => {
+                self.selected_rule_set_id = if idx >= 0 {
+                    self.rule_sets.get(idx as usize).map(|rs| rs.id)
+                } else {
+                    None
+                };
             }
             PomodoroInput::StatusUpdated {
                 phase,
@@ -465,22 +472,34 @@ impl Component for PomodoroSection {
                 self.seconds_remaining = seconds_remaining;
             }
             PomodoroInput::RuleSetsUpdated(sets) => {
-                widgets.rule_set_combo.remove_all();
+                while let Some(child) = widgets.rule_set_list.first_child() {
+                    widgets.rule_set_list.remove(&child);
+                }
                 for (i, rs) in sets.iter().enumerate() {
-                    let label = if i == 0 {
+                    let label_text = if i == 0 {
                         format!("{} (default)", rs.name)
                     } else {
                         rs.name.clone()
                     };
-                    widgets
-                        .rule_set_combo
-                        .append(Some(&rs.id.to_string()), &label);
+                    let label = gtk4::Label::new(Some(&label_text));
+                    label.set_halign(gtk4::Align::Start);
+                    label.set_margin_start(8);
+                    label.set_margin_end(8);
+                    label.set_margin_top(6);
+                    label.set_margin_bottom(6);
+                    let row = gtk4::ListBoxRow::new();
+                    row.set_child(Some(&label));
+                    widgets.rule_set_list.append(&row);
                 }
                 let restore_id = restored_rule_set_id(self.selected_rule_set_id, &sets);
                 if let Some(id) = restore_id {
-                    widgets.rule_set_combo.set_active_id(Some(&id.to_string()));
+                    let idx = sets.iter().position(|rs| rs.id == id).unwrap_or(0);
+                    if let Some(row) = widgets.rule_set_list.row_at_index(idx as i32) {
+                        widgets.rule_set_list.select_row(Some(&row));
+                    }
                     self.selected_rule_set_id = Some(id);
                 } else {
+                    widgets.rule_set_list.unselect_all();
                     self.selected_rule_set_id = None;
                 }
                 self.rule_sets = sets;

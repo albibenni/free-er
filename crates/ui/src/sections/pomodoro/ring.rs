@@ -35,28 +35,27 @@ pub fn draw_ring(
 ) {
     let cx = width / 2.0;
     let cy = height / 2.0;
-    let radius = (width.min(height) / 2.0) - 10.0;
+    let radius = (width.min(height) / 2.0) - 14.0;
     let start = -FRAC_PI_2;
     let sweep = 2.0 * PI * fraction.clamp(0.0, 1.0);
     let end = start - sweep; // counter-clockwise: subtract sweep
 
-    cr.set_line_width(12.0);
-    cr.set_source_rgb(0.22, 0.22, 0.24);
+    // Background track
+    cr.set_line_width(18.0);
+    cr.set_source_rgb(0.12, 0.12, 0.14);
     cr.arc(cx, cy, radius, 0.0, 2.0 * PI);
     let _ = cr.stroke();
 
+    // Colored arc
     cr.set_source_rgb(color.0, color.1, color.2);
     cr.arc_negative(cx, cy, radius, start, end); // counter-clockwise arc
     let _ = cr.stroke();
 
+    // Endpoint dot
     let hx = cx + radius * end.cos();
     let hy = cy + radius * end.sin();
     cr.set_source_rgb(color.0, color.1, color.2);
-    cr.arc(hx, hy, 5.5, 0.0, 2.0 * PI);
-    let _ = cr.fill();
-
-    cr.set_source_rgb(0.92, 0.92, 0.92);
-    cr.arc(hx, hy, 3.5, 0.0, 2.0 * PI);
+    cr.arc(hx, hy, 6.0, 0.0, 2.0 * PI);
     let _ = cr.fill();
 }
 
