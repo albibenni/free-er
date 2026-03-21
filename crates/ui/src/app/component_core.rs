@@ -23,7 +23,22 @@ impl Component for App {
             },
 
             gtk4::Box {
+                set_orientation: gtk4::Orientation::Vertical,
+
+                // ── Daemon warning banner ─────────────────────────────────
+                #[name = "daemon_banner"]
+                gtk4::Box {
+                    set_visible: false,
+                    add_css_class: "error",
+                    gtk4::Label {
+                        set_label: "Daemon is unreachable — the app will close shortly.",
+                        set_margin_all: 8,
+                    },
+                },
+
+                gtk4::Box {
                 set_orientation: gtk4::Orientation::Horizontal,
+                set_vexpand: true,
 
                 // ── Sidebar ──────────────────────────────────────────────
                 #[name = "sidebar"]
@@ -129,6 +144,7 @@ impl Component for App {
                     set_hexpand: true,
                     set_vexpand: true,
                 },
+                }, // end horizontal Box
             },
         }
     }
@@ -394,9 +410,11 @@ impl Component for App {
             }
             AppMsg::DaemonAlive => {
                 self.daemon_failures = 0;
+                widgets.daemon_banner.set_visible(false);
             }
             AppMsg::DaemonGone => {
                 self.daemon_failures += 1;
+                widgets.daemon_banner.set_visible(true);
                 if self.daemon_failures >= 3 {
                     relm4::main_application().quit();
                 }
