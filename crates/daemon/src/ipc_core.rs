@@ -393,6 +393,13 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             state.remove_import_rule(&keyword, &schedule_type);
             ok(true)
         }
+        Command::Shutdown => {
+            tokio::spawn(async {
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                std::process::exit(0);
+            });
+            ok(false)
+        }
         Command::ListImportRules => {
             let rules: Vec<shared::ipc::ImportRuleSummary> = state
                 .list_import_rules()

@@ -17,6 +17,10 @@ impl Component for App {
         gtk4::ApplicationWindow {
             set_title: Some("free-er"),
             set_default_size: (800, 550),
+            connect_close_request[sender] => move |_| {
+                sender.input(AppMsg::ShutdownDaemon);
+                gtk4::glib::Propagation::Stop // we handle exit ourselves after IPC
+            },
 
             gtk4::Box {
                 set_orientation: gtk4::Orientation::Horizontal,
@@ -141,6 +145,7 @@ impl Component for App {
             current_page: Page::Focus,
             sidebar_open: true,
             default_rule_set_id: None,
+            daemon_failures: 0,
             focus,
             pomodoro,
             allowed_lists,
@@ -374,6 +379,27 @@ impl Component for App {
             // calling apply_accent_css directly from the tokio worker.
             AppMsg::ApplyAccentCss(hex) => {
                 settings_handlers::apply_accent_css(&hex);
+            }
+
+            AppMsg::ShutdownDaemon => {
+                // Send shutdown to daemon (with timeout), then exit the UI process.
+                relm4::spawn(async {
+                    let _ = tokio::time::timeout(
+                        tokio::time::Duration::from_millis(500),
+                        crate::ipc_client::send(&shared::ipc::Command::Shutdown),
+                    )
+                    .await;
+                    std::process::exit(0);
+                });
+            }
+            AppMsg::DaemonAlive => {
+                self.daemon_failures = 0;
+            }
+            AppMsg::DaemonGone => {
+                self.daemon_failures += 1;
+                if self.daemon_failures >= 3 {
+                    relm4::main_application().quit();
+                }
             }
         }
     }

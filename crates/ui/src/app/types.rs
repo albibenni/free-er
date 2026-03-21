@@ -22,6 +22,8 @@ pub struct App {
     pub(super) sidebar_open: bool,
     /// ID of the selected default rule set.
     pub(super) default_rule_set_id: Option<Uuid>,
+    /// Consecutive status-poll failures — when it reaches the threshold the UI exits.
+    pub(super) daemon_failures: u32,
     pub(super) focus: Controller<FocusSection>,
     pub(super) pomodoro: Controller<PomodoroSection>,
     pub(super) allowed_lists: Controller<AllowedListsSection>,
@@ -110,4 +112,10 @@ pub enum AppMsg {
     AccentColorChanged(String),
     /// Apply accent CSS on the main thread (from status tick — no IPC call).
     ApplyAccentCss(String),
+    /// Send Shutdown to the daemon then quit the UI.
+    ShutdownDaemon,
+    /// Daemon is unreachable — quit the UI.
+    DaemonGone,
+    /// Daemon responded — reset the failure counter.
+    DaemonAlive,
 }

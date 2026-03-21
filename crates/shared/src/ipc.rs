@@ -99,6 +99,8 @@ pub enum Command {
     SetAccentColor {
         hex: String,
     },
+    /// Shut the daemon down cleanly.
+    Shutdown,
 }
 
 /// Returned by ListSchedules.

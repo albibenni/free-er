@@ -23,6 +23,7 @@ pub(super) fn status_tick(
     tokio::spawn(async move {
         match ipc_client::get_status().await {
             Ok(status) => {
+                sender.input(AppMsg::DaemonAlive);
                 focus_sender.emit(FocusInput::StatusUpdated {
                     active: status.focus_active,
                     rule_set: status.active_rule_set_name,
@@ -42,7 +43,10 @@ pub(super) fn status_tick(
                     sender.input(AppMsg::SetDefaultRuleSet(default_id));
                 }
             }
-            Err(e) => warn!("status poll failed: {e}"),
+            Err(e) => {
+                warn!("status poll failed: {e}");
+                sender.input(AppMsg::DaemonGone);
+            }
         }
 
         push_rule_sets(
