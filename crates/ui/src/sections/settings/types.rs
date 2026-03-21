@@ -11,6 +11,8 @@ pub enum SettingsInput {
     ConnectGoogle,
     DisconnectGoogle,
     GoogleStatusUpdated(bool),
+    SetAccentColor(String),
+    AccentColorUpdated(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,4 +32,5 @@ pub enum SettingsOutput {
     },
     ConnectGoogleRequested,
     DisconnectGoogleRequested,
+    AccentColorChanged(String),
 }

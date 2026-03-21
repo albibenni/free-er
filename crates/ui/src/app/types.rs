@@ -107,4 +107,5 @@ pub enum AppMsg {
     StatusTick,
     RefreshRuleSets,
     SetDefaultRuleSet(Uuid),
+    AccentColorChanged(String),
 }

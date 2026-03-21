@@ -101,6 +101,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 seconds_remaining: snap.seconds_remaining,
                 google_calendar_connected: snap.google_calendar_connected,
                 default_rule_set_id: snap.default_rule_set_id,
+                accent_color: snap.accent_color,
             };
             (
                 serde_json::to_string(&resp).unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}")),
@@ -287,6 +288,10 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
         }
         Command::SetAllowNewTab { enabled } => {
             state.set_allow_new_tab(enabled);
+            ok(true)
+        }
+        Command::SetAccentColor { hex } => {
+            state.set_accent_color(hex);
             ok(true)
         }
         Command::SetCalDav {

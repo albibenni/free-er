@@ -99,6 +99,10 @@ pub(super) fn reduce_settings_input(
             state.google_connected = connected;
             None
         }
+        SettingsInput::SetAccentColor(hex) => {
+            Some(SettingsEffect::Output(SettingsOutput::AccentColorChanged(hex)))
+        }
+        SettingsInput::AccentColorUpdated(_) => None,
     }
 }
 

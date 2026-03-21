@@ -130,6 +130,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_accent_color() -> String {
+    "#3584e4".to_string()
+}
+
 /// Top-level persisted config written to ~/.config/free-er/config.json
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -149,6 +153,9 @@ pub struct Config {
     /// If false, new tab pages (chrome://newtab, about:newtab) are blocked during focus.
     #[serde(default = "default_true")]
     pub allow_new_tab: bool,
+    /// Accent color as a CSS hex string (e.g. "#3584e4").
+    #[serde(default = "default_accent_color")]
+    pub accent_color: String,
 }
 
 #[cfg(test)]

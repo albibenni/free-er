@@ -98,6 +98,7 @@ fn status_handlers_cover_all_paths() {
                 google_calendar_connected: false,
                 allow_new_tab: true,
                 default_rule_set_id: None,
+                accent_color: "#3584e4".to_string(),
             })
             .unwrap(),
             Command::ListRuleSets => {

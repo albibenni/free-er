@@ -30,6 +30,7 @@ fn parses_successful_responses() {
             google_calendar_connected: true,
             allow_new_tab: true,
             default_rule_set_id: Some(rule_set_id),
+            accent_color: "#3584e4".to_string(),
         })
         .unwrap(),
         Command::ListRuleSets => serde_json::to_string(&vec![RuleSetSummary {

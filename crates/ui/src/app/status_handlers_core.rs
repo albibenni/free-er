@@ -1,3 +1,4 @@
+use crate::app::settings_handlers::apply_accent_css;
 use crate::ipc_client;
 use crate::sections::{
     allowed_lists::AllowedListsInput, calendar_rules::CalendarRulesInput, focus::FocusInput,
@@ -35,6 +36,9 @@ pub(super) fn status_tick(
                     status.google_calendar_connected,
                 ));
                 settings_sender.emit(SettingsInput::AllowNewTabUpdated(status.allow_new_tab));
+                settings_sender.emit(SettingsInput::AccentColorUpdated(status.accent_color.clone()));
+                pom_sender.emit(PomodoroInput::AccentColorUpdated(status.accent_color.clone()));
+                apply_accent_css(&status.accent_color);
                 if let Some(default_id) = status.default_rule_set_id {
                     sender.input(AppMsg::SetDefaultRuleSet(default_id));
                 }

@@ -360,6 +360,16 @@ impl Component for App {
                     crate::sections::schedule::ScheduleInput::DefaultRuleSetUpdated(Some(id)),
                 );
             }
+            AppMsg::AccentColorChanged(hex) => {
+                settings_handlers::set_accent_color(hex.clone());
+                settings_handlers::apply_accent_css(&hex);
+                self.pomodoro
+                    .sender()
+                    .emit(crate::sections::pomodoro::PomodoroInput::AccentColorUpdated(hex.clone()));
+                self.settings
+                    .sender()
+                    .emit(crate::sections::settings::SettingsInput::AccentColorUpdated(hex));
+            }
         }
     }
 }

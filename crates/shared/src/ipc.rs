@@ -96,6 +96,9 @@ pub enum Command {
     },
     /// List all global calendar import rules.
     ListImportRules,
+    SetAccentColor {
+        hex: String,
+    },
 }
 
 /// Returned by ListSchedules.
@@ -153,4 +156,5 @@ pub struct StatusResponse {
     pub google_calendar_connected: bool,
     pub allow_new_tab: bool,
     pub default_rule_set_id: Option<Uuid>,
+    pub accent_color: String,
 }

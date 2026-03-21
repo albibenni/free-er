@@ -316,6 +316,10 @@ impl AppState {
         self.0.lock().unwrap().config.allow_new_tab = enabled;
     }
 
+    pub fn set_accent_color(&self, hex: String) {
+        self.0.lock().unwrap().config.accent_color = hex;
+    }
+
     // ── Google Calendar OAuth2 ────────────────────────────────────────────────
 
     pub fn set_pending_oauth_state(
@@ -420,6 +424,7 @@ impl AppState {
             seconds_remaining,
             google_calendar_connected,
             default_rule_set_id: inner.config.default_rule_set_id,
+            accent_color: inner.config.accent_color.clone(),
         }
     }
 }
@@ -434,6 +439,7 @@ pub struct StateSnapshot {
     pub seconds_remaining: Option<u64>,
     pub google_calendar_connected: bool,
     pub default_rule_set_id: Option<Uuid>,
+    pub accent_color: String,
 }
 
 #[cfg(test)]

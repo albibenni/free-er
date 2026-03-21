@@ -16,6 +16,7 @@ pub struct PomodoroSection {
     focus_secs: u64,
     break_secs: u64,
     ring_visual: Rc<RefCell<RingVisualState>>,
+    accent_color: Rc<RefCell<(f64, f64, f64)>>,
 }
 
 #[derive(Debug)]
@@ -49,6 +50,7 @@ pub enum PomodoroInput {
         seconds_remaining: Option<u64>,
     },
     RuleSetsUpdated(Vec<RuleSetSummary>),
+    AccentColorUpdated(String),
 }
 
 #[derive(Debug)]
@@ -59,6 +61,17 @@ pub enum PomodoroOutput {
         rule_set_id: Option<Uuid>,
     },
     Stop,
+}
+
+fn hex_to_rgb(hex: &str) -> Option<(f64, f64, f64)> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some((r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0))
 }
 
 fn adjust_duration_secs(current_secs: u64, delta_min: i64, min_m: u64, max_m: u64) -> u64 {
@@ -373,6 +386,7 @@ impl Component for PomodoroSection {
                 phase: None,
                 seconds_remaining: None,
             })),
+            accent_color: Rc::new(RefCell::new((0.204, 0.518, 0.894))), // #3584e4
         };
         let widgets = view_output!();
 
@@ -392,10 +406,11 @@ impl Component for PomodoroSection {
         let break_dims: Rc<RefCell<(f64, f64)>> = Rc::new(RefCell::new((200.0, 200.0)));
 
         let ring = model.ring_visual.clone();
+        let accent = model.accent_color.clone();
         let fd = focus_dims.clone();
         widgets.focus_ring.set_draw_func(move |_, cr, w, h| {
             *fd.borrow_mut() = (w as f64, h as f64);
-            draw_ring(cr, w as f64, h as f64, focus_fraction(&ring.borrow()), (0.12, 0.55, 0.95));
+            draw_ring(cr, w as f64, h as f64, focus_fraction(&ring.borrow()), *accent.borrow());
         });
 
         let ring = model.ring_visual.clone();
@@ -470,6 +485,11 @@ impl Component for PomodoroSection {
             } => {
                 self.phase = phase;
                 self.seconds_remaining = seconds_remaining;
+            }
+            PomodoroInput::AccentColorUpdated(hex) => {
+                if let Some(rgb) = hex_to_rgb(&hex) {
+                    *self.accent_color.borrow_mut() = rgb;
+                }
             }
             PomodoroInput::RuleSetsUpdated(sets) => {
                 while let Some(child) = widgets.rule_set_list.first_child() {

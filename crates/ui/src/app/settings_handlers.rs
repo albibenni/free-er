@@ -62,6 +62,36 @@ pub(super) fn save_caldav(url: String, user: String, pass: String) {
     });
 }
 
+pub(super) fn set_accent_color(hex: String) {
+    tokio::spawn(async move {
+        if let Err(e) = ipc_client::send(&Command::SetAccentColor { hex }).await {
+            error!("SetAccentColor IPC failed: {e}");
+        }
+    });
+}
+
+pub(super) fn apply_accent_css(hex: &str) {
+    let css = format!(
+        "button.suggested-action {{ background-color: {hex}; color: white; }}\
+         button.suggested-action:hover {{ background-color: {hex}; opacity: 0.85; }}\
+         switch:checked {{ background-color: {hex}; }}"
+    );
+    thread_local! {
+        static PROVIDER: gtk4::CssProvider = {
+            let p = gtk4::CssProvider::new();
+            if let Some(display) = gtk4::gdk::Display::default() {
+                gtk4::style_context_add_provider_for_display(
+                    &display,
+                    &p,
+                    gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                );
+            }
+            p
+        };
+    }
+    PROVIDER.with(|p| p.load_from_data(&css));
+}
+
 #[cfg(test)]
 #[path = "settings_handlers_tests.rs"]
 mod tests;

@@ -124,6 +124,7 @@ fn map_settings_output(out: SettingsOutput) -> AppMsg {
         SettingsOutput::CalDavSaved { url, user, pass } => AppMsg::SaveCalDav { url, user, pass },
         SettingsOutput::ConnectGoogleRequested => AppMsg::ConnectGoogle,
         SettingsOutput::DisconnectGoogleRequested => AppMsg::DisconnectGoogle,
+        SettingsOutput::AccentColorChanged(hex) => AppMsg::AccentColorChanged(hex),
     }
 }
 

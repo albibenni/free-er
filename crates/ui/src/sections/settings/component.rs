@@ -1,5 +1,7 @@
 use super::{state::SettingsState, types::SettingsOutput};
 use gtk4::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct SettingsSection {
@@ -15,10 +17,15 @@ pub struct SettingsSection {
     pub(super) caldav_user: gtk4::EntryBuffer,
     pub(super) caldav_pass: gtk4::EntryBuffer,
     pub(super) google_connected: bool,
+    pub(super) accent_color: String,
+    pub(super) accent_ref: Rc<RefCell<String>>,
+    pub(super) color_dots: Vec<gtk4::DrawingArea>,
 }
 
 impl SettingsSection {
     pub(super) fn new_model(strict_mode: bool) -> Self {
+        let accent_color = "#3584e4".to_string();
+        let accent_ref = Rc::new(RefCell::new(accent_color.clone()));
         Self {
             strict_mode,
             allow_new_tab: true,
@@ -32,6 +39,9 @@ impl SettingsSection {
             caldav_user: gtk4::EntryBuffer::default(),
             caldav_pass: gtk4::EntryBuffer::default(),
             google_connected: false,
+            accent_color,
+            accent_ref,
+            color_dots: Vec::new(),
         }
     }
 
