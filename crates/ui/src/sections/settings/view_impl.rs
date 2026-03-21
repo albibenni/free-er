@@ -261,68 +261,6 @@ impl SimpleComponent for SettingsSection {
             },
 
             gtk4::Separator {},
-
-            gtk4::Label {
-                set_label: "CalDAV",
-                add_css_class: "title-2",
-                set_halign: gtk4::Align::Start,
-            },
-
-            gtk4::Entry {
-                set_buffer: &model.caldav_url,
-                set_placeholder_text: Some("Calendar URL (.ics or CalDAV)"),
-            },
-            gtk4::Entry {
-                set_buffer: &model.caldav_user,
-                set_placeholder_text: Some("Username (optional)"),
-            },
-            gtk4::Entry {
-                set_buffer: &model.caldav_pass,
-                set_placeholder_text: Some("Password (optional)"),
-                set_visibility: false,
-            },
-
-            gtk4::Button {
-                set_label: "Save",
-                set_css_classes: &["suggested-action"],
-                set_halign: gtk4::Align::End,
-                connect_clicked => SettingsInput::SaveCalDav,
-            },
-
-            gtk4::Separator {},
-
-            gtk4::Label {
-                set_label: "Google Calendar",
-                add_css_class: "title-2",
-                set_halign: gtk4::Align::Start,
-            },
-
-            gtk4::Box {
-                set_orientation: gtk4::Orientation::Horizontal,
-                set_spacing: 8,
-
-                gtk4::Label {
-                    #[watch]
-                    set_label: if model.google_connected { "● Connected" } else { "○ Not connected" },
-                    set_hexpand: true,
-                    set_halign: gtk4::Align::Start,
-                },
-
-                gtk4::Button {
-                    set_label: "Connect",
-                    set_css_classes: &["suggested-action"],
-                    #[watch]
-                    set_visible: !model.google_connected,
-                    connect_clicked => SettingsInput::ConnectGoogle,
-                },
-                gtk4::Button {
-                    set_label: "Disconnect",
-                    set_css_classes: &["destructive-action"],
-                    #[watch]
-                    set_visible: model.google_connected,
-                    connect_clicked => SettingsInput::DisconnectGoogle,
-                },
-            },
         }
     }
 
