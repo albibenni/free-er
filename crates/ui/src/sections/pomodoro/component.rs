@@ -163,6 +163,7 @@ impl Component for PomodoroSection {
                             },
                             gtk4::Button {
                                 set_label: "25/5",
+                                add_css_class: "suggested-action",
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 25 * 60, break_secs: 5 * 60 },
                             },
                             gtk4::Button {
@@ -172,10 +173,12 @@ impl Component for PomodoroSection {
                             },
                             gtk4::Button {
                                 set_label: "50/10",
+                                add_css_class: "suggested-action",
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 50 * 60, break_secs: 10 * 60 },
                             },
                             gtk4::Button {
                                 set_label: "90/20",
+                                add_css_class: "suggested-action",
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 90 * 60, break_secs: 20 * 60 },
                             },
 
@@ -192,14 +195,17 @@ impl Component for PomodoroSection {
                             },
                             gtk4::Button {
                                 set_label: "5m",
+                                add_css_class: "suggested-action",
                                 connect_clicked => PomodoroInput::SetQuickBreak { break_secs: 5 * 60 },
                             },
                             gtk4::Button {
                                 set_label: "15m",
+                                add_css_class: "suggested-action",
                                 connect_clicked => PomodoroInput::SetQuickBreak { break_secs: 15 * 60 },
                             },
                             gtk4::Button {
                                 set_label: "30m",
+                                add_css_class: "suggested-action",
                                 connect_clicked => PomodoroInput::SetQuickBreak { break_secs: 30 * 60 },
                             },
                         },
@@ -257,10 +263,12 @@ impl Component for PomodoroSection {
                                     set_spacing: 6,
                                     gtk4::Button {
                                         set_label: "−",
+                                        add_css_class: "suggested-action",
                                         connect_clicked => PomodoroInput::AdjustFocus(-5),
                                     },
                                     gtk4::Button {
                                         set_label: "+",
+                                        add_css_class: "suggested-action",
                                         connect_clicked => PomodoroInput::AdjustFocus(5),
                                     },
                                 },
@@ -312,10 +320,12 @@ impl Component for PomodoroSection {
                                     set_spacing: 6,
                                     gtk4::Button {
                                         set_label: "−",
+                                        add_css_class: "suggested-action",
                                         connect_clicked => PomodoroInput::AdjustBreak(-5),
                                     },
                                     gtk4::Button {
                                         set_label: "+",
+                                        add_css_class: "suggested-action",
                                         connect_clicked => PomodoroInput::AdjustBreak(5),
                                     },
                                 },
