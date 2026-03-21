@@ -241,7 +241,7 @@ impl Component for ScheduleSection {
                 #[name = "drawing_area"]
                 gtk4::DrawingArea {
                     set_hexpand: true,
-                    set_content_height: 900,
+                    set_content_height: 1100,
                 },
             },
         }
@@ -274,12 +274,12 @@ impl Component for ScheduleSection {
             gtk4::glib::idle_add_local_once(move || {
                 use chrono::Timelike;
                 let now = chrono::Local::now();
-                let hour =
-                    now.hour() as f64 + now.minute() as f64 / 60.0;
-                let content_h = 900.0 - HEADER_H;
+                let hour = now.hour() as f64 + now.minute() as f64 / 60.0;
+                let extended = if hour < START_HOUR as f64 { hour + 24.0 } else { hour };
+                let content_h = 1100.0 - HEADER_H;
                 let hours_span = (END_HOUR - START_HOUR) as f64;
                 let y = HEADER_H
-                    + (hour.clamp(START_HOUR as f64, END_HOUR as f64) - START_HOUR as f64)
+                    + (extended.clamp(START_HOUR as f64, END_HOUR as f64) - START_HOUR as f64)
                         / hours_span
                         * content_h;
                 let adj = sw.vadjustment();

@@ -3,7 +3,8 @@ use gtk4::prelude::*;
 
 use super::draw_data::{DragMode, DrawData};
 use super::geometry::{
-    clamp_hour_frac, compute_layout, END_HOUR, HEADER_H, MARGIN_LEFT, MARGIN_RIGHT, START_HOUR,
+    compute_layout, extended_hour_frac, END_HOUR, HEADER_H, MARGIN_LEFT,
+    MARGIN_RIGHT, START_HOUR,
 };
 
 // ── Color palette ─────────────────────────────────────────────────────────────
@@ -140,7 +141,7 @@ fn draw_hour_grid(cr: &gtk4::cairo::Context, t: &Theme, w: f64, _h: f64, hour_h:
         cr.line_to(w - MARGIN_RIGHT, y);
         let _ = cr.stroke();
 
-        let label = format!("{hour:02}:00");
+        let label = format!("{:02}:00", hour % 24);
         cr.set_source_rgb(t.text_dim.0, t.text_dim.1, t.text_dim.2);
         cr.move_to(2.0, y + 4.0);
         let _ = cr.show_text(&label);
@@ -235,8 +236,8 @@ fn draw_event_blocks(
         let x = MARGIN_LEFT + layout.col as f64 * col_w + layout.slot as f64 * slot_w + 2.0;
         let block_w = slot_w - 4.0;
 
-        let start_frac = clamp_hour_frac(sched.start_min as f64 / 60.0);
-        let end_frac = clamp_hour_frac(sched.end_min as f64 / 60.0);
+        let start_frac = extended_hour_frac(sched.start_min);
+        let end_frac = extended_hour_frac(sched.end_min);
         let y_start = HEADER_H + start_frac * (h - HEADER_H);
         let y_end = HEADER_H + end_frac * (h - HEADER_H);
         let block_h = (y_end - y_start).max(4.0);
@@ -291,8 +292,10 @@ fn draw_event_label(
     let show_times = block_h > 36.0;
 
     if show_times {
-        let start_label = format!("{:02}:{:02}", sched.start_min / 60, sched.start_min % 60);
-        let end_label = format!("{:02}:{:02}", sched.end_min / 60, sched.end_min % 60);
+        let s = sched.start_min % (24 * 60);
+        let e = sched.end_min % (24 * 60);
+        let start_label = format!("{:02}:{:02}", s / 60, s % 60);
+        let end_label = format!("{:02}:{:02}", e / 60, e % 60);
 
         cr.set_font_size(10.0);
         cr.set_source_rgba(1.0, 1.0, 1.0, 0.75);
@@ -354,8 +357,8 @@ fn draw_drag_preview(cr: &gtk4::cairo::Context, h: f64, col_w: f64, data: &DrawD
 
     let x = MARGIN_LEFT + col as f64 * col_w + 2.0;
     let bw = col_w - 4.0;
-    let ys = HEADER_H + clamp_hour_frac(s_min as f64 / 60.0) * (h - HEADER_H);
-    let ye = HEADER_H + clamp_hour_frac(e_min as f64 / 60.0) * (h - HEADER_H);
+    let ys = HEADER_H + extended_hour_frac(s_min) * (h - HEADER_H);
+    let ye = HEADER_H + extended_hour_frac(e_min) * (h - HEADER_H);
     let bh = (ye - ys).max(4.0);
 
     let (fill_a, stroke_a) = drag_preview_alphas(&data.drag_mode);
@@ -378,12 +381,14 @@ fn draw_drag_preview(cr: &gtk4::cairo::Context, h: f64, col_w: f64, data: &DrawD
         cr.set_font_size(10.0);
         cr.set_source_rgba(1.0, 1.0, 1.0, 0.9);
 
-        let start_label = format!("{:02}:{:02}", s_min / 60, s_min % 60);
+        let sm = s_min % (24 * 60);
+        let start_label = format!("{:02}:{:02}", sm / 60, sm % 60);
         cr.move_to(x + 4.0, ys + 10.0);
         let _ = cr.show_text(&start_label);
 
         if bh > 28.0 {
-            let end_label = format!("{:02}:{:02}", e_min / 60, e_min % 60);
+            let em = e_min % (24 * 60);
+            let end_label = format!("{:02}:{:02}", em / 60, em % 60);
             cr.move_to(x + 4.0, ys + bh - 4.0);
             let _ = cr.show_text(&end_label);
         }
@@ -417,7 +422,7 @@ fn draw_now_indicator(
     }
     let col = today.weekday().num_days_from_monday() as usize;
     let now_min = now.hour() * 60 + now.minute();
-    let frac = clamp_hour_frac(now_min as f64 / 60.0);
+    let frac = extended_hour_frac(now_min);
     let y = HEADER_H + frac * (h - HEADER_H);
     let x = MARGIN_LEFT + col as f64 * col_w;
 

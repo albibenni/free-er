@@ -93,8 +93,8 @@ fn find_overlap_groups(sorted_indices: &[usize], schedules: &[ScheduleSummary]) 
 pub(super) const MARGIN_LEFT: f64 = 52.0;
 pub(super) const HEADER_H: f64 = 40.0;
 pub(super) const MARGIN_RIGHT: f64 = 4.0;
-pub(super) const START_HOUR: u32 = 6;
-pub(super) const END_HOUR: u32 = 23;
+pub(super) const START_HOUR: u32 = 4;
+pub(super) const END_HOUR: u32 = 25; // 25 = 1am next day
 
 // ── Coordinate math ───────────────────────────────────────────────────────────
 
@@ -104,6 +104,14 @@ pub(super) fn clamp_hour_frac(hour_frac: f64) -> f64 {
     let start = START_HOUR as f64;
     let end = END_HOUR as f64;
     ((hour_frac - start) / (end - start)).clamp(0.0, 1.0)
+}
+
+/// Convert minutes-from-midnight to a viewport fraction, treating hours before
+/// START_HOUR as belonging to the next day (hour + 24).
+pub(super) fn extended_hour_frac(min: u32) -> f64 {
+    let h = min as f64 / 60.0;
+    let extended = if h < START_HOUR as f64 { h + 24.0 } else { h };
+    clamp_hour_frac(extended)
 }
 
 /// Round minutes to the nearest 15-minute boundary.
@@ -125,7 +133,8 @@ pub(super) fn pixel_to_day_time(x: f64, y: f64, w: f64, h: f64) -> Option<(usize
     }
     let hour_frac = (y - HEADER_H) / hour_h;
     let minutes = (START_HOUR as f64 * 60.0 + hour_frac * 60.0) as u32;
-    Some((col, minutes.clamp(START_HOUR * 60, END_HOUR * 60)))
+    let minutes = minutes.clamp(START_HOUR * 60, END_HOUR * 60) % (24 * 60);
+    Some((col, minutes))
 }
 
 /// Find the schedule block under (x, y) and return its metadata.
@@ -169,8 +178,8 @@ pub(super) fn hit_test_event(
         let slot_w = col_w / layout.total_slots as f64;
         let ex = MARGIN_LEFT + layout.col as f64 * col_w + layout.slot as f64 * slot_w + 2.0;
         let bw = slot_w - 4.0;
-        let sf = clamp_hour_frac(sched.start_min as f64 / 60.0);
-        let ef = clamp_hour_frac(sched.end_min as f64 / 60.0);
+        let sf = extended_hour_frac(sched.start_min);
+        let ef = extended_hour_frac(sched.end_min);
         let ys = HEADER_H + sf * (h - HEADER_H);
         let ye = HEADER_H + ef * (h - HEADER_H);
         let bh = (ye - ys).max(4.0);
