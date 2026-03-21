@@ -65,6 +65,38 @@ cd free-er
 make run
 ```
 
+## Open at Startup (Hyprland / systemd)
+
+Run the install script once from the repo root:
+
+```bash
+./scripts/install-startup.sh
+```
+
+This will:
+
+1. Build release binaries (`cargo build --release`)
+2. Install `free-er` and `free-er-ui` to `~/.local/bin/`
+3. Create and enable a systemd user service for the daemon (`~/.config/systemd/user/free-er.service`)
+4. Add `exec-once = uwsm-app -- free-er-ui` to `~/.config/hypr/autostart.conf`
+
+After running, the daemon starts immediately and on every login. The UI launches automatically with the Hyprland session. Re-running the script is safe — it overwrites existing files and skips already-configured entries.
+
+**Useful commands:**
+
+```bash
+# Check daemon status
+systemctl --user status free-er.service
+
+# View daemon logs
+journalctl --user -u free-er.service -f
+
+# Stop and disable
+systemctl --user disable --now free-er.service
+```
+
+To fully uninstall startup behaviour, also remove the `exec-once` line from `~/.config/hypr/autostart.conf`.
+
 ## Coverage Setup
 
 Install the coverage tool once:
