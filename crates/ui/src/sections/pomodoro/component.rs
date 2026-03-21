@@ -1,4 +1,6 @@
-use super::ring::{break_fraction, draw_ring, focus_fraction, minutes_from_ring_pos, RingVisualState};
+use super::ring::{
+    break_fraction, draw_ring, focus_fraction, minutes_from_ring_pos, RingVisualState,
+};
 
 use gtk4::prelude::*;
 use relm4::prelude::*;
@@ -346,6 +348,12 @@ impl Component for PomodoroSection {
                         set_halign: gtk4::Align::Start,
                     },
 
+                    gtk4::Separator {
+                        set_orientation: gtk4::Orientation::Horizontal,
+                        set_margin_top: 4,
+                        set_margin_bottom: 2,
+                    },
+
                     gtk4::Label {
                         set_label: "SELECT LIST",
                         add_css_class: "dim-label",
@@ -359,6 +367,11 @@ impl Component for PomodoroSection {
                         add_css_class: "boxed-list",
                     },
 
+                    gtk4::Separator {
+                        set_orientation: gtk4::Orientation::Horizontal,
+                        set_margin_top: 4,
+                        set_margin_bottom: 2,
+                    },
                     gtk4::Box {
                         set_orientation: gtk4::Orientation::Horizontal,
                         set_spacing: 8,
@@ -421,19 +434,34 @@ impl Component for PomodoroSection {
         let fd = focus_dims.clone();
         widgets.focus_ring.set_draw_func(move |_, cr, w, h| {
             *fd.borrow_mut() = (w as f64, h as f64);
-            draw_ring(cr, w as f64, h as f64, focus_fraction(&ring.borrow()), *accent.borrow());
+            draw_ring(
+                cr,
+                w as f64,
+                h as f64,
+                focus_fraction(&ring.borrow()),
+                *accent.borrow(),
+            );
         });
 
         let ring = model.ring_visual.clone();
         let bd = break_dims.clone();
         widgets.break_ring.set_draw_func(move |_, cr, w, h| {
             *bd.borrow_mut() = (w as f64, h as f64);
-            draw_ring(cr, w as f64, h as f64, break_fraction(&ring.borrow()), (0.98, 0.60, 0.18));
+            draw_ring(
+                cr,
+                w as f64,
+                h as f64,
+                break_fraction(&ring.borrow()),
+                (0.98, 0.60, 0.18),
+            );
         });
 
-        attach_ring_drag(&widgets.focus_ring, _sender.clone(), focus_dims, |x, y, w, h| {
-            PomodoroInput::DragFocusAt { x, y, w, h }
-        });
+        attach_ring_drag(
+            &widgets.focus_ring,
+            _sender.clone(),
+            focus_dims,
+            |x, y, w, h| PomodoroInput::DragFocusAt { x, y, w, h },
+        );
         attach_ring_drag(&widgets.break_ring, _sender, break_dims, |x, y, w, h| {
             PomodoroInput::DragBreakAt { x, y, w, h }
         });
@@ -552,7 +580,6 @@ impl Component for PomodoroSection {
         self.update_view(widgets, sender);
     }
 }
-
 
 #[cfg(test)]
 #[path = "tests.rs"]
