@@ -1,6 +1,7 @@
 .PHONY: all build daemon ui ui-debug extension test coverage clean dev run run-debug stop help
 
 UI_RUN_ENV ?=
+DAEMON_RUN_ENV ?=
 
 all: build extension
 
@@ -54,12 +55,13 @@ dev: build stop
 # Build everything (Rust + extension) and launch daemon + UI
 run: build extension stop
 	@echo "Starting daemon..."
-	@cargo run -p daemon &
+	@$(DAEMON_RUN_ENV) cargo run -p daemon &
 	@sleep 1
 	@echo "Starting UI..."
 	@$(UI_RUN_ENV) cargo run -p ui
 
 # Build everything (Rust + extension), then launch daemon + UI with GTK inspector enabled.
+run-debug: DAEMON_RUN_ENV=RUST_LOG=free_er=debug
 run-debug: UI_RUN_ENV=GTK_DEBUG=interactive GDK_DEBUG=events G_MESSAGES_DEBUG=all RUST_LOG=free_er_ui=debug
 run-debug: run
 
