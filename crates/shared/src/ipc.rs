@@ -103,6 +103,55 @@ pub enum Command {
     GetOpenTabs,
     /// Shut the daemon down cleanly.
     Shutdown,
+    /// Upgrade this connection to a push-event subscription.
+    /// The daemon will send a DaemonEvent::InitialSnapshot immediately,
+    /// then push further DaemonEvent values as JSON lines whenever state changes.
+    Subscribe,
+}
+
+/// Events pushed from the daemon to subscribed UI clients.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "event")]
+pub enum DaemonEvent {
+    /// Full state snapshot — sent immediately after Subscribe so the UI can
+    /// initialise without a separate polling round-trip.
+    InitialSnapshot {
+        status: StatusResponse,
+        rule_sets: Vec<RuleSetSummary>,
+        schedules: Vec<ScheduleSummary>,
+        import_rules: Vec<ImportRuleSummary>,
+    },
+    /// Focus session started, stopped, or the active rule set changed.
+    FocusChanged {
+        active: bool,
+        rule_set_name: Option<String>,
+    },
+    /// Pomodoro timer update — emitted every second while active, and once
+    /// with all-None fields when the pomodoro stops.
+    PomodoroTick {
+        phase: Option<PomodoroPhase>,
+        seconds_remaining: Option<u64>,
+    },
+    /// Any configuration field changed (accent color, allow_new_tab, etc.).
+    ConfigChanged {
+        strict_mode: bool,
+        allow_new_tab: bool,
+        accent_color: String,
+        google_calendar_connected: bool,
+        default_rule_set_id: Option<Uuid>,
+    },
+    /// The full rule-set list changed (create / delete / URL mutation).
+    RuleSetsChanged {
+        rule_sets: Vec<RuleSetSummary>,
+    },
+    /// The full schedule list changed.
+    SchedulesChanged {
+        schedules: Vec<ScheduleSummary>,
+    },
+    /// The calendar import rules changed.
+    ImportRulesChanged {
+        rules: Vec<ImportRuleSummary>,
+    },
 }
 
 /// Returned by ListSchedules.

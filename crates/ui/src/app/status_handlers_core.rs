@@ -1,18 +1,14 @@
-use crate::ipc_client;
 use crate::sections::{
     allowed_lists::AllowedListsInput, calendar_rules::CalendarRulesInput, focus::FocusInput,
     pomodoro::PomodoroInput, schedule::ScheduleInput, settings::SettingsInput,
 };
-use relm4::{ComponentController, ComponentSender, Sender};
-use tracing::warn;
+use relm4::{ComponentController, ComponentSender};
+use shared::ipc::{DaemonEvent, RuleSetSummary};
 
 use super::{App, AppMsg};
 
-pub(super) fn status_tick(
-    app: &App,
-    default_rule_set_id: Option<uuid::Uuid>,
-    sender: ComponentSender<App>,
-) {
+/// Dispatch a push event from the daemon subscription to the appropriate child components.
+pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSender<App>) {
     let focus_sender = app.focus.sender().clone();
     let pom_sender = app.pomodoro.sender().clone();
     let lists_sender = app.allowed_lists.sender().clone();
@@ -20,102 +16,113 @@ pub(super) fn status_tick(
     let schedule_sender = app.schedule.sender().clone();
     let cal_sender = app.calendar_rules.sender().clone();
 
-    tokio::spawn(async move {
-        match ipc_client::get_status().await {
-            Ok(status) => {
-                sender.input(AppMsg::DaemonAlive);
-                focus_sender.emit(FocusInput::StatusUpdated {
-                    active: status.focus_active,
-                    rule_set: status.active_rule_set_name,
-                });
-                pom_sender.emit(PomodoroInput::StatusUpdated {
-                    phase: status.pomodoro_phase.map(|p| format!("{p:?}")),
-                    seconds_remaining: status.seconds_remaining,
-                });
-                settings_sender.emit(SettingsInput::GoogleStatusUpdated(
-                    status.google_calendar_connected,
-                ));
-                settings_sender.emit(SettingsInput::AllowNewTabUpdated(status.allow_new_tab));
-                settings_sender.emit(SettingsInput::AccentColorUpdated(status.accent_color.clone()));
-                pom_sender.emit(PomodoroInput::AccentColorUpdated(status.accent_color.clone()));
-                sender.input(AppMsg::ApplyAccentCss(status.accent_color.clone()));
-                if let Some(default_id) = status.default_rule_set_id {
-                    sender.input(AppMsg::SetDefaultRuleSet(default_id));
-                }
+    match event {
+        DaemonEvent::InitialSnapshot {
+            status,
+            rule_sets,
+            schedules,
+            import_rules,
+        } => {
+            focus_sender.emit(FocusInput::StatusUpdated {
+                active: status.focus_active,
+                rule_set: status.active_rule_set_name,
+            });
+            pom_sender.emit(PomodoroInput::StatusUpdated {
+                phase: status.pomodoro_phase.map(|p| format!("{p:?}")),
+                seconds_remaining: status.seconds_remaining,
+            });
+            settings_sender.emit(SettingsInput::GoogleStatusUpdated(
+                status.google_calendar_connected,
+            ));
+            settings_sender.emit(SettingsInput::AllowNewTabUpdated(status.allow_new_tab));
+            settings_sender.emit(SettingsInput::AccentColorUpdated(status.accent_color.clone()));
+            pom_sender.emit(PomodoroInput::AccentColorUpdated(status.accent_color.clone()));
+            sender.input(AppMsg::ApplyAccentCss(status.accent_color));
+            if let Some(id) = status.default_rule_set_id {
+                sender.input(AppMsg::SetDefaultRuleSet(id));
             }
-            Err(e) => {
-                warn!("status poll failed: {e}");
-                sender.input(AppMsg::DaemonGone);
-            }
+            dispatch_rule_sets(
+                rule_sets,
+                &lists_sender,
+                &pom_sender,
+                &schedule_sender,
+                &settings_sender,
+                &sender,
+            );
+            schedule_sender.emit(ScheduleInput::SchedulesUpdated(schedules));
+            cal_sender.emit(CalendarRulesInput::RulesUpdated(import_rules));
         }
 
-        push_rule_sets(
-            &lists_sender,
-            &pom_sender,
-            &schedule_sender,
-            &settings_sender,
+        DaemonEvent::FocusChanged { active, rule_set_name } => {
+            focus_sender.emit(FocusInput::StatusUpdated {
+                active,
+                rule_set: rule_set_name,
+            });
+        }
+
+        DaemonEvent::PomodoroTick { phase, seconds_remaining } => {
+            pom_sender.emit(PomodoroInput::StatusUpdated {
+                phase: phase.map(|p| format!("{p:?}")),
+                seconds_remaining,
+            });
+        }
+
+        DaemonEvent::ConfigChanged {
+            strict_mode: _,
+            allow_new_tab,
+            accent_color,
+            google_calendar_connected,
             default_rule_set_id,
-            &sender,
-        )
-        .await;
-
-        match ipc_client::list_schedules().await {
-            Ok(schedules) => sender.input(AppMsg::SchedulesUpdated(schedules)),
-            Err(e) => warn!("list_schedules failed: {e}"),
-        }
-
-        match ipc_client::list_import_rules().await {
-            Ok(rules) => cal_sender.emit(CalendarRulesInput::RulesUpdated(rules)),
-            Err(e) => warn!("list_import_rules failed: {e}"),
-        }
-    });
-}
-
-pub(super) fn refresh_rule_sets(
-    app: &App,
-    default_rule_set_id: Option<uuid::Uuid>,
-    sender: ComponentSender<App>,
-) {
-    let lists_sender = app.allowed_lists.sender().clone();
-    let pom_sender = app.pomodoro.sender().clone();
-    let sched_sender = app.schedule.sender().clone();
-    let settings_sender = app.settings.sender().clone();
-
-    tokio::spawn(async move {
-        push_rule_sets(
-            &lists_sender,
-            &pom_sender,
-            &sched_sender,
-            &settings_sender,
-            default_rule_set_id,
-            &sender,
-        )
-        .await;
-    });
-}
-
-async fn push_rule_sets(
-    lists_sender: &Sender<AllowedListsInput>,
-    pom_sender: &Sender<PomodoroInput>,
-    sched_sender: &Sender<ScheduleInput>,
-    settings_sender: &Sender<SettingsInput>,
-    current_default_rule_set_id: Option<uuid::Uuid>,
-    tick_sender: &ComponentSender<App>,
-) {
-    match ipc_client::list_rule_sets().await {
-        Ok(sets) => {
-            lists_sender.emit(AllowedListsInput::RuleSetsUpdated(sets.clone()));
-            pom_sender.emit(PomodoroInput::RuleSetsUpdated(sets.clone()));
-            sched_sender.emit(ScheduleInput::RuleSetsUpdated(sets.clone()));
-            let all_urls: Vec<String> = sets.iter().flat_map(|s| s.allowed_urls.clone()).collect();
-            settings_sender.emit(SettingsInput::QuickUrlsUpdated(all_urls));
-            let next_default = current_default_rule_set_id
-                .filter(|id| sets.iter().any(|s| s.id == *id))
-                .or_else(|| sets.first().map(|s| s.id));
-            if let Some(default_id) = next_default {
-                tick_sender.input(AppMsg::SetDefaultRuleSet(default_id));
+        } => {
+            settings_sender.emit(SettingsInput::GoogleStatusUpdated(google_calendar_connected));
+            settings_sender.emit(SettingsInput::AllowNewTabUpdated(allow_new_tab));
+            settings_sender.emit(SettingsInput::AccentColorUpdated(accent_color.clone()));
+            pom_sender.emit(PomodoroInput::AccentColorUpdated(accent_color.clone()));
+            sender.input(AppMsg::ApplyAccentCss(accent_color));
+            if let Some(id) = default_rule_set_id {
+                sender.input(AppMsg::SetDefaultRuleSet(id));
             }
         }
-        Err(e) => warn!("list_rule_sets failed: {e}"),
+
+        DaemonEvent::RuleSetsChanged { rule_sets } => {
+            dispatch_rule_sets(
+                rule_sets,
+                &lists_sender,
+                &pom_sender,
+                &schedule_sender,
+                &settings_sender,
+                &sender,
+            );
+        }
+
+        DaemonEvent::SchedulesChanged { schedules } => {
+            sender.input(AppMsg::SchedulesUpdated(schedules));
+        }
+
+        DaemonEvent::ImportRulesChanged { rules } => {
+            cal_sender.emit(CalendarRulesInput::RulesUpdated(rules));
+        }
     }
+}
+
+fn dispatch_rule_sets(
+    rule_sets: Vec<RuleSetSummary>,
+    lists_sender: &relm4::Sender<AllowedListsInput>,
+    pom_sender: &relm4::Sender<PomodoroInput>,
+    schedule_sender: &relm4::Sender<ScheduleInput>,
+    settings_sender: &relm4::Sender<SettingsInput>,
+    _tick_sender: &ComponentSender<App>,
+) {
+    use crate::sections::allowed_lists::AllowedListsInput as AL;
+    use crate::sections::pomodoro::PomodoroInput as PI;
+    use crate::sections::schedule::ScheduleInput as SI;
+
+    lists_sender.emit(AL::RuleSetsUpdated(rule_sets.clone()));
+    pom_sender.emit(PI::RuleSetsUpdated(rule_sets.clone()));
+    schedule_sender.emit(SI::RuleSetsUpdated(rule_sets.clone()));
+
+    let all_urls: Vec<String> = rule_sets.iter().flat_map(|s| s.allowed_urls.clone()).collect();
+    settings_sender.emit(SettingsInput::QuickUrlsUpdated(all_urls));
+
+    // Don't override the default_rule_set_id from here — it comes from ConfigChanged/InitialSnapshot.
 }
