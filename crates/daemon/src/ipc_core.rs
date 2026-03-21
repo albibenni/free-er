@@ -1,7 +1,7 @@
 use crate::app_state::AppState;
 use anyhow::Result;
 use shared::{
-    ipc::{Command, DaemonEvent, ImportRuleSummary, PomodoroPhase, RuleSetSummary, ScheduleSummary, StatusResponse},
+    ipc::{Command, DaemonEvent, PomodoroPhase, StatusResponse},
     models::RuleSet,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -120,64 +120,7 @@ async fn handle_subscription(
 }
 
 fn build_initial_snapshot(state: &AppState) -> DaemonEvent {
-    use chrono::Timelike;
-    let snap = state.snapshot();
-    let status = StatusResponse {
-        focus_active: snap.focus_active,
-        strict_mode: snap.strict_mode,
-        allow_new_tab: snap.allow_new_tab,
-        active_rule_set_name: snap.active_rule_set_name,
-        pomodoro_active: snap.pomodoro_active,
-        pomodoro_phase: snap.pomodoro_phase.map(|p| match p {
-            crate::pomodoro::Phase::Focus => PomodoroPhase::Focus,
-            crate::pomodoro::Phase::Break => PomodoroPhase::Break,
-        }),
-        seconds_remaining: snap.seconds_remaining,
-        google_calendar_connected: snap.google_calendar_connected,
-        caldav_url: snap.caldav_url,
-        default_rule_set_id: snap.default_rule_set_id,
-        accent_color: snap.accent_color,
-    };
-    let rule_sets = state
-        .list_rule_sets()
-        .into_iter()
-        .map(|rs| RuleSetSummary {
-            id: rs.id,
-            name: rs.name,
-            allowed_urls: rs.allowed_urls,
-        })
-        .collect();
-    let schedules = state
-        .list_schedules()
-        .into_iter()
-        .map(|s| ScheduleSummary {
-            id: s.id,
-            name: s.name,
-            days: s.days.iter().map(|d| d.num_days_from_monday() as u8).collect(),
-            start_min: s.start.hour() * 60 + s.start.minute(),
-            end_min: s.end.hour() * 60 + s.end.minute(),
-            enabled: s.enabled,
-            imported: s.imported,
-            imported_repeating: s.imported_repeating,
-            specific_date: s.specific_date.map(|d| d.format("%Y-%m-%d").to_string()),
-            schedule_type: s.schedule_type,
-            rule_set_id: s.rule_set_id,
-        })
-        .collect();
-    let import_rules = state
-        .list_import_rules()
-        .into_iter()
-        .map(|r| ImportRuleSummary {
-            keyword: r.keyword,
-            schedule_type: r.schedule_type,
-        })
-        .collect();
-    DaemonEvent::InitialSnapshot {
-        status,
-        rule_sets,
-        schedules,
-        import_rules,
-    }
+    state.build_snapshot_event()
 }
 
 fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {

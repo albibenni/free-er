@@ -1,6 +1,9 @@
 use crate::pomodoro::PomodoroTimer;
 use shared::{
-    ipc::{DaemonEvent, ImportRuleSummary, RuleSetSummary, ScheduleSummary},
+    ipc::{
+        DaemonEvent, ImportRuleSummary, PomodoroPhase, RuleSetSummary, ScheduleSummary,
+        StatusResponse,
+    },
     models::{Config, RuleSet},
 };
 use std::sync::{Arc, Mutex};
@@ -54,16 +57,14 @@ impl AppState {
         self.lock().event_tx.subscribe()
     }
 
-    /// Emit an event to all subscribers. Safe to call after dropping the Inner lock.
-    fn emit(&self, event: DaemonEvent) {
-        let tx = self.lock().event_tx.clone();
+    /// Send an event to all subscribers. Caller must already hold the sender.
+    fn emit(tx: &broadcast::Sender<DaemonEvent>, event: DaemonEvent) {
         let _ = tx.send(event);
     }
 
-    // ── Event payload builders (each acquires the lock briefly) ──────────────
+    // ── Event payload builders (static, operate on an already-held Inner) ─────
 
-    fn focus_event(&self) -> DaemonEvent {
-        let inner = self.lock();
+    fn focus_event(inner: &Inner) -> DaemonEvent {
         let rule_set_name = inner
             .active_rule_set_id
             .and_then(|id| inner.config.rule_sets.iter().find(|r| r.id == id))
@@ -74,8 +75,7 @@ impl AppState {
         }
     }
 
-    fn config_event(&self) -> DaemonEvent {
-        let inner = self.lock();
+    fn config_event(inner: &Inner) -> DaemonEvent {
         DaemonEvent::ConfigChanged {
             strict_mode: inner.config.strict_mode,
             allow_new_tab: inner.config.allow_new_tab,
@@ -91,8 +91,7 @@ impl AppState {
         }
     }
 
-    fn rule_sets_event(&self) -> DaemonEvent {
-        let inner = self.lock();
+    fn rule_sets_event(inner: &Inner) -> DaemonEvent {
         let rule_sets = inner
             .config
             .rule_sets
@@ -106,9 +105,8 @@ impl AppState {
         DaemonEvent::RuleSetsChanged { rule_sets }
     }
 
-    fn schedules_event(&self) -> DaemonEvent {
+    fn schedules_event(inner: &Inner) -> DaemonEvent {
         use chrono::Timelike;
-        let inner = self.lock();
         let schedules = inner
             .config
             .schedules
@@ -134,8 +132,7 @@ impl AppState {
         DaemonEvent::SchedulesChanged { schedules }
     }
 
-    fn import_rules_event(&self) -> DaemonEvent {
-        let inner = self.lock();
+    fn import_rules_event(inner: &Inner) -> DaemonEvent {
         let rules = inner
             .config
             .import_rules
@@ -151,59 +148,70 @@ impl AppState {
     // ── Mutations ─────────────────────────────────────────────────────────────
 
     pub fn start_focus(&self, rule_set_id: Uuid) {
-        {
+        let (tx, ev) = {
             let mut inner = self.lock();
             inner.focus_active = true;
             inner.active_rule_set_id = Some(rule_set_id);
             inner.schedule_activated = false;
-        }
-        self.emit(self.focus_event());
+            (inner.event_tx.clone(), Self::focus_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn stop_focus(&self) {
-        {
+        let (tx, focus_ev) = {
             let mut inner = self.lock();
             inner.focus_active = false;
             inner.active_rule_set_id = None;
             inner.pomodoro = None;
             inner.schedule_activated = false;
-        }
-        self.emit(self.focus_event());
-        self.emit(DaemonEvent::PomodoroTick {
-            phase: None,
-            seconds_remaining: None,
-        });
+            (inner.event_tx.clone(), Self::focus_event(&inner))
+        };
+        Self::emit(&tx, focus_ev);
+        Self::emit(
+            &tx,
+            DaemonEvent::PomodoroTick {
+                phase: None,
+                seconds_remaining: None,
+            },
+        );
     }
 
     pub fn start_pomodoro(&self, focus_secs: u64, break_secs: u64, rule_set_id: Option<Uuid>) {
-        let pom_state = {
+        let (tx, focus_ev, pom_ev) = {
             let mut inner = self.lock();
             inner.focus_active = true;
             inner.active_rule_set_id = rule_set_id;
             let pom = PomodoroTimer::new(focus_secs, break_secs);
             let secs = pom.seconds_remaining();
             inner.pomodoro = Some(pom);
-            (Some(shared::ipc::PomodoroPhase::Focus), Some(secs))
+            let focus_ev = Self::focus_event(&inner);
+            let pom_ev = DaemonEvent::PomodoroTick {
+                phase: Some(PomodoroPhase::Focus),
+                seconds_remaining: Some(secs),
+            };
+            (inner.event_tx.clone(), focus_ev, pom_ev)
         };
-        self.emit(self.focus_event());
-        self.emit(DaemonEvent::PomodoroTick {
-            phase: pom_state.0,
-            seconds_remaining: pom_state.1,
-        });
+        Self::emit(&tx, focus_ev);
+        Self::emit(&tx, pom_ev);
     }
 
     pub fn stop_pomodoro(&self) {
-        {
+        let (tx, focus_ev) = {
             let mut inner = self.lock();
             inner.pomodoro = None;
             inner.focus_active = false;
             inner.active_rule_set_id = None;
-        }
-        self.emit(self.focus_event());
-        self.emit(DaemonEvent::PomodoroTick {
-            phase: None,
-            seconds_remaining: None,
-        });
+            (inner.event_tx.clone(), Self::focus_event(&inner))
+        };
+        Self::emit(&tx, focus_ev);
+        Self::emit(
+            &tx,
+            DaemonEvent::PomodoroTick {
+                phase: None,
+                seconds_remaining: None,
+            },
+        );
     }
 
     pub fn active_rule_set(&self) -> Option<RuleSet> {
@@ -218,16 +226,21 @@ impl AppState {
     }
 
     pub fn add_rule_set(&self, rule_set: RuleSet) {
-        {
+        let (tx, ev1, ev2) = {
             let mut inner = self.lock();
             let id = rule_set.id;
             inner.config.rule_sets.push(rule_set);
             if inner.config.default_rule_set_id.is_none() {
                 inner.config.default_rule_set_id = Some(id);
             }
-        }
-        self.emit(self.rule_sets_event());
-        self.emit(self.config_event());
+            (
+                inner.event_tx.clone(),
+                Self::rule_sets_event(&inner),
+                Self::config_event(&inner),
+            )
+        };
+        Self::emit(&tx, ev1);
+        Self::emit(&tx, ev2);
     }
 
     /// Called every second by the background tick loop.
@@ -243,8 +256,8 @@ impl AppState {
                     }
                     let is_focus = pom.phase == crate::pomodoro::Phase::Focus;
                     let phase = Some(match pom.phase {
-                        crate::pomodoro::Phase::Focus => shared::ipc::PomodoroPhase::Focus,
-                        crate::pomodoro::Phase::Break => shared::ipc::PomodoroPhase::Break,
+                        crate::pomodoro::Phase::Focus => PomodoroPhase::Focus,
+                        crate::pomodoro::Phase::Break => PomodoroPhase::Break,
                     });
                     let secs = Some(pom.seconds_remaining());
                     (true, is_focus, phase, secs)
@@ -254,20 +267,17 @@ impl AppState {
             if is_active {
                 inner.focus_active = is_focus;
             }
-            is_active.then_some((phase, secs))
+            is_active.then_some((inner.event_tx.clone(), phase, secs))
         }; // lock dropped here
-        if let Some((phase, seconds_remaining)) = pom_state {
-            self.emit(DaemonEvent::PomodoroTick {
-                phase,
-                seconds_remaining,
-            });
+        if let Some((tx, phase, seconds_remaining)) = pom_state {
+            Self::emit(&tx, DaemonEvent::PomodoroTick { phase, seconds_remaining });
         }
     }
 
     /// Skip the current break and return to Focus immediately.
     /// Returns false if strict_breaks is enabled.
     pub fn skip_break(&self) -> bool {
-        let result = {
+        let (tx, ev) = {
             let mut inner = self.lock();
             if inner.config.pomodoro.strict_breaks {
                 return false;
@@ -278,12 +288,10 @@ impl AppState {
                     inner.focus_active = true;
                 }
             }
-            true
+            (inner.event_tx.clone(), Self::focus_event(&inner))
         };
-        if result {
-            self.emit(self.focus_event());
-        }
-        result
+        Self::emit(&tx, ev);
+        true
     }
 
     pub fn set_open_tabs(&self, tabs: Vec<(String, String)>) {
@@ -295,32 +303,40 @@ impl AppState {
     }
 
     pub fn remove_rule_set(&self, id: Uuid) {
-        {
+        let (tx, ev1, ev2) = {
             let mut inner = self.lock();
             inner.config.rule_sets.retain(|r| r.id != id);
             if inner.config.default_rule_set_id == Some(id) {
                 inner.config.default_rule_set_id =
                     inner.config.rule_sets.first().map(|r| r.id);
             }
-        }
-        self.emit(self.rule_sets_event());
-        self.emit(self.config_event());
+            (
+                inner.event_tx.clone(),
+                Self::rule_sets_event(&inner),
+                Self::config_event(&inner),
+            )
+        };
+        Self::emit(&tx, ev1);
+        Self::emit(&tx, ev2);
     }
 
     pub fn set_default_rule_set(&self, id: Uuid) -> bool {
-        let changed = {
+        let result = {
             let mut inner = self.lock();
             if inner.config.rule_sets.iter().any(|r| r.id == id) {
                 inner.config.default_rule_set_id = Some(id);
-                true
+                let ev = Self::config_event(&inner);
+                Some((inner.event_tx.clone(), ev))
             } else {
-                false
+                None
             }
         };
-        if changed {
-            self.emit(self.config_event());
+        if let Some((tx, ev)) = result {
+            Self::emit(&tx, ev);
+            true
+        } else {
+            false
         }
-        changed
     }
 
     pub fn effective_default_rule_set_id(&self) -> Uuid {
@@ -342,13 +358,21 @@ impl AppState {
     }
 
     pub fn add_schedule(&self, schedule: shared::models::Schedule) {
-        self.lock().config.schedules.push(schedule);
-        self.emit(self.schedules_event());
+        let (tx, ev) = {
+            let mut inner = self.lock();
+            inner.config.schedules.push(schedule);
+            (inner.event_tx.clone(), Self::schedules_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn remove_schedule(&self, id: Uuid) {
-        self.lock().config.schedules.retain(|s| s.id != id);
-        self.emit(self.schedules_event());
+        let (tx, ev) = {
+            let mut inner = self.lock();
+            inner.config.schedules.retain(|s| s.id != id);
+            (inner.event_tx.clone(), Self::schedules_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn update_schedule(
@@ -362,7 +386,7 @@ impl AppState {
         new_specific_date: Option<chrono::NaiveDate>,
         schedule_type: shared::models::ScheduleType,
     ) {
-        {
+        let (tx, ev) = {
             let mut inner = self.lock();
             if let Some(s) = inner.config.schedules.iter_mut().find(|s| s.id == id) {
                 s.name = name;
@@ -373,14 +397,15 @@ impl AppState {
                 s.specific_date = new_specific_date;
                 s.schedule_type = schedule_type;
             }
-        }
-        self.emit(self.schedules_event());
+            (inner.event_tx.clone(), Self::schedules_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     /// Check active schedules and start/stop focus accordingly.
     /// Called periodically by the background scheduler loop.
     pub fn apply_schedule(&self) {
-        let focus_changed = {
+        let result = {
             let mut inner = self.lock();
 
             if inner.pomodoro.is_some() {
@@ -424,16 +449,21 @@ impl AppState {
                 inner.schedule_activated = false;
             }
 
-            inner.focus_active != prev_active || inner.active_rule_set_id != prev_rule_set
+            if inner.focus_active != prev_active || inner.active_rule_set_id != prev_rule_set {
+                let ev = Self::focus_event(&inner);
+                Some((inner.event_tx.clone(), ev))
+            } else {
+                None
+            }
         }; // lock dropped
 
-        if focus_changed {
-            self.emit(self.focus_event());
+        if let Some((tx, ev)) = result {
+            Self::emit(&tx, ev);
         }
     }
 
     pub fn remove_url_from_rule_set(&self, rule_set_id: Uuid, url: &str) -> bool {
-        let changed = {
+        let result = {
             let mut inner = self.lock();
             if let Some(rs) = inner
                 .config
@@ -442,19 +472,22 @@ impl AppState {
                 .find(|r| r.id == rule_set_id)
             {
                 rs.allowed_urls.retain(|u| u != url);
-                true
+                let ev = Self::rule_sets_event(&inner);
+                Some((inner.event_tx.clone(), ev))
             } else {
-                false
+                None
             }
         };
-        if changed {
-            self.emit(self.rule_sets_event());
+        if let Some((tx, ev)) = result {
+            Self::emit(&tx, ev);
+            true
+        } else {
+            false
         }
-        changed
     }
 
     pub fn add_url_to_rule_set(&self, rule_set_id: Uuid, url: String) -> bool {
-        let changed = {
+        let result = {
             let mut inner = self.lock();
             if let Some(rs) = inner
                 .config
@@ -465,25 +498,29 @@ impl AppState {
                 if !rs.allowed_urls.contains(&url) {
                     rs.allowed_urls.push(url);
                 }
-                true
+                let ev = Self::rule_sets_event(&inner);
+                Some((inner.event_tx.clone(), ev))
             } else {
-                false
+                None
             }
         };
-        if changed {
-            self.emit(self.rule_sets_event());
+        if let Some((tx, ev)) = result {
+            Self::emit(&tx, ev);
+            true
+        } else {
+            false
         }
-        changed
     }
 
     /// Replace calendar-imported schedules with a fresh set.
     pub fn apply_calendar_schedules(&self, imported: Vec<shared::models::Schedule>) {
-        {
+        let (tx, ev) = {
             let mut inner = self.lock();
             inner.config.schedules.retain(|s| !s.imported);
             inner.config.schedules.extend(imported);
-        }
-        self.emit(self.schedules_event());
+            (inner.event_tx.clone(), Self::schedules_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn caldav_config(&self) -> Option<shared::models::CalDavConfig> {
@@ -496,7 +533,7 @@ impl AppState {
 
     pub fn add_import_rule(&self, keyword: String, schedule_type: shared::models::ScheduleType) {
         let keyword = keyword.to_lowercase();
-        {
+        let (tx, ev) = {
             let mut inner = self.lock();
             let exists = inner
                 .config
@@ -513,8 +550,9 @@ impl AppState {
                         rule_set_id: None,
                     });
             }
-        }
-        self.emit(self.import_rules_event());
+            (inner.event_tx.clone(), Self::import_rules_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn remove_import_rule(
@@ -523,29 +561,42 @@ impl AppState {
         schedule_type: &shared::models::ScheduleType,
     ) {
         let keyword = keyword.to_lowercase();
-        {
+        let (tx, ev) = {
             let mut inner = self.lock();
             inner
                 .config
                 .import_rules
                 .retain(|r| !(r.keyword == keyword && &r.schedule_type == schedule_type));
-        }
-        self.emit(self.import_rules_event());
+            (inner.event_tx.clone(), Self::import_rules_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn set_strict_mode(&self, enabled: bool) {
-        self.lock().config.strict_mode = enabled;
-        self.emit(self.config_event());
+        let (tx, ev) = {
+            let mut inner = self.lock();
+            inner.config.strict_mode = enabled;
+            (inner.event_tx.clone(), Self::config_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn set_allow_new_tab(&self, enabled: bool) {
-        self.lock().config.allow_new_tab = enabled;
-        self.emit(self.config_event());
+        let (tx, ev) = {
+            let mut inner = self.lock();
+            inner.config.allow_new_tab = enabled;
+            (inner.event_tx.clone(), Self::config_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn set_accent_color(&self, hex: String) {
-        self.lock().config.accent_color = hex;
-        self.emit(self.config_event());
+        let (tx, ev) = {
+            let mut inner = self.lock();
+            inner.config.accent_color = hex;
+            (inner.event_tx.clone(), Self::config_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     // ── Google Calendar OAuth2 ────────────────────────────────────────────────
@@ -586,7 +637,7 @@ impl AppState {
         refresh_token: String,
         expiry_secs: i64,
     ) {
-        {
+        let (tx, ev) = {
             let mut inner = self.lock();
             inner.config.google_calendar = Some(shared::models::GoogleCalendarConfig {
                 client_id,
@@ -595,24 +646,30 @@ impl AppState {
                 refresh_token: Some(refresh_token),
                 token_expiry_secs: Some(expiry_secs),
             });
-        }
-        self.emit(self.config_event());
+            (inner.event_tx.clone(), Self::config_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn update_google_tokens(&self, access_token: String, expiry_secs: i64) {
-        {
+        let (tx, ev) = {
             let mut inner = self.lock();
             if let Some(cfg) = &mut inner.config.google_calendar {
                 cfg.access_token = Some(access_token);
                 cfg.token_expiry_secs = Some(expiry_secs);
             }
-        }
-        self.emit(self.config_event());
+            (inner.event_tx.clone(), Self::config_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn revoke_google_calendar(&self) {
-        self.lock().config.google_calendar = None;
-        self.emit(self.config_event());
+        let (tx, ev) = {
+            let mut inner = self.lock();
+            inner.config.google_calendar = None;
+            (inner.event_tx.clone(), Self::config_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn google_calendar_config(&self) -> Option<shared::models::GoogleCalendarConfig> {
@@ -620,15 +677,16 @@ impl AppState {
     }
 
     pub fn set_caldav(&self, url: String, username: String, password: String) {
-        {
+        let (tx, ev) = {
             let mut inner = self.lock();
             inner.config.caldav = Some(shared::models::CalDavConfig {
                 url,
                 username: Some(username),
                 password: Some(password),
             });
-        }
-        self.emit(self.config_event());
+            (inner.event_tx.clone(), Self::config_event(&inner))
+        };
+        Self::emit(&tx, ev);
     }
 
     pub fn snapshot(&self) -> StateSnapshot {
@@ -664,6 +722,101 @@ impl AppState {
             caldav_url: inner.config.caldav.as_ref().map(|c| c.url.clone()),
             default_rule_set_id: inner.config.default_rule_set_id,
             accent_color: inner.config.accent_color.clone(),
+        }
+    }
+
+    /// Build a full InitialSnapshot event in a single lock acquisition.
+    pub fn build_snapshot_event(&self) -> DaemonEvent {
+        use chrono::Timelike;
+        let inner = self.lock();
+
+        let active_rule_set_name = inner
+            .active_rule_set_id
+            .and_then(|id| inner.config.rule_sets.iter().find(|r| r.id == id))
+            .map(|r| r.name.clone());
+
+        let (pomodoro_active, pomodoro_phase, seconds_remaining) =
+            if let Some(pom) = &inner.pomodoro {
+                (
+                    true,
+                    Some(match pom.phase {
+                        crate::pomodoro::Phase::Focus => PomodoroPhase::Focus,
+                        crate::pomodoro::Phase::Break => PomodoroPhase::Break,
+                    }),
+                    Some(pom.seconds_remaining()),
+                )
+            } else {
+                (false, None, None)
+            };
+
+        let status = StatusResponse {
+            focus_active: inner.focus_active,
+            strict_mode: inner.config.strict_mode,
+            allow_new_tab: inner.config.allow_new_tab,
+            active_rule_set_name,
+            pomodoro_active,
+            pomodoro_phase,
+            seconds_remaining,
+            google_calendar_connected: inner
+                .config
+                .google_calendar
+                .as_ref()
+                .map(|c| c.access_token.is_some())
+                .unwrap_or(false),
+            caldav_url: inner.config.caldav.as_ref().map(|c| c.url.clone()),
+            default_rule_set_id: inner.config.default_rule_set_id,
+            accent_color: inner.config.accent_color.clone(),
+        };
+
+        let rule_sets = inner
+            .config
+            .rule_sets
+            .iter()
+            .map(|rs| RuleSetSummary {
+                id: rs.id,
+                name: rs.name.clone(),
+                allowed_urls: rs.allowed_urls.clone(),
+            })
+            .collect();
+
+        let schedules = inner
+            .config
+            .schedules
+            .iter()
+            .map(|s| ScheduleSummary {
+                id: s.id,
+                name: s.name.clone(),
+                days: s
+                    .days
+                    .iter()
+                    .map(|d| d.num_days_from_monday() as u8)
+                    .collect(),
+                start_min: s.start.hour() * 60 + s.start.minute(),
+                end_min: s.end.hour() * 60 + s.end.minute(),
+                enabled: s.enabled,
+                imported: s.imported,
+                imported_repeating: s.imported_repeating,
+                specific_date: s.specific_date.map(|d| d.format("%Y-%m-%d").to_string()),
+                schedule_type: s.schedule_type.clone(),
+                rule_set_id: s.rule_set_id,
+            })
+            .collect();
+
+        let import_rules = inner
+            .config
+            .import_rules
+            .iter()
+            .map(|r| ImportRuleSummary {
+                keyword: r.keyword.clone(),
+                schedule_type: r.schedule_type.clone(),
+            })
+            .collect();
+
+        DaemonEvent::InitialSnapshot {
+            status,
+            rule_sets,
+            schedules,
+            import_rules,
         }
     }
 }
