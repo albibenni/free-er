@@ -70,12 +70,23 @@ pub(super) fn set_accent_color(hex: String) {
     });
 }
 
+fn hex_to_rgb(hex: &str) -> (u8, u8, u8) {
+    let h = hex.trim_start_matches('#');
+    let r = u8::from_str_radix(&h[0..2], 16).unwrap_or(53);
+    let g = u8::from_str_radix(&h[2..4], 16).unwrap_or(132);
+    let b = u8::from_str_radix(&h[4..6], 16).unwrap_or(228);
+    (r, g, b)
+}
+
 pub(super) fn apply_accent_css(hex: &str) {
+    let (r, g, b) = hex_to_rgb(hex);
     let css = format!(
-        "button.suggested-action:not(.flat) {{ background-color: {hex}; background-image: none; color: white; }}\
-         button.suggested-action:not(.flat):hover {{ background-color: {hex}; background-image: none; opacity: 0.85; }}\
+        "button.suggested-action:not(.flat) {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}\
+         button.suggested-action:not(.flat):hover {{ background-color: rgba({r},{g},{b},0.32); background-image: none; }}\
+         button.destructive-action:not(.flat) {{ background-color: rgba(220, 53, 69, 0.5); background-image: none; color: white; border: 1px solid rgba(220, 53, 69, 1); }}\
+         button.destructive-action:not(.flat):hover {{ background-color: rgba(220, 53, 69, 1); background-image: none; }}\
          switch:checked {{ background-color: {hex}; }}\
-         listbox row:selected {{ background-color: {hex}; color: white; }}"
+         listbox row:selected, listbox.boxed-list row:selected {{ background-color: {hex}; color: white; }}"
     );
     thread_local! {
         static PROVIDER: gtk4::CssProvider = {

@@ -52,6 +52,7 @@
     - [x] no screen
     - [x] focus, study, work
     - [x] break, free, colloquio
+- [ ] calendar view scrollable - focussed to current time
 
 ### POMODORO
 
