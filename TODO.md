@@ -24,6 +24,8 @@
 
 ## FEATURES
 
+- [ ] open at startup
+
 ### CALENDAR
 
 - [x] allow modify existing schedules from calendar ui

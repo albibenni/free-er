@@ -13,7 +13,7 @@ const SOCKET_PATH: &str = "/tmp/free-er.sock";
 
 pub async fn serve(state: AppState) -> Result<()> {
     // Remove stale socket from a previous run
-    let _ = std::fs::remove_file(SOCKET_PATH);
+    let _ = tokio::fs::remove_file(SOCKET_PATH).await;
 
     let listener = UnixListener::bind(SOCKET_PATH)?;
     info!("IPC socket listening at {}", SOCKET_PATH);
@@ -45,9 +45,9 @@ async fn handle_connection(stream: tokio::net::UnixStream, state: AppState) -> R
         }
         Ok(cmd) => {
             // Normal request-response: handle first command then continue loop.
-            let (response, mutated) = handle_command(cmd, &state);
+            let (mut response, mutated) = handle_command(cmd, &state);
+            response.push('\n');
             writer.write_all(response.as_bytes()).await?;
-            writer.write_all(b"\n").await?;
             if mutated {
                 let config = state.config();
                 tokio::spawn(async move {
@@ -66,12 +66,12 @@ async fn handle_connection(stream: tokio::net::UnixStream, state: AppState) -> R
     }
 
     while let Some(line) = lines.next_line().await? {
-        let (response, mutated) = match serde_json::from_str::<Command>(&line) {
+        let (mut response, mutated) = match serde_json::from_str::<Command>(&line) {
             Ok(cmd) => handle_command(cmd, &state),
             Err(e) => (format!("{{\"error\": \"{e}\"}}"), false),
         };
+        response.push('\n');
         writer.write_all(response.as_bytes()).await?;
-        writer.write_all(b"\n").await?;
 
         if mutated {
             let config = state.config();
@@ -476,11 +476,10 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             ok(true)
         }
         Command::SyncCalendar => {
-            let import_rules = state.list_import_rules();
             // CalDAV sync
             if let Some(cfg) = state.caldav_config() {
                 let s = state.clone();
-                let rules = import_rules.clone();
+                let rules = state.list_import_rules();
                 tokio::spawn(async move {
                     match crate::calendar::fetch_ics(&cfg).await {
                         Ok(ics) => {
@@ -500,7 +499,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             // Google Calendar sync
             if let Some(cfg) = state.google_calendar_config() {
                 let s = state.clone();
-                let rules = import_rules.clone();
+                let rules = state.list_import_rules();
                 tokio::spawn(async move {
                     let default_id = s.effective_default_rule_set_id();
                     match crate::calendar::fetch_google_calendar_schedules(&cfg, &rules, default_id)

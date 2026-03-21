@@ -390,19 +390,21 @@ impl AppState {
             let prev_active = inner.focus_active;
             let prev_rule_set = inner.active_rule_set_id;
 
-            let active_focus = inner
-                .config
-                .schedules
-                .iter()
-                .filter(|s| {
-                    s.schedule_type == shared::models::ScheduleType::Focus && s.is_active_now()
-                })
-                .map(|s| s.rule_set_id)
-                .next();
-
-            let has_break = inner.config.schedules.iter().any(|s| {
-                s.schedule_type == shared::models::ScheduleType::Break && s.is_active_now()
-            });
+            let (active_focus, has_break) =
+                inner
+                    .config
+                    .schedules
+                    .iter()
+                    .filter(|s| s.is_active_now())
+                    .fold((None, false), |(focus, brk), s| {
+                        match s.schedule_type {
+                            shared::models::ScheduleType::Focus if focus.is_none() => {
+                                (Some(s.rule_set_id), brk)
+                            }
+                            shared::models::ScheduleType::Break => (focus, true),
+                            _ => (focus, brk),
+                        }
+                    });
 
             if has_break {
                 if inner.schedule_activated {

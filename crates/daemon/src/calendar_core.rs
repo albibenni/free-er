@@ -102,7 +102,7 @@ fn resolve_rule(
     let lower = summary.to_lowercase();
     if let Some(rule) = import_rules
         .iter()
-        .find(|r| lower.contains(&r.keyword.to_lowercase()))
+        .find(|r| lower.contains(&r.keyword))
     {
         let rule_set_id = match rule.schedule_type {
             ScheduleType::Focus => rule.rule_set_id.unwrap_or(default_rule_set_id),
