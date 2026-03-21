@@ -51,12 +51,15 @@ pub fn draw_ring(
     cr.arc(cx, cy, radius, start, end); // clockwise arc
     let _ = cr.stroke();
 
-    // Endpoint dot
+    // Endpoint dot (hollow: white fill + colored border)
     let hx = cx + radius * end.cos();
     let hy = cy + radius * end.sin();
+    cr.arc(hx, hy, 7.0, 0.0, 2.0 * PI);
+    cr.set_source_rgb(1.0, 1.0, 1.0);
+    let _ = cr.fill_preserve();
     cr.set_source_rgb(color.0, color.1, color.2);
-    cr.arc(hx, hy, 6.0, 0.0, 2.0 * PI);
-    let _ = cr.fill();
+    cr.set_line_width(2.0);
+    let _ = cr.stroke();
 }
 
 pub fn minutes_from_ring_pos(x: f64, y: f64, w: f64, h: f64, min_m: u64, max_m: u64) -> u64 {
