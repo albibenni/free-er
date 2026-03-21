@@ -54,7 +54,7 @@ pub fn draw_ring(
     // Endpoint dot (hollow: white fill + colored border)
     let hx = cx + radius * end.cos();
     let hy = cy + radius * end.sin();
-    cr.arc(hx, hy, 7.0, 0.0, 2.0 * PI);
+    cr.arc(hx, hy, 9.0, 0.0, 2.0 * PI);
     cr.set_source_rgb(1.0, 1.0, 1.0);
     let _ = cr.fill_preserve();
     cr.set_source_rgb(color.0, color.1, color.2);
