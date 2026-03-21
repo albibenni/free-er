@@ -9,7 +9,7 @@ use super::controllers::install_controllers;
 use super::dialogs::{show_create_dialog, show_edit_dialog, show_view_dialog};
 use super::draw_data::DrawData;
 use super::drawing::draw_calendar;
-use super::geometry::hit_test_event;
+use super::geometry::{hit_test_event, END_HOUR, HEADER_H, START_HOUR};
 use super::week::{
     clamp_week_offset, week_label_text, week_monday_for_offset, MAX_WEEK_OFFSET, MIN_WEEK_OFFSET,
 };
@@ -232,6 +232,7 @@ impl Component for ScheduleSection {
                 },
             },
 
+            #[name = "scroll_window"]
             gtk4::ScrolledWindow {
                 set_vexpand: true,
                 set_hexpand: true,
@@ -239,7 +240,6 @@ impl Component for ScheduleSection {
 
                 #[name = "drawing_area"]
                 gtk4::DrawingArea {
-                    set_vexpand: true,
                     set_hexpand: true,
                     set_content_height: 900,
                 },
@@ -266,6 +266,27 @@ impl Component for ScheduleSection {
             });
 
         install_controllers(&widgets.drawing_area, draw_data.clone(), sender.clone());
+
+        // Scroll to the current hour each time the schedule view becomes visible.
+        let sw = widgets.scroll_window.clone();
+        widgets.scroll_window.connect_map(move |_| {
+            let sw = sw.clone();
+            gtk4::glib::idle_add_local_once(move || {
+                use chrono::Timelike;
+                let now = chrono::Local::now();
+                let hour =
+                    now.hour() as f64 + now.minute() as f64 / 60.0;
+                let content_h = 900.0 - HEADER_H;
+                let hours_span = (END_HOUR - START_HOUR) as f64;
+                let y = HEADER_H
+                    + (hour.clamp(START_HOUR as f64, END_HOUR as f64) - START_HOUR as f64)
+                        / hours_span
+                        * content_h;
+                let adj = sw.vadjustment();
+                let target = (y - adj.page_size() / 2.0).max(0.0);
+                adj.set_value(target);
+            });
+        });
 
         ComponentParts { model, widgets }
     }
