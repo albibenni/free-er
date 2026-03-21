@@ -1,5 +1,5 @@
 use crate::ipc_client;
-use crate::sections::settings::{AI_SITES, SEARCH_ENGINES};
+use crate::sections::settings::{AI_SITES, LOCALHOST_URLS, SEARCH_ENGINES};
 use relm4::ComponentSender;
 use shared::ipc::Command;
 use tracing::error;
@@ -157,6 +157,34 @@ pub(super) fn toggle_search_engines(
             };
             if let Err(e) = ipc_client::send(&cmd).await {
                 error!("Search engines toggle IPC failed: {e}");
+            }
+        }
+    });
+}
+
+pub(super) fn toggle_localhost(
+    enabled: bool,
+    default_rule_set_id: Option<Uuid>,
+    sender: ComponentSender<App>,
+) {
+    tokio::spawn(async move {
+        let Some(id) = resolve_or_create_rule_set(default_rule_set_id, sender).await else {
+            return;
+        };
+        for url in LOCALHOST_URLS {
+            let cmd = if enabled {
+                Command::AddUrlToRuleSet {
+                    rule_set_id: id,
+                    url: url.to_string(),
+                }
+            } else {
+                Command::RemoveUrlFromRuleSet {
+                    rule_set_id: id,
+                    url: url.to_string(),
+                }
+            };
+            if let Err(e) = ipc_client::send(&cmd).await {
+                error!("Localhost toggle IPC failed: {e}");
             }
         }
     });

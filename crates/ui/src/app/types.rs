@@ -64,6 +64,7 @@ pub enum AppMsg {
     ChooseDefaultRuleSet(Uuid),
     AiSitesToggled(bool),
     SearchEnginesToggled(bool),
+    LocalhostToggled(bool),
     // Settings / integrations
     ConnectGoogle,
     DisconnectGoogle,

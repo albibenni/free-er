@@ -193,6 +193,20 @@ impl SimpleComponent for SettingsSection {
             gtk4::Box {
                 set_orientation: gtk4::Orientation::Horizontal,
                 set_spacing: 12,
+                gtk4::Label { set_label: "Localhost & loopback", set_hexpand: true, set_halign: gtk4::Align::Start },
+                gtk4::Switch {
+                    #[watch]
+                    set_active: model.allow_localhost,
+                    connect_state_set[sender] => move |_, state| {
+                        sender.input(SettingsInput::SetLocalhost(state));
+                        gtk4::glib::Propagation::Proceed
+                    },
+                },
+            },
+
+            gtk4::Box {
+                set_orientation: gtk4::Orientation::Horizontal,
+                set_spacing: 12,
                 gtk4::Label { set_label: "AI web pages", set_hexpand: true, set_halign: gtk4::Align::Start },
                 gtk4::Switch {
                     #[watch]

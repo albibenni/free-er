@@ -1,5 +1,5 @@
 use super::constants::{
-    contains_any, AI_SITES, DISCORD, SEARCH_ENGINES, SPOTIFY, TELEGRAM, WHATSAPP,
+    contains_any, AI_SITES, DISCORD, LOCALHOST_URLS, SEARCH_ENGINES, SPOTIFY, TELEGRAM, WHATSAPP,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -10,6 +10,7 @@ pub(super) struct QuickUrlState {
     pub spotify: bool,
     pub allow_ai_sites: bool,
     pub allow_search_engines: bool,
+    pub allow_localhost: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +19,7 @@ pub(super) struct SettingsState {
     pub allow_new_tab: bool,
     pub allow_ai_sites: bool,
     pub allow_search_engines: bool,
+    pub allow_localhost: bool,
     pub whatsapp: bool,
     pub telegram: bool,
     pub discord: bool,
@@ -33,6 +35,7 @@ pub(super) fn quick_url_state_from_urls(urls: &[String]) -> QuickUrlState {
         spotify: contains_any(urls, &[SPOTIFY]),
         allow_ai_sites: contains_any(urls, AI_SITES),
         allow_search_engines: contains_any(urls, SEARCH_ENGINES),
+        allow_localhost: contains_any(urls, LOCALHOST_URLS),
     }
 }
 

@@ -283,6 +283,9 @@ impl Component for App {
             AppMsg::SearchEnginesToggled(enabled) => {
                 url_handlers::toggle_search_engines(enabled, self.default_rule_set_id, sender);
             }
+            AppMsg::LocalhostToggled(enabled) => {
+                url_handlers::toggle_localhost(enabled, self.default_rule_set_id, sender);
+            }
 
             // ── Settings / integrations ──────────────────────────────────
             AppMsg::ConnectGoogle => settings_handlers::connect_google(),

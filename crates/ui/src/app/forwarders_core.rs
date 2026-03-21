@@ -120,6 +120,7 @@ fn map_settings_output(out: SettingsOutput) -> AppMsg {
         SettingsOutput::AllowNewTabChanged(v) => AppMsg::AllowNewTabChanged(v),
         SettingsOutput::AiSitesToggled(v) => AppMsg::AiSitesToggled(v),
         SettingsOutput::SearchEnginesToggled(v) => AppMsg::SearchEnginesToggled(v),
+        SettingsOutput::LocalhostToggled(v) => AppMsg::LocalhostToggled(v),
         SettingsOutput::QuickUrlToggled { url, enabled } => {
             if enabled {
                 AppMsg::AddUrl(url.to_string())

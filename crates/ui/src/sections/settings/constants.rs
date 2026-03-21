@@ -1,3 +1,5 @@
+pub const LOCALHOST_URLS: &[&str] = &["localhost", "127.0.0.1", "[::1]", "192.168.*", "10.*"];
+
 pub(super) const WHATSAPP: &str = "web.whatsapp.com";
 pub(super) const TELEGRAM: &str = "web.telegram.org";
 pub(super) const DISCORD: &str = "discord.com";

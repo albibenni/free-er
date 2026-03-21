@@ -9,6 +9,7 @@ pub struct SettingsSection {
     pub(super) allow_new_tab: bool,
     pub(super) allow_ai_sites: bool,
     pub(super) allow_search_engines: bool,
+    pub(super) allow_localhost: bool,
     pub(super) whatsapp: bool,
     pub(super) telegram: bool,
     pub(super) discord: bool,
@@ -31,6 +32,7 @@ impl SettingsSection {
             allow_new_tab: true,
             allow_ai_sites: false,
             allow_search_engines: false,
+            allow_localhost: false,
             whatsapp: false,
             telegram: false,
             discord: false,
@@ -51,6 +53,7 @@ impl SettingsSection {
             allow_new_tab: self.allow_new_tab,
             allow_ai_sites: self.allow_ai_sites,
             allow_search_engines: self.allow_search_engines,
+            allow_localhost: self.allow_localhost,
             whatsapp: self.whatsapp,
             telegram: self.telegram,
             discord: self.discord,
@@ -64,6 +67,7 @@ impl SettingsSection {
         self.allow_new_tab = state.allow_new_tab;
         self.allow_ai_sites = state.allow_ai_sites;
         self.allow_search_engines = state.allow_search_engines;
+        self.allow_localhost = state.allow_localhost;
         self.whatsapp = state.whatsapp;
         self.telegram = state.telegram;
         self.discord = state.discord;

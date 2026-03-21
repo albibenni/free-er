@@ -5,6 +5,7 @@ pub enum SettingsInput {
     AllowNewTabUpdated(bool),
     SetAiSites(bool),
     SetSearchEngines(bool),
+    SetLocalhost(bool),
     SetQuick(&'static str, bool),
     QuickUrlsUpdated(Vec<String>),
     SaveCalDav,
@@ -21,6 +22,7 @@ pub enum SettingsOutput {
     AllowNewTabChanged(bool),
     AiSitesToggled(bool),
     SearchEnginesToggled(bool),
+    LocalhostToggled(bool),
     QuickUrlToggled {
         url: &'static str,
         enabled: bool,
