@@ -86,10 +86,10 @@ fn minutes_from_ring_pos_top_is_minimum() {
 }
 
 #[test]
-fn minutes_from_ring_pos_left_is_quarter_turn() {
-    // CCW: top(0) → left(25%) → bottom(50%) → right(75%)
+fn minutes_from_ring_pos_left_is_three_quarters_turn() {
+    // CW: top(0) → right(25%) → bottom(50%) → left(75%)
     let m = minutes_from_ring_pos(0.0, 100.0, 200.0, 200.0, 0, 120);
-    assert!((28..=32).contains(&m));
+    assert!((88..=92).contains(&m));
 }
 
 #[test]
@@ -99,10 +99,10 @@ fn minutes_from_ring_pos_bottom_is_half_turn() {
 }
 
 #[test]
-fn minutes_from_ring_pos_right_is_three_quarters_turn() {
-    // CCW: right is at 75%
+fn minutes_from_ring_pos_right_is_quarter_turn() {
+    // CW: right is at 25%
     let m = minutes_from_ring_pos(200.0, 100.0, 200.0, 200.0, 0, 120);
-    assert!((88..=92).contains(&m));
+    assert!((28..=32).contains(&m));
 }
 
 #[test]

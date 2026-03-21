@@ -53,6 +53,9 @@ impl AppState {
     pub fn stop_pomodoro(&self) {
         let mut inner = self.0.lock().unwrap();
         inner.pomodoro = None;
+        // Reset focus state so the schedule loop can cleanly resume on its next tick.
+        inner.focus_active = false;
+        inner.active_rule_set_id = None;
     }
 
     pub fn active_rule_set(&self) -> Option<RuleSet> {
@@ -82,9 +85,10 @@ impl AppState {
         if let Some(pom) = &mut inner.pomodoro {
             if pom.is_expired() {
                 pom.advance();
-                // When moving back to Focus, ensure focus_active stays true.
-                inner.focus_active = true;
             }
+            // During focus phase: block with pomodoro's allowed list.
+            // During break phase: unblock everything (focus_active = false).
+            inner.focus_active = pom.phase == crate::pomodoro::Phase::Focus;
         }
     }
 
@@ -181,6 +185,11 @@ impl AppState {
     /// Called periodically by the background scheduler loop.
     pub fn apply_schedule(&self) {
         let mut inner = self.0.lock().unwrap();
+
+        // Pomodoro takes priority: don't let schedules interfere while it's running.
+        if inner.pomodoro.is_some() {
+            return;
+        }
 
         // Find the first active Focus schedule
         let active_focus = inner

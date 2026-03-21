@@ -50,8 +50,8 @@
 ### POMODORO
 
 - [x] pomodoro timer clock
-- [ ] snap 5 min drag
-- [ ] opposite - clock wise to increase, counter clock wise to decrease
+- [x] snap 5 min drag
+- [x] opposite - clock wise to increase, counter clock wise to decrease
 - [ ] break timer clock - connected to the pomodoro end
 - [ ] race condition between pomodoro and calendar task - pomodoro is above calendar task, but when pomodoro ends, calendar task should come back
 

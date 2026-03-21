@@ -189,12 +189,14 @@ fn start_pomodoro_sets_focus_and_pomodoro() {
 }
 
 #[test]
-fn stop_pomodoro_clears_pomodoro_but_not_focus() {
+fn stop_pomodoro_clears_pomodoro_and_focus() {
     let state = AppState::new(Config::default());
     state.start_pomodoro(1500, 300, None);
     state.stop_pomodoro();
     let snap = state.snapshot();
     assert!(!snap.pomodoro_active);
+    // Focus is also cleared so the schedule loop can cleanly resume.
+    assert!(!snap.focus_active);
 }
 
 #[test]
@@ -630,4 +632,66 @@ fn snapshot_returns_no_seconds_remaining_when_no_pomodoro() {
     assert!(!snap.pomodoro_active);
     assert!(snap.seconds_remaining.is_none());
     assert!(snap.pomodoro_phase.is_none());
+}
+
+#[test]
+fn pomodoro_takes_priority_over_schedule() {
+    use chrono::Local;
+    let now = Local::now();
+    let today = now.date_naive().weekday();
+
+    let state = AppState::new(Config::default());
+    let rs = RuleSet::new("SchedRS");
+    let rs_id = rs.id;
+    let pom_rs = RuleSet::new("PomRS");
+    let pom_rs_id = pom_rs.id;
+    state.add_rule_set(rs);
+    state.add_rule_set(pom_rs);
+
+    // Activate schedule first
+    let sched = Schedule {
+        id: Uuid::new_v4(),
+        name: "Always".into(),
+        days: vec![today],
+        start: NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        end: NaiveTime::from_hms_opt(23, 59, 59).unwrap(),
+        rule_set_id: rs_id,
+        enabled: true,
+        imported: false,
+        imported_repeating: false,
+        specific_date: None,
+        schedule_type: ScheduleType::Focus,
+    };
+    state.add_schedule(sched);
+    state.apply_schedule();
+    assert_eq!(state.snapshot().active_rule_set_name.as_deref(), Some("SchedRS"));
+
+    // Start pomodoro: should override schedule's rule set
+    state.start_pomodoro(3600, 300, Some(pom_rs_id));
+    assert_eq!(state.snapshot().active_rule_set_name.as_deref(), Some("PomRS"));
+
+    // apply_schedule while pomodoro is running: should be a no-op
+    state.apply_schedule();
+    assert_eq!(state.snapshot().active_rule_set_name.as_deref(), Some("PomRS"));
+
+    // Stop pomodoro: focus resets; next apply_schedule restores the schedule
+    state.stop_pomodoro();
+    assert!(!state.snapshot().focus_active);
+    state.apply_schedule();
+    assert_eq!(state.snapshot().active_rule_set_name.as_deref(), Some("SchedRS"));
+}
+
+#[test]
+fn tick_sets_focus_inactive_during_break_phase() {
+    use std::time::Duration;
+    let state = AppState::new(Config::default());
+    state.start_pomodoro(1, 3600, None); // 1-second focus
+
+    std::thread::sleep(Duration::from_millis(1100));
+    state.tick(); // advance to Break phase
+
+    let snap = state.snapshot();
+    assert_eq!(snap.pomodoro_phase.as_ref().map(|p| format!("{p:?}")), Some("Break".into()));
+    // During break, blocking should be inactive
+    assert!(!snap.focus_active);
 }
