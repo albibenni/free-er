@@ -20,6 +20,7 @@
 - [x] allow all search engines from settings
 - [x] allow all ai web pages from settings
 - [x] allow new tab page from settings
+- [ ] allow localhosts and ips
 
 ## FEATURES
 
@@ -81,3 +82,4 @@ keeps paniking
 
 - [x] pomodoro.rs refactor - too much code, should be split into smaller functions
 - [ ] event loop - use a more efficient way to handle events, maybe with a channel or a queue, instead of matching on every event
+  - [ ] risk: Lock discipline in the daemon: emit() must always be called after releasing the `Mutex<Inner>` guard, never while holding it. The fix is a small emit() helper that clones the Sender out of the lock first, then sends outside.

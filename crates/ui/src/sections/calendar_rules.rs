@@ -8,10 +8,20 @@ pub struct CalendarRulesSection {
     break_keywords: Vec<String>,
     focus_entry: gtk4::EntryBuffer,
     break_entry: gtk4::EntryBuffer,
+    caldav_url: gtk4::EntryBuffer,
+    caldav_user: gtk4::EntryBuffer,
+    caldav_pass: gtk4::EntryBuffer,
+    google_connected: bool,
+    caldav_connected: bool,
 }
 
 #[derive(Debug)]
 pub enum CalendarRulesInput {
+    SaveCalDav,
+    ConnectGoogle,
+    DisconnectGoogle,
+    GoogleStatusUpdated(bool),
+    CaldavStatusUpdated(bool),
     AddFocusKeyword,
     AddBreakKeyword,
     RemoveFocusKeyword(String),
@@ -21,6 +31,13 @@ pub enum CalendarRulesInput {
 
 #[derive(Debug)]
 pub enum CalendarRulesOutput {
+    SaveCalDav {
+        url: String,
+        user: String,
+        pass: String,
+    },
+    ConnectGoogleRequested,
+    DisconnectGoogleRequested,
     AddRule {
         keyword: String,
         schedule_type: ScheduleType,
@@ -162,6 +179,86 @@ impl Component for CalendarRulesSection {
                 add_css_class: "boxed-list",
                 set_selection_mode: gtk4::SelectionMode::None,
             },
+
+            gtk4::Separator {},
+
+            // ── Calendar connections ──────────────────────────────────────────────
+
+            gtk4::Separator {},
+
+            gtk4::Label {
+                set_label: "CalDAV",
+                add_css_class: "title-2",
+                set_halign: gtk4::Align::Start,
+            },
+
+            gtk4::Entry {
+                set_buffer: &model.caldav_url,
+                set_placeholder_text: Some("Calendar URL (.ics or CalDAV)"),
+            },
+            gtk4::Entry {
+                set_buffer: &model.caldav_user,
+                set_placeholder_text: Some("Username (optional)"),
+            },
+            gtk4::Entry {
+                set_buffer: &model.caldav_pass,
+                set_placeholder_text: Some("Password (optional)"),
+                set_visibility: false,
+            },
+
+            gtk4::Box {
+                set_orientation: gtk4::Orientation::Horizontal,
+                set_spacing: 8,
+
+                gtk4::Label {
+                    #[watch]
+                    set_label: if model.caldav_connected { "● Connected" } else { "○ Not connected" },
+                    set_hexpand: true,
+                    set_halign: gtk4::Align::Start,
+                },
+
+                gtk4::Button {
+                    set_label: "Save",
+                    set_css_classes: &["suggested-action"],
+                    set_halign: gtk4::Align::End,
+                    connect_clicked => CalendarRulesInput::SaveCalDav,
+                },
+            },
+
+            gtk4::Separator {},
+
+            gtk4::Label {
+                set_label: "Google Calendar",
+                add_css_class: "title-2",
+                set_halign: gtk4::Align::Start,
+            },
+
+            gtk4::Box {
+                set_orientation: gtk4::Orientation::Horizontal,
+                set_spacing: 8,
+
+                gtk4::Label {
+                    #[watch]
+                    set_label: if model.google_connected { "● Connected" } else { "○ Not connected" },
+                    set_hexpand: true,
+                    set_halign: gtk4::Align::Start,
+                },
+
+                gtk4::Button {
+                    set_label: "Connect",
+                    set_css_classes: &["suggested-action"],
+                    #[watch]
+                    set_visible: !model.google_connected,
+                    connect_clicked => CalendarRulesInput::ConnectGoogle,
+                },
+                gtk4::Button {
+                    set_label: "Disconnect",
+                    set_css_classes: &["destructive-action"],
+                    #[watch]
+                    set_visible: model.google_connected,
+                    connect_clicked => CalendarRulesInput::DisconnectGoogle,
+                },
+            },
         }
     }
 
@@ -171,6 +268,11 @@ impl Component for CalendarRulesSection {
             break_keywords: Vec::new(),
             focus_entry: gtk4::EntryBuffer::default(),
             break_entry: gtk4::EntryBuffer::default(),
+            caldav_url: gtk4::EntryBuffer::default(),
+            caldav_user: gtk4::EntryBuffer::default(),
+            caldav_pass: gtk4::EntryBuffer::default(),
+            google_connected: false,
+            caldav_connected: false,
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -184,6 +286,25 @@ impl Component for CalendarRulesSection {
         _root: &Self::Root,
     ) {
         match msg {
+            CalendarRulesInput::SaveCalDav => {
+                let _ = sender.output(CalendarRulesOutput::SaveCalDav {
+                    url: self.caldav_url.text().to_string(),
+                    user: self.caldav_user.text().to_string(),
+                    pass: self.caldav_pass.text().to_string(),
+                });
+            }
+            CalendarRulesInput::ConnectGoogle => {
+                let _ = sender.output(CalendarRulesOutput::ConnectGoogleRequested);
+            }
+            CalendarRulesInput::DisconnectGoogle => {
+                let _ = sender.output(CalendarRulesOutput::DisconnectGoogleRequested);
+            }
+            CalendarRulesInput::GoogleStatusUpdated(connected) => {
+                self.google_connected = connected;
+            }
+            CalendarRulesInput::CaldavStatusUpdated(connected) => {
+                self.caldav_connected = connected;
+            }
             CalendarRulesInput::AddFocusKeyword => {
                 let Some(kw) = normalize_keyword(&self.focus_entry.text()) else {
                     return;
@@ -263,6 +384,7 @@ impl Component for CalendarRulesSection {
                 }
             }
         }
+        self.update_view(widgets, sender);
     }
 }
 

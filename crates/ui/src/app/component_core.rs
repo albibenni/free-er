@@ -5,6 +5,7 @@ use super::{
 use gtk4::prelude::*;
 use relm4::prelude::*;
 use relm4::ComponentController;
+use tracing::debug;
 
 #[relm4::component(pub)]
 impl Component for App {
@@ -174,18 +175,21 @@ impl Component for App {
             .stack
             .add_named(model.settings.widget(), Some("settings"));
 
-        // Fetch accent color from daemon once at startup
+        // Long-lived subscription task: connects to daemon, receives push events,
+        // reconnects automatically on failure.
         sender.command(|out, _| async move {
-            if let Ok(status) = crate::ipc_client::get_status().await {
-                out.emit(AppCmdOutput::AccentColorFetched(status.accent_color));
+            loop {
+                match crate::ipc_client::subscribe().await {
+                    Ok(mut rx) => {
+                        while let Some(e) = rx.recv().await {
+                            out.emit(AppCmdOutput::DaemonEvent(e));
+                        }
+                        out.emit(AppCmdOutput::SubscriptionFailed);
+                    }
+                    Err(_) => out.emit(AppCmdOutput::SubscriptionFailed),
+                }
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             }
-        });
-
-        // Poll daemon status every 2 seconds
-        let tick_sender = sender.clone();
-        gtk4::glib::timeout_add_seconds_local(2, move || {
-            tick_sender.input(AppMsg::StatusTick);
-            gtk4::glib::ControlFlow::Continue
         });
 
         // Set initial sidebar minimum width
@@ -201,6 +205,7 @@ impl Component for App {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        debug!(target: "free_er_ui::app", ?msg, "app message received");
         match msg {
             // ── UI / Navigation ──────────────────────────────────────────
             AppMsg::ToggleSidebar => {
@@ -356,11 +361,16 @@ impl Component for App {
                 });
             }
             // ── Status / refresh ─────────────────────────────────────────
-            AppMsg::StatusTick => {
-                status_handlers::status_tick(self, self.default_rule_set_id, sender)
-            }
             AppMsg::RefreshRuleSets => {
-                status_handlers::refresh_rule_sets(self, self.default_rule_set_id, sender)
+                // On-demand re-fetch (e.g. after a mutation) — spawn a one-shot IPC call.
+                let s = sender.clone();
+                relm4::spawn(async move {
+                    if let Ok(sets) = crate::ipc_client::list_rule_sets().await {
+                        s.input(AppMsg::DaemonEvent(shared::ipc::DaemonEvent::RuleSetsChanged {
+                            rule_sets: sets,
+                        }));
+                    }
+                });
             }
             AppMsg::SetDefaultRuleSet(id) => {
                 self.default_rule_set_id = Some(id);
@@ -404,13 +414,12 @@ impl Component for App {
                     std::process::exit(0);
                 });
             }
-            AppMsg::DaemonAlive => {
-                self.daemon_failures = 0;
-                self.daemon_dialog_shown = false;
+            AppMsg::DaemonEvent(event) => {
+                status_handlers::handle_event(self, event, sender);
             }
-            AppMsg::DaemonGone => {
+            AppMsg::SubscriptionLost => {
                 self.daemon_failures += 1;
-                if !self.daemon_dialog_shown {
+                if !self.daemon_dialog_shown && self.daemon_failures >= 3 {
                     self.daemon_dialog_shown = true;
                     let dialog = gtk4::AlertDialog::builder()
                         .message("Daemon is unreachable")
@@ -419,7 +428,7 @@ impl Component for App {
                         .build();
                     dialog.show(Some(_root));
                 }
-                if self.daemon_failures >= 3 {
+                if self.daemon_failures >= 5 {
                     relm4::main_application().quit();
                 }
             }
@@ -429,18 +438,18 @@ impl Component for App {
     fn update_cmd(
         &mut self,
         msg: AppCmdOutput,
-        _sender: ComponentSender<Self>,
+        sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
         match msg {
-            AppCmdOutput::AccentColorFetched(hex) => {
-                settings_handlers::apply_accent_css(&hex);
-                self.pomodoro
-                    .sender()
-                    .emit(crate::sections::pomodoro::PomodoroInput::AccentColorUpdated(hex.clone()));
-                self.settings
-                    .sender()
-                    .emit(crate::sections::settings::SettingsInput::AccentColorUpdated(hex));
+            AppCmdOutput::DaemonEvent(event) => {
+                // Reset failure counter on any successful event.
+                self.daemon_failures = 0;
+                self.daemon_dialog_shown = false;
+                sender.input(AppMsg::DaemonEvent(event));
+            }
+            AppCmdOutput::SubscriptionFailed => {
+                sender.input(AppMsg::SubscriptionLost);
             }
         }
     }

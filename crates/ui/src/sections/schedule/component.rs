@@ -333,27 +333,21 @@ impl Component for ScheduleSection {
                             rule_set_id,
                         });
                     } else {
+                        let specific_date = self
+                            .draw_data
+                            .borrow()
+                            .schedules
+                            .iter()
+                            .find(|s| s.id == id)
+                            .and_then(|s| s.specific_date.clone());
                         sender.input(ScheduleInput::ShowEditDialog {
                             id,
                             name,
                             col,
-                            days: self
-                                .draw_data
-                                .borrow()
-                                .schedules
-                                .iter()
-                                .find(|s| s.id == id)
-                                .map(|s| s.days.clone())
-                                .expect("hit-test id must exist in schedules"),
+                            days,
                             start_min,
                             end_min,
-                            specific_date: self
-                                .draw_data
-                                .borrow()
-                                .schedules
-                                .iter()
-                                .find(|s| s.id == id)
-                                .and_then(|s| s.specific_date.clone()),
+                            specific_date,
                             schedule_type,
                             rule_set_id,
                         });

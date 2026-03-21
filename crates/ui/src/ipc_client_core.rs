@@ -1,10 +1,11 @@
 use anyhow::Result;
 use shared::ipc::{
-    Command, ImportRuleSummary, OpenTab, RuleSetSummary, ScheduleSummary, ScheduleType,
+    Command, DaemonEvent, ImportRuleSummary, OpenTab, RuleSetSummary, ScheduleSummary, ScheduleType,
     StatusResponse,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 const SOCKET_PATH: &str = "/tmp/free-er.sock";
@@ -173,6 +174,36 @@ pub async fn add_rule_set(name: &str) -> Result<Uuid> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("no id in response"))?;
     Ok(id.parse()?)
+}
+
+/// Connect to the daemon in subscription mode.
+/// Returns an mpsc receiver that yields DaemonEvent values as the daemon pushes them.
+/// The background reader task runs until the receiver is dropped or the socket closes.
+pub async fn subscribe() -> Result<mpsc::Receiver<DaemonEvent>> {
+    let stream = UnixStream::connect(SOCKET_PATH).await?;
+    let (reader, mut writer) = stream.into_split();
+
+    let line = serde_json::to_string(&Command::Subscribe)? + "\n";
+    writer.write_all(line.as_bytes()).await?;
+
+    let (tx, rx) = mpsc::channel::<DaemonEvent>(64);
+
+    tokio::spawn(async move {
+        let _writer = writer; // keep the write half alive as a liveness signal to the daemon
+        let mut lines = BufReader::new(reader).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            match serde_json::from_str::<DaemonEvent>(&line) {
+                Ok(event) => {
+                    if tx.send(event).await.is_err() {
+                        break; // receiver dropped — UI is shutting down
+                    }
+                }
+                Err(e) => tracing::warn!("malformed daemon event: {e}"),
+            }
+        }
+    });
+
+    Ok(rx)
 }
 
 #[cfg(test)]

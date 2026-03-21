@@ -92,6 +92,11 @@ fn map_schedule_output(out: ScheduleOutput) -> AppMsg {
 
 fn map_calendar_rules_output(out: CalendarRulesOutput) -> AppMsg {
     match out {
+        CalendarRulesOutput::SaveCalDav { url, user, pass } => {
+            AppMsg::SaveCalDav { url, user, pass }
+        }
+        CalendarRulesOutput::ConnectGoogleRequested => AppMsg::ConnectGoogle,
+        CalendarRulesOutput::DisconnectGoogleRequested => AppMsg::DisconnectGoogle,
         CalendarRulesOutput::AddRule {
             keyword,
             schedule_type,

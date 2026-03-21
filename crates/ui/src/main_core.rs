@@ -1,14 +1,9 @@
 use relm4::RelmApp;
 use ui::app::App;
 
-fn default_env_filter() -> tracing_subscriber::EnvFilter {
-    tracing_subscriber::EnvFilter::from_default_env()
-        .add_directive("free_er_ui=debug".parse().unwrap())
-}
-
 fn init_tracing() {
     tracing_subscriber::fmt()
-        .with_env_filter(default_env_filter())
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 }
 

@@ -1,7 +1,7 @@
 use crate::app_state::AppState;
 use anyhow::Result;
 use shared::{
-    ipc::{Command, PomodoroPhase, StatusResponse},
+    ipc::{Command, DaemonEvent, ImportRuleSummary, PomodoroPhase, RuleSetSummary, ScheduleSummary, StatusResponse},
     models::RuleSet,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -33,6 +33,38 @@ async fn handle_connection(stream: tokio::net::UnixStream, state: AppState) -> R
     let (reader, mut writer) = stream.into_split();
     let mut lines = BufReader::new(reader).lines();
 
+    // Read the first command to detect a subscription upgrade.
+    let first = match lines.next_line().await? {
+        Some(l) => l,
+        None => return Ok(()),
+    };
+
+    match serde_json::from_str::<Command>(&first) {
+        Ok(Command::Subscribe) => {
+            return handle_subscription(lines, writer, state).await;
+        }
+        Ok(cmd) => {
+            // Normal request-response: handle first command then continue loop.
+            let (response, mutated) = handle_command(cmd, &state);
+            writer.write_all(response.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+            if mutated {
+                let config = state.config();
+                tokio::spawn(async move {
+                    if let Err(e) = crate::persistence::save(&config).await {
+                        warn!("Failed to persist config: {e}");
+                    }
+                });
+            }
+        }
+        Err(e) => {
+            writer
+                .write_all(format!("{{\"error\": \"{e}\"}}\n").as_bytes())
+                .await?;
+            return Ok(());
+        }
+    }
+
     while let Some(line) = lines.next_line().await? {
         let (response, mutated) = match serde_json::from_str::<Command>(&line) {
             Ok(cmd) => handle_command(cmd, &state),
@@ -51,6 +83,101 @@ async fn handle_connection(stream: tokio::net::UnixStream, state: AppState) -> R
         }
     }
     Ok(())
+}
+
+async fn handle_subscription(
+    _lines: tokio::io::Lines<BufReader<tokio::net::unix::OwnedReadHalf>>,
+    mut writer: tokio::net::unix::OwnedWriteHalf,
+    state: AppState,
+) -> Result<()> {
+    // Send a full snapshot immediately so the UI can paint without a round-trip.
+    let snapshot = build_initial_snapshot(&state);
+    let line = serde_json::to_string(&snapshot)? + "\n";
+    writer.write_all(line.as_bytes()).await?;
+
+    let mut rx = state.subscribe();
+
+    loop {
+        match rx.recv().await {
+            Ok(event) => {
+                let line = serde_json::to_string(&event)? + "\n";
+                if writer.write_all(line.as_bytes()).await.is_err() {
+                    break; // Client disconnected — normal.
+                }
+            }
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                warn!("subscription lagged by {n} events — sending resync snapshot");
+                let snapshot = build_initial_snapshot(&state);
+                let line = serde_json::to_string(&snapshot)? + "\n";
+                if writer.write_all(line.as_bytes()).await.is_err() {
+                    break;
+                }
+            }
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+        }
+    }
+    Ok(())
+}
+
+fn build_initial_snapshot(state: &AppState) -> DaemonEvent {
+    use chrono::Timelike;
+    let snap = state.snapshot();
+    let status = StatusResponse {
+        focus_active: snap.focus_active,
+        strict_mode: snap.strict_mode,
+        allow_new_tab: snap.allow_new_tab,
+        active_rule_set_name: snap.active_rule_set_name,
+        pomodoro_active: snap.pomodoro_active,
+        pomodoro_phase: snap.pomodoro_phase.map(|p| match p {
+            crate::pomodoro::Phase::Focus => PomodoroPhase::Focus,
+            crate::pomodoro::Phase::Break => PomodoroPhase::Break,
+        }),
+        seconds_remaining: snap.seconds_remaining,
+        google_calendar_connected: snap.google_calendar_connected,
+        caldav_url: snap.caldav_url,
+        default_rule_set_id: snap.default_rule_set_id,
+        accent_color: snap.accent_color,
+    };
+    let rule_sets = state
+        .list_rule_sets()
+        .into_iter()
+        .map(|rs| RuleSetSummary {
+            id: rs.id,
+            name: rs.name,
+            allowed_urls: rs.allowed_urls,
+        })
+        .collect();
+    let schedules = state
+        .list_schedules()
+        .into_iter()
+        .map(|s| ScheduleSummary {
+            id: s.id,
+            name: s.name,
+            days: s.days.iter().map(|d| d.num_days_from_monday() as u8).collect(),
+            start_min: s.start.hour() * 60 + s.start.minute(),
+            end_min: s.end.hour() * 60 + s.end.minute(),
+            enabled: s.enabled,
+            imported: s.imported,
+            imported_repeating: s.imported_repeating,
+            specific_date: s.specific_date.map(|d| d.format("%Y-%m-%d").to_string()),
+            schedule_type: s.schedule_type,
+            rule_set_id: s.rule_set_id,
+        })
+        .collect();
+    let import_rules = state
+        .list_import_rules()
+        .into_iter()
+        .map(|r| ImportRuleSummary {
+            keyword: r.keyword,
+            schedule_type: r.schedule_type,
+        })
+        .collect();
+    DaemonEvent::InitialSnapshot {
+        status,
+        rule_sets,
+        schedules,
+        import_rules,
+    }
 }
 
 fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
@@ -100,6 +227,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 }),
                 seconds_remaining: snap.seconds_remaining,
                 google_calendar_connected: snap.google_calendar_connected,
+                caldav_url: snap.caldav_url,
                 default_rule_set_id: snap.default_rule_set_id,
                 accent_color: snap.accent_color,
             };
@@ -405,6 +533,9 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             state.remove_import_rule(&keyword, &schedule_type);
             ok(true)
         }
+        // Subscribe is handled before handle_command is called; this arm is unreachable
+        // but required for exhaustiveness.
+        Command::Subscribe => ok(false),
         Command::Shutdown => {
             tokio::spawn(async {
                 tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;

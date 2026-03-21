@@ -14,10 +14,7 @@ use tracing::{info, warn};
 /// binaries (which may call this multiple times) never panic.
 fn setup_tracing() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("free_er=debug".parse()?),
-        )
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .try_init()
         .map_err(|e| anyhow::anyhow!("{e}"))
 }

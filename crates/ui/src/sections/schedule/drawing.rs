@@ -214,11 +214,9 @@ fn draw_event_blocks(
     let layouts = compute_layout(&data.schedules, week_monday);
 
     for layout in &layouts {
-        let sched = data
-            .schedules
-            .iter()
-            .find(|s| s.id == layout.sched_id)
-            .expect("layout must reference an existing schedule");
+        let Some(sched) = data.schedules.iter().find(|s| s.id == layout.sched_id) else {
+            continue;
+        };
         if !sched.enabled {
             continue;
         }
@@ -275,7 +273,9 @@ fn draw_event_label(
     const PAD_L: f64 = 6.0;
     const PAD_R: f64 = 6.0;
 
-    cr.save().unwrap();
+    if cr.save().is_err() {
+        return;
+    }
     cr.rectangle(x, y_start, block_w - PAD_R, block_h);
     let _ = cr.clip();
 
@@ -322,7 +322,7 @@ fn draw_event_label(
     cr.move_to(text_x, text_y);
     let _ = cr.show_text(&sched.name);
 
-    cr.restore().unwrap();
+    let _ = cr.restore();
 }
 
 // ── Drag preview ──────────────────────────────────────────────────────────────

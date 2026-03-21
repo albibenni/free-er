@@ -108,7 +108,6 @@ pub enum AppMsg {
         schedule_type: shared::ipc::ScheduleType,
     },
     // Status / refresh
-    StatusTick,
     RefreshRuleSets,
     SetDefaultRuleSet(Uuid),
     AccentColorChanged(String),
@@ -118,14 +117,16 @@ pub enum AppMsg {
     FetchOpenTabs,
     /// Send Shutdown to the daemon then quit the UI.
     ShutdownDaemon,
-    /// Daemon is unreachable — quit the UI.
-    DaemonGone,
-    /// Daemon responded — reset the failure counter.
-    DaemonAlive,
+    /// A push event arrived from the daemon subscription.
+    DaemonEvent(shared::ipc::DaemonEvent),
+    /// The subscription task lost its connection — attempt reconnect.
+    SubscriptionLost,
 }
 
 #[derive(Debug)]
 pub enum AppCmdOutput {
-    /// Initial accent color fetched from daemon at startup.
-    AccentColorFetched(String),
+    /// A DaemonEvent arrived from the long-running subscription task.
+    DaemonEvent(shared::ipc::DaemonEvent),
+    /// The subscription socket closed or errored.
+    SubscriptionFailed,
 }
