@@ -67,5 +67,6 @@ pub fn minutes_from_ring_pos(x: f64, y: f64, w: f64, h: f64, min_m: u64, max_m: 
     // Clockwise from top: add FRAC_PI_2 offset
     let t = ((angle + FRAC_PI_2) / (2.0 * PI)).rem_euclid(1.0);
     let mins = min_m as f64 + t * (max_m - min_m) as f64;
-    mins.round().clamp(min_m as f64, max_m as f64) as u64
+    let snapped = (mins / 5.0).round() * 5.0;
+    snapped.clamp(min_m as f64, max_m as f64) as u64
 }
