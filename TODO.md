@@ -2,13 +2,13 @@
 
 ## UI
 
-- [ ] sidebar:
+- [x] sidebar:
   - [x] icons
   - [x] toggle sidebar with a button - if closed, only show icons, if open show icons and text
   - [x] settings on the bottom, not in the middle
-- [ ] accent color:
+- [x] accent color:
   - [x] allow user to choose from a palette of colors
-  - [ ] use accent color for buttons, icons, highlights
+  - [x] use accent color for buttons, icons, highlights
 - [ ] dark light mode:
   - [ ] automatic based on system settings
   - [ ] manual toggle in settings
@@ -20,7 +20,7 @@
 - [x] allow all search engines from settings
 - [x] allow all ai web pages from settings
 - [x] allow new tab page from settings
-- [ ] allow localhosts and ips
+- [x] allow localhosts and ips
 
 ## FEATURES
 
@@ -81,5 +81,5 @@ keeps paniking
 ## OPTIMIZATION
 
 - [x] pomodoro.rs refactor - too much code, should be split into smaller functions
-- [ ] event loop - use a more efficient way to handle events, maybe with a channel or a queue, instead of matching on every event
-  - [ ] risk: Lock discipline in the daemon: emit() must always be called after releasing the `Mutex<Inner>` guard, never while holding it. The fix is a small emit() helper that clones the Sender out of the lock first, then sends outside.
+- [x] event loop - use a more efficient way to handle events, maybe with a channel or a queue, instead of matching on every event
+  - [x] risk: Lock discipline in the daemon: emit() must always be called after releasing the `Mutex<Inner>` guard, never while holding it. The fix is a small emit() helper that clones the Sender out of the lock first, then sends outside.
