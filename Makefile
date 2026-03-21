@@ -1,4 +1,6 @@
-.PHONY: all build daemon ui extension test coverage clean dev run stop help
+.PHONY: all build daemon ui ui-debug extension test coverage clean dev run run-debug stop help
+
+UI_RUN_ENV ?=
 
 all: build extension
 
@@ -13,6 +15,10 @@ daemon:
 
 ui:
 	cargo run -p ui
+
+ui-debug: UI_RUN_ENV=GTK_DEBUG=interactive GDK_DEBUG=events G_MESSAGES_DEBUG=all RUST_LOG=free_er_ui=debug
+ui-debug:
+	$(UI_RUN_ENV) cargo run -p ui
 
 extension:
 	cd extension && pnpm build
@@ -51,7 +57,11 @@ run: build extension stop
 	@cargo run -p daemon &
 	@sleep 1
 	@echo "Starting UI..."
-	@cargo run -p ui
+	@$(UI_RUN_ENV) cargo run -p ui
+
+# Build everything (Rust + extension), then launch daemon + UI with GTK inspector enabled.
+run-debug: UI_RUN_ENV=GTK_DEBUG=interactive GDK_DEBUG=events G_MESSAGES_DEBUG=all RUST_LOG=free_er_ui=debug
+run-debug: run
 
 clean:
 	cargo clean
@@ -61,15 +71,18 @@ help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "  run               Build everything and launch daemon + UI"
+	@echo "                    Use UI_RUN_ENV='GTK_DEBUG=interactive GDK_DEBUG=events G_MESSAGES_DEBUG=all RUST_LOG=free_er_ui=debug' for UI debug logs"
 	@echo "  build             Build all Rust crates (debug)"
 	@echo "  release           Build all Rust crates (release)"
 	@echo "  daemon            Run the daemon"
 	@echo "  ui                Run the GTK4 UI"
+	@echo "  ui-debug          Run GTK4 UI with inspector and click/event debug logging"
 	@echo "  extension         Build the browser extension"
 	@echo "  extension-watch   Watch and rebuild extension on changes"
 	@echo "  stop              Kill any running daemon"
 	@echo "  dev               Build + start daemon in background + launch UI"
 	@echo "  test              Run all tests"
+	@echo "  run-debug         Build everything and launch daemon + UI with inspector + click/event logs"
 	@echo "  coverage          Generate HTML coverage report with cargo-llvm-cov"
 	@echo "  coverage-summary  Print per-file and total coverage (lines/regions/functions) to stdout"
 	@echo "  clean             Remove build artifacts and extension/dist"
