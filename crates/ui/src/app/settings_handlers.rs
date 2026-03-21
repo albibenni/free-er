@@ -90,8 +90,8 @@ pub(super) fn apply_accent_css(hex: &str) {
          button.destructive-action-dialog:not(.flat) {{ background-color: rgba(220, 53, 69, 0.12); background-image: none; color: red; border: 1px solid rgba(220, 53, 69, 0.35); }}\
          button.destructive-action-dialog:not(.flat):hover {{ background-color: rgba(220, 53, 69, 0.32); background-image: none; }}\
          switch:checked {{ background-color: {hex}; }}\
-         popover.menu listview row:selected {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}\
-         listbox row:selected, listbox.boxed-list row:selected {{ background-color: {hex}; color: white; }}"
+         listbox.boxed-list row:selected {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}
+         popover listview row:selected,popover listview row:selected > * {{ background-color: rgba({r},{g},{b},0.12) !important; background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}"
     );
     thread_local! {
         static PROVIDER: gtk4::CssProvider = {

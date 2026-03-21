@@ -237,14 +237,14 @@ fn google_event_to_schedule(
         .map(|dt| dt.naive_local())
         .or_else(|_| {
             chrono::NaiveDate::parse_from_str(start_str, "%Y-%m-%d")
-                .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+                .map(|d| chrono::NaiveDateTime::new(d, chrono::NaiveTime::MIN))
         })
         .ok()?;
     let end_dt = chrono::DateTime::parse_from_rfc3339(end_str)
         .map(|dt| dt.naive_local())
         .or_else(|_| {
             chrono::NaiveDate::parse_from_str(end_str, "%Y-%m-%d")
-                .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+                .map(|d| chrono::NaiveDateTime::new(d, chrono::NaiveTime::MIN))
         })
         .ok()?;
 
@@ -278,8 +278,8 @@ fn schedule_window_bounds() -> (chrono::NaiveDateTime, chrono::NaiveDateTime) {
     let week_after_next_monday = this_monday + chrono::Duration::weeks(2);
 
     (
-        prev_monday.and_hms_opt(0, 0, 0).unwrap(),
-        week_after_next_monday.and_hms_opt(0, 0, 0).unwrap(),
+        chrono::NaiveDateTime::new(prev_monday, chrono::NaiveTime::MIN),
+        chrono::NaiveDateTime::new(week_after_next_monday, chrono::NaiveTime::MIN),
     )
 }
 
