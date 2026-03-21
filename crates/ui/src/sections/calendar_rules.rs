@@ -12,6 +12,7 @@ pub struct CalendarRulesSection {
     caldav_user: gtk4::EntryBuffer,
     caldav_pass: gtk4::EntryBuffer,
     google_connected: bool,
+    caldav_connected: bool,
 }
 
 #[derive(Debug)]
@@ -20,6 +21,7 @@ pub enum CalendarRulesInput {
     ConnectGoogle,
     DisconnectGoogle,
     GoogleStatusUpdated(bool),
+    CaldavStatusUpdated(bool),
     AddFocusKeyword,
     AddBreakKeyword,
     RemoveFocusKeyword(String),
@@ -204,11 +206,23 @@ impl Component for CalendarRulesSection {
                 set_visibility: false,
             },
 
-            gtk4::Button {
-                set_label: "Save",
-                set_css_classes: &["suggested-action"],
-                set_halign: gtk4::Align::End,
-                connect_clicked => CalendarRulesInput::SaveCalDav,
+            gtk4::Box {
+                set_orientation: gtk4::Orientation::Horizontal,
+                set_spacing: 8,
+
+                gtk4::Label {
+                    #[watch]
+                    set_label: if model.caldav_connected { "● Connected" } else { "○ Not connected" },
+                    set_hexpand: true,
+                    set_halign: gtk4::Align::Start,
+                },
+
+                gtk4::Button {
+                    set_label: "Save",
+                    set_css_classes: &["suggested-action"],
+                    set_halign: gtk4::Align::End,
+                    connect_clicked => CalendarRulesInput::SaveCalDav,
+                },
             },
 
             gtk4::Separator {},
@@ -258,6 +272,7 @@ impl Component for CalendarRulesSection {
             caldav_user: gtk4::EntryBuffer::default(),
             caldav_pass: gtk4::EntryBuffer::default(),
             google_connected: false,
+            caldav_connected: false,
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -286,6 +301,9 @@ impl Component for CalendarRulesSection {
             }
             CalendarRulesInput::GoogleStatusUpdated(connected) => {
                 self.google_connected = connected;
+            }
+            CalendarRulesInput::CaldavStatusUpdated(connected) => {
+                self.caldav_connected = connected;
             }
             CalendarRulesInput::AddFocusKeyword => {
                 let Some(kw) = normalize_keyword(&self.focus_entry.text()) else {
@@ -366,6 +384,7 @@ impl Component for CalendarRulesSection {
                 }
             }
         }
+        self.update_view(widgets, sender);
     }
 }
 

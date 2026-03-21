@@ -138,6 +138,8 @@ pub enum DaemonEvent {
         allow_new_tab: bool,
         accent_color: String,
         google_calendar_connected: bool,
+        #[serde(default)]
+        caldav_url: Option<String>,
         default_rule_set_id: Option<Uuid>,
     },
     /// The full rule-set list changed (create / delete / URL mutation).
@@ -214,6 +216,8 @@ pub struct StatusResponse {
     pub pomodoro_phase: Option<PomodoroPhase>,
     pub seconds_remaining: Option<u64>,
     pub google_calendar_connected: bool,
+    #[serde(default)]
+    pub caldav_url: Option<String>,
     pub allow_new_tab: bool,
     pub default_rule_set_id: Option<Uuid>,
     pub accent_color: String,

@@ -134,6 +134,7 @@ fn build_initial_snapshot(state: &AppState) -> DaemonEvent {
         }),
         seconds_remaining: snap.seconds_remaining,
         google_calendar_connected: snap.google_calendar_connected,
+        caldav_url: snap.caldav_url,
         default_rule_set_id: snap.default_rule_set_id,
         accent_color: snap.accent_color,
     };
@@ -226,6 +227,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 }),
                 seconds_remaining: snap.seconds_remaining,
                 google_calendar_connected: snap.google_calendar_connected,
+                caldav_url: snap.caldav_url,
                 default_rule_set_id: snap.default_rule_set_id,
                 accent_color: snap.accent_color,
             };

@@ -20,6 +20,7 @@
 - [x] allow all search engines from settings
 - [x] allow all ai web pages from settings
 - [x] allow new tab page from settings
+- [ ] allow localhosts and ips
 
 ## FEATURES
 

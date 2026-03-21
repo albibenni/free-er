@@ -86,6 +86,7 @@ impl AppState {
                 .as_ref()
                 .map(|c| c.access_token.is_some())
                 .unwrap_or(false),
+            caldav_url: inner.config.caldav.as_ref().map(|c| c.url.clone()),
             default_rule_set_id: inner.config.default_rule_set_id,
         }
     }
@@ -658,6 +659,7 @@ impl AppState {
             pomodoro_phase,
             seconds_remaining,
             google_calendar_connected,
+            caldav_url: inner.config.caldav.as_ref().map(|c| c.url.clone()),
             default_rule_set_id: inner.config.default_rule_set_id,
             accent_color: inner.config.accent_color.clone(),
         }
@@ -673,6 +675,7 @@ pub struct StateSnapshot {
     pub pomodoro_phase: Option<crate::pomodoro::Phase>,
     pub seconds_remaining: Option<u64>,
     pub google_calendar_connected: bool,
+    pub caldav_url: Option<String>,
     pub default_rule_set_id: Option<Uuid>,
     pub accent_color: String,
 }

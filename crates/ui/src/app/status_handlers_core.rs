@@ -37,6 +37,9 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
             cal_sender.emit(CalendarRulesInput::GoogleStatusUpdated(
                 status.google_calendar_connected,
             ));
+            cal_sender.emit(CalendarRulesInput::CaldavStatusUpdated(
+                status.caldav_url.is_some(),
+            ));
             settings_sender.emit(SettingsInput::AllowNewTabUpdated(status.allow_new_tab));
             settings_sender.emit(SettingsInput::AccentColorUpdated(status.accent_color.clone()));
             pom_sender.emit(PomodoroInput::AccentColorUpdated(status.accent_color.clone()));
@@ -75,10 +78,12 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
             allow_new_tab,
             accent_color,
             google_calendar_connected,
+            caldav_url,
             default_rule_set_id,
         } => {
             settings_sender.emit(SettingsInput::GoogleStatusUpdated(google_calendar_connected));
             cal_sender.emit(CalendarRulesInput::GoogleStatusUpdated(google_calendar_connected));
+            cal_sender.emit(CalendarRulesInput::CaldavStatusUpdated(caldav_url.is_some()));
             settings_sender.emit(SettingsInput::AllowNewTabUpdated(allow_new_tab));
             settings_sender.emit(SettingsInput::AccentColorUpdated(accent_color.clone()));
             pom_sender.emit(PomodoroInput::AccentColorUpdated(accent_color.clone()));
