@@ -370,6 +370,11 @@ impl Component for App {
                     .sender()
                     .emit(crate::sections::settings::SettingsInput::AccentColorUpdated(hex));
             }
+            // CSS must be applied on the GTK main thread; status_tick routes here instead of
+            // calling apply_accent_css directly from the tokio worker.
+            AppMsg::ApplyAccentCss(hex) => {
+                settings_handlers::apply_accent_css(&hex);
+            }
         }
     }
 }

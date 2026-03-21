@@ -63,6 +63,12 @@
 - [ ] why clone on sender in app.rs
 - [x] save schedule doesn't save the schedule on the calendar
 - [ ] break isn't actual break - it is still in focus
+- [ ] thread 'tokio-rt-worker' (285106) panicked at /home/albibenni/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk4-0.10.3/src/auto/css_provider.rs:30:9:
+GTK may only be used from the main thread.
+
+keeps paniking
+
+- [ ] ui thread connected to the deamon thread - if I close the ui, the daemon should stop, if I close the daemon, the ui should stop
 
 ## OPTIMIZATION
 

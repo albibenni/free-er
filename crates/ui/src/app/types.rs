@@ -108,4 +108,6 @@ pub enum AppMsg {
     RefreshRuleSets,
     SetDefaultRuleSet(Uuid),
     AccentColorChanged(String),
+    /// Apply accent CSS on the main thread (from status tick — no IPC call).
+    ApplyAccentCss(String),
 }
