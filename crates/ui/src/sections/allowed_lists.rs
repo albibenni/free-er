@@ -1,6 +1,6 @@
 use gtk4::prelude::*;
 use relm4::prelude::*;
-use shared::ipc::RuleSetSummary;
+use shared::ipc::{OpenTab, RuleSetSummary};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -11,6 +11,8 @@ pub struct AllowedListsSection {
     selected_id: Option<Uuid>,
     default_id: Option<Uuid>,
     creating_new: bool,
+    open_tabs: Vec<OpenTab>,
+    show_tab_picker: bool,
 }
 
 #[derive(Debug)]
@@ -25,6 +27,9 @@ pub enum AllowedListsInput {
     CancelNewList,
     DeleteSelectedList,
     SetSelectedAsDefault,
+    ToggleTabPicker,
+    OpenTabsReceived(Vec<OpenTab>),
+    AddTabUrl { url: String },
 }
 
 #[derive(Debug)]
@@ -34,6 +39,7 @@ pub enum AllowedListsOutput {
     CreateRuleSet(String),
     DeleteRuleSet(Uuid),
     SetDefaultRuleSet(Uuid),
+    RequestOpenTabs,
 }
 
 fn reconcile_selection(
@@ -193,6 +199,49 @@ impl Component for AllowedListsSection {
                     set_halign: gtk4::Align::Start,
                     add_css_class: "dim-label",
                 },
+
+                gtk4::Separator {
+                    set_orientation: gtk4::Orientation::Horizontal,
+                    set_margin_top: 4,
+                },
+
+                gtk4::Button {
+                    add_css_class: "flat",
+                    set_halign: gtk4::Align::Start,
+                    connect_clicked => AllowedListsInput::ToggleTabPicker,
+                    gtk4::Box {
+                        set_orientation: gtk4::Orientation::Horizontal,
+                        set_spacing: 6,
+                        gtk4::Image {
+                            set_icon_name: Some("network-workgroup-symbolic"),
+                        },
+                        gtk4::Label {
+                            #[watch]
+                            set_label: if model.show_tab_picker {
+                                "Open tabs ▲"
+                            } else {
+                                "Open tabs ▼"
+                            },
+                        },
+                    },
+                },
+
+                #[name = "tab_picker_list"]
+                gtk4::ListBox {
+                    set_selection_mode: gtk4::SelectionMode::None,
+                    add_css_class: "boxed-list",
+                    #[watch]
+                    set_visible: model.show_tab_picker && !model.open_tabs.is_empty(),
+                },
+
+                gtk4::Label {
+                    set_label: "No open tabs found. Make sure the browser extension is running.",
+                    #[watch]
+                    set_visible: model.show_tab_picker && model.open_tabs.is_empty(),
+                    set_halign: gtk4::Align::Start,
+                    add_css_class: "dim-label",
+                    set_wrap: true,
+                },
             },
 
             gtk4::Label {
@@ -216,6 +265,8 @@ impl Component for AllowedListsSection {
             selected_id: None,
             default_id: None,
             creating_new: false,
+            open_tabs: vec![],
+            show_tab_picker: false,
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -285,6 +336,30 @@ impl Component for AllowedListsSection {
             AllowedListsInput::SetSelectedAsDefault => {
                 if let Some(id) = self.selected_id {
                     let _ = sender.output(AllowedListsOutput::SetDefaultRuleSet(id));
+                }
+            }
+            AllowedListsInput::ToggleTabPicker => {
+                self.show_tab_picker = !self.show_tab_picker;
+                if self.show_tab_picker {
+                    self.open_tabs.clear();
+                    let _ = sender.output(AllowedListsOutput::RequestOpenTabs);
+                }
+                self.rebuild_tab_picker(widgets, &sender);
+            }
+            AllowedListsInput::OpenTabsReceived(tabs) => {
+                self.open_tabs = tabs;
+                self.rebuild_tab_picker(widgets, &sender);
+            }
+            AllowedListsInput::AddTabUrl { url } => {
+                if let Some(id) = self.selected_id {
+                    let pattern = extract_pattern(&url);
+                    let _ = sender.output(AllowedListsOutput::AddUrl {
+                        rule_set_id: id,
+                        url: pattern.clone(),
+                    });
+                    // Optimistic: remove this tab from the picker for immediate feedback
+                    self.open_tabs.retain(|t| extract_pattern(&t.url) != pattern);
+                    self.rebuild_tab_picker(widgets, &sender);
                 }
             }
         }
@@ -363,6 +438,66 @@ impl AllowedListsSection {
             row_box.append(&del_btn);
             row.set_child(Some(&row_box));
             widgets.list_box.append(&row);
+        }
+    }
+
+    fn rebuild_tab_picker(
+        &self,
+        widgets: &mut AllowedListsSectionWidgets,
+        sender: &ComponentSender<Self>,
+    ) {
+        while let Some(child) = widgets.tab_picker_list.first_child() {
+            widgets.tab_picker_list.remove(&child);
+        }
+        let already_added = self.selected_urls();
+        for tab in &self.open_tabs {
+            let pattern = extract_pattern(&tab.url);
+            if already_added.contains(&pattern) {
+                continue;
+            }
+            let row = gtk4::ListBoxRow::new();
+            let row_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+
+            let label_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+            label_box.set_hexpand(true);
+            label_box.set_margin_start(8);
+            label_box.set_margin_top(6);
+            label_box.set_margin_bottom(6);
+
+            let title_lbl = gtk4::Label::new(Some(
+                if tab.title.is_empty() { &tab.url } else { &tab.title },
+            ));
+            title_lbl.set_halign(gtk4::Align::Start);
+            title_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+            title_lbl.set_max_width_chars(50);
+
+            let host_lbl = gtk4::Label::new(Some(&pattern));
+            host_lbl.set_halign(gtk4::Align::Start);
+            host_lbl.add_css_class("dim-label");
+            host_lbl.add_css_class("caption");
+
+            label_box.append(&title_lbl);
+            label_box.append(&host_lbl);
+
+            let add_btn = gtk4::Button::new();
+            add_btn.set_icon_name("list-add-symbolic");
+            add_btn.add_css_class("flat");
+            add_btn.set_margin_end(4);
+            add_btn.set_valign(gtk4::Align::Center);
+            add_btn.set_tooltip_text(Some("Add to allowed list"));
+
+            let url_clone = tab.url.clone();
+            let s = sender.clone();
+            add_btn.connect_clicked(move |_| {
+                s.input(AllowedListsInput::AddTabUrl {
+                    url: url_clone.clone(),
+                });
+            });
+
+            row_box.append(&label_box);
+            row_box.append(&add_btn);
+            row.set_child(Some(&row_box));
+            widgets.tab_picker_list.append(&row);
         }
     }
 }

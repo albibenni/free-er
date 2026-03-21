@@ -114,6 +114,8 @@ pub enum AppMsg {
     AccentColorChanged(String),
     /// Apply accent CSS on the main thread (from status tick — no IPC call).
     ApplyAccentCss(String),
+    /// Fetch open browser tabs from daemon and forward to AllowedLists.
+    FetchOpenTabs,
     /// Send Shutdown to the daemon then quit the UI.
     ShutdownDaemon,
     /// Daemon is unreachable — quit the UI.

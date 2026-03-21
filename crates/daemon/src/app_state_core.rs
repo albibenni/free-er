@@ -15,6 +15,8 @@ struct Inner {
     pending_google_client_secret: Option<String>,
     /// True when the current focus session was started automatically by a schedule.
     schedule_activated: bool,
+    /// Open browser tabs pushed by the extension — ephemeral, never persisted.
+    open_tabs: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +108,14 @@ impl AppState {
             }
         }
         true
+    }
+
+    pub fn set_open_tabs(&self, tabs: Vec<(String, String)>) {
+        self.0.lock().unwrap().open_tabs = tabs;
+    }
+
+    pub fn get_open_tabs(&self) -> Vec<(String, String)> {
+        self.0.lock().unwrap().open_tabs.clone()
     }
 
     pub fn remove_rule_set(&self, id: Uuid) {

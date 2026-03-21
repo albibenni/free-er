@@ -294,6 +294,18 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             state.set_accent_color(hex);
             ok(true)
         }
+        Command::GetOpenTabs => {
+            let tabs: Vec<shared::ipc::OpenTab> = state
+                .get_open_tabs()
+                .into_iter()
+                .map(|(url, title)| shared::ipc::OpenTab { url, title })
+                .collect();
+            (
+                serde_json::to_string(&tabs)
+                    .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}")),
+                false,
+            )
+        }
         Command::SetCalDav {
             url,
             username,

@@ -2,6 +2,7 @@ import type { DaemonStatus } from "./types";
 import { isAllowed, isInternalUrl, isNewTabUrl } from "./matcher";
 
 const API_URL = "http://127.0.0.1:10000/api/status";
+const TABS_URL = "http://127.0.0.1:10000/api/tabs";
 const BLOCK_URL = "http://127.0.0.1:10000/";
 const POLL_INTERVAL_MS = 2000;
 
@@ -24,6 +25,24 @@ async function pollDaemon(): Promise<void> {
         focusActive = false;
         allowedPatterns = [];
         allowNewTab = true;
+    }
+}
+
+// ── Open tab reporting ───────────────────────────────────────────────────────
+
+async function pushOpenTabs(): Promise<void> {
+    try {
+        const tabs = await chrome.tabs.query({});
+        const tabInfos = tabs
+            .filter(t => t.url && !isInternalUrl(t.url))
+            .map(t => ({ url: t.url!, title: t.title ?? "" }));
+        await fetch(TABS_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(tabInfos),
+        });
+    } catch {
+        // Daemon not running — silently skip
     }
 }
 
@@ -64,6 +83,7 @@ chrome.webNavigation.onBeforeNavigate.addListener((details) => {
 setInterval(async () => {
     await pollDaemon();
     await auditOpenTabs();
+    await pushOpenTabs();
 }, POLL_INTERVAL_MS);
 
 pollDaemon();

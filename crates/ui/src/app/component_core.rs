@@ -382,6 +382,10 @@ impl Component for App {
                 settings_handlers::apply_accent_css(&hex);
             }
 
+            AppMsg::FetchOpenTabs => {
+                url_handlers::fetch_open_tabs(self.allowed_lists.sender().clone());
+            }
+
             AppMsg::ShutdownDaemon => {
                 // Send shutdown to daemon (with timeout), then exit the UI process.
                 relm4::spawn(async {

@@ -43,6 +43,7 @@ fn map_allowed_lists_output(out: AllowedListsOutput) -> AppMsg {
         AllowedListsOutput::CreateRuleSet(name) => AppMsg::CreateRuleSet(name),
         AllowedListsOutput::DeleteRuleSet(id) => AppMsg::DeleteRuleSet(id),
         AllowedListsOutput::SetDefaultRuleSet(id) => AppMsg::ChooseDefaultRuleSet(id),
+        AllowedListsOutput::RequestOpenTabs => AppMsg::FetchOpenTabs,
     }
 }
 

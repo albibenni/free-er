@@ -99,6 +99,8 @@ pub enum Command {
     SetAccentColor {
         hex: String,
     },
+    /// Request the list of currently open browser tabs (pushed by the extension).
+    GetOpenTabs,
     /// Shut the daemon down cleanly.
     Shutdown,
 }
@@ -122,6 +124,13 @@ pub struct ScheduleSummary {
     pub schedule_type: ScheduleType,
     /// UUID of the associated rule set (Uuid::nil if none).
     pub rule_set_id: Uuid,
+}
+
+/// A browser tab reported by the extension.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenTab {
+    pub url: String,
+    pub title: String,
 }
 
 /// Returned by ListRuleSets.

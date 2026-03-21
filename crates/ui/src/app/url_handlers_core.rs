@@ -73,6 +73,21 @@ pub(super) fn remove_url_from_list(rule_set_id: Uuid, url: String) {
     });
 }
 
+pub(super) fn fetch_open_tabs(
+    allowed_lists_sender: relm4::Sender<crate::sections::allowed_lists::AllowedListsInput>,
+) {
+    tokio::spawn(async move {
+        match ipc_client::get_open_tabs().await {
+            Ok(tabs) => {
+                allowed_lists_sender.emit(
+                    crate::sections::allowed_lists::AllowedListsInput::OpenTabsReceived(tabs),
+                );
+            }
+            Err(e) => error!("GetOpenTabs IPC failed: {e}"),
+        }
+    });
+}
+
 pub(super) fn create_rule_set(name: String, sender: ComponentSender<App>) {
     tokio::spawn(async move {
         match ipc_client::add_rule_set(&name).await {

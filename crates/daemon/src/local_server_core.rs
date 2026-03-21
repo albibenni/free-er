@@ -3,10 +3,10 @@ use anyhow::Result;
 use axum::{
     extract::{Query, State},
     response::Json,
-    routing::get,
+    routing::{get, post},
     Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
@@ -42,6 +42,21 @@ async fn api_status(State(state): State<AppState>) -> Json<ApiStatus> {
         allowed_urls,
         allow_new_tab: snap.allow_new_tab,
     })
+}
+
+#[derive(Deserialize)]
+struct TabInfo {
+    url: String,
+    title: String,
+}
+
+async fn api_post_tabs(
+    State(state): State<AppState>,
+    Json(tabs): Json<Vec<TabInfo>>,
+) -> Json<serde_json::Value> {
+    let pairs = tabs.into_iter().map(|t| (t.url, t.title)).collect();
+    state.set_open_tabs(pairs);
+    Json(serde_json::json!({ "ok": true }))
 }
 
 async fn oauth_google_callback(
@@ -159,6 +174,7 @@ pub async fn serve(state: AppState) -> Result<()> {
     let app = Router::new()
         .route("/", get(block_page))
         .route("/api/status", get(api_status))
+        .route("/api/tabs", post(api_post_tabs))
         .route("/oauth/google/callback", get(oauth_google_callback))
         .with_state(state)
         .layer(cors);

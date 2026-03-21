@@ -1,6 +1,7 @@
 use anyhow::Result;
 use shared::ipc::{
-    Command, ImportRuleSummary, RuleSetSummary, ScheduleSummary, ScheduleType, StatusResponse,
+    Command, ImportRuleSummary, OpenTab, RuleSetSummary, ScheduleSummary, ScheduleType,
+    StatusResponse,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -152,6 +153,12 @@ pub async fn remove_rule_set(id: Uuid) -> Result<()> {
 pub async fn set_default_rule_set(id: Uuid) -> Result<()> {
     send(&Command::SetDefaultRuleSet { id }).await?;
     Ok(())
+}
+
+/// Fetch the list of currently open browser tabs from the daemon.
+pub async fn get_open_tabs() -> Result<Vec<OpenTab>> {
+    let raw = send(&Command::GetOpenTabs).await?;
+    Ok(serde_json::from_str(&raw)?)
 }
 
 /// Create a new rule set and return its assigned UUID.
