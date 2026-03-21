@@ -66,5 +66,4 @@
 
 ## OPTIMIZATION
 
-- [ ] pomodoro.rs refactor - too much code, should be split into smaller functions
-- [ ] why so many main files
+- [x] pomodoro.rs refactor - too much code, should be split into smaller functions
