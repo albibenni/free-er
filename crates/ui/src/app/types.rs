@@ -24,6 +24,8 @@ pub struct App {
     pub(super) default_rule_set_id: Option<Uuid>,
     /// Consecutive status-poll failures — when it reaches the threshold the UI exits.
     pub(super) daemon_failures: u32,
+    /// Whether the "daemon gone" dialog is already showing.
+    pub(super) daemon_dialog_shown: bool,
     pub(super) focus: Controller<FocusSection>,
     pub(super) pomodoro: Controller<PomodoroSection>,
     pub(super) allowed_lists: Controller<AllowedListsSection>,

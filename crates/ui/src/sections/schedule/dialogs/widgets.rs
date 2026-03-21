@@ -75,7 +75,7 @@ pub(super) fn build_type_and_list_rows(
     initial_type: &ScheduleType,
     initial_rule_set_id: uuid::Uuid,
     rule_sets: &[RuleSetSummary],
-) -> (gtk4::ToggleButton, gtk4::ToggleButton, gtk4::ComboBoxText) {
+) -> (gtk4::ToggleButton, gtk4::ToggleButton, gtk4::DropDown) {
     let type_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
     let type_lbl = gtk4::Label::new(Some("Type:"));
     type_lbl.set_width_chars(8);
@@ -94,17 +94,16 @@ pub(super) fn build_type_and_list_rows(
     let list_lbl = gtk4::Label::new(Some("Allowed list:"));
     list_lbl.set_width_chars(8);
     list_lbl.set_halign(gtk4::Align::Start);
-    let list_combo = gtk4::ComboBoxText::new();
-    list_combo.append_text("(none)");
-    for rs in rule_sets {
-        list_combo.append_text(&rs.name);
-    }
+    let mut items = vec!["(none)".to_string()];
+    items.extend(rule_sets.iter().map(|rs| rs.name.clone()));
+    let item_refs: Vec<&str> = items.iter().map(String::as_str).collect();
+    let list_combo = gtk4::DropDown::from_strings(&item_refs);
     let sel_idx = rule_sets
         .iter()
         .position(|r| r.id == initial_rule_set_id)
         .map(|i| i + 1)
         .unwrap_or(0);
-    list_combo.set_active(Some(sel_idx as u32));
+    list_combo.set_selected(sel_idx as u32);
     list_combo.set_hexpand(true);
     list_row.append(&list_lbl);
     list_row.append(&list_combo);
@@ -195,8 +194,8 @@ pub(super) fn set_recurrence_read_only(
 }
 
 pub(super) fn resolve_rule_set(
-    combo: &gtk4::ComboBoxText,
+    combo: &gtk4::DropDown,
     rule_sets: &[RuleSetSummary],
 ) -> Option<uuid::Uuid> {
-    resolve_rule_set_index(combo.active(), rule_sets)
+    resolve_rule_set_index(Some(combo.selected()), rule_sets)
 }

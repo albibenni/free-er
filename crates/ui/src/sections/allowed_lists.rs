@@ -79,9 +79,9 @@ impl Component for AllowedListsSection {
                 set_spacing: 8,
 
                 #[name = "list_combo"]
-                gtk4::ComboBoxText {
+                gtk4::DropDown {
                     set_hexpand: true,
-                    connect_changed => AllowedListsInput::ComboChanged,
+                    connect_selected_notify => AllowedListsInput::ComboChanged,
                 },
 
                 // Delete button for selected list (hidden when only one list)
@@ -257,11 +257,8 @@ impl Component for AllowedListsSection {
                 self.rebuild_combo(widgets);
             }
             AllowedListsInput::ComboChanged => {
-                let new_id = widgets
-                    .list_combo
-                    .active_id()
-                    .and_then(|id| id.parse::<Uuid>().ok());
-                self.selected_id = new_id;
+                let idx = widgets.list_combo.selected() as usize;
+                self.selected_id = self.rule_sets.get(idx).map(|rs| rs.id);
                 self.rebuild_url_list(widgets, &sender);
             }
             AllowedListsInput::ShowNewListEntry => {
@@ -304,19 +301,21 @@ impl AllowedListsSection {
     }
 
     fn rebuild_combo(&self, widgets: &mut AllowedListsSectionWidgets) {
-        // Block the signal temporarily by rebuilding without triggering ComboChanged logic
-        widgets.list_combo.remove_all();
+        let model = gtk4::StringList::new(&[]);
         for rs in &self.rule_sets {
             let label = if Some(rs.id) == self.default_id {
                 format!("{} (default)", rs.name)
             } else {
                 rs.name.clone()
             };
-            widgets.list_combo.append(Some(&rs.id.to_string()), &label);
+            model.append(&label);
         }
-        if let Some(id) = self.selected_id {
-            widgets.list_combo.set_active_id(Some(&id.to_string()));
-        }
+        widgets.list_combo.set_model(Some(&model));
+        let idx = self
+            .selected_id
+            .and_then(|id| self.rule_sets.iter().position(|s| s.id == id))
+            .unwrap_or(0) as u32;
+        widgets.list_combo.set_selected(idx);
     }
 
     fn rebuild_url_list(

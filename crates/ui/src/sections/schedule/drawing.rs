@@ -30,7 +30,7 @@ pub(super) struct Theme {
 
 impl Theme {
     pub fn from_widget(da: &gtk4::DrawingArea) -> Self {
-        let fg = da.style_context().color();
+        let fg = da.color();
         let lum = 0.299 * fg.red() as f64 + 0.587 * fg.green() as f64 + 0.114 * fg.blue() as f64;
         if use_dark_theme(lum) {
             Theme {
