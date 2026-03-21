@@ -1,6 +1,7 @@
 use gtk4::prelude::*;
 use relm4::prelude::*;
 use shared::ipc::{OpenTab, RuleSetSummary};
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -279,6 +280,7 @@ impl Component for AllowedListsSection {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        debug!(target: "free_er_ui::allowed_lists", ?msg, "allowed-lists message received");
         match msg {
             AllowedListsInput::AddUrl => {
                 let raw = self.url_entry.text().to_string();

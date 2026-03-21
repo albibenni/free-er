@@ -5,6 +5,7 @@ use relm4::prelude::*;
 use shared::ipc::RuleSetSummary;
 use std::cell::RefCell;
 use std::rc::Rc;
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -447,6 +448,7 @@ impl Component for PomodoroSection {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        debug!(target: "free_er_ui::pomodoro", ?msg, "pomodoro message received");
         match msg {
             PomodoroInput::SelectPreset {
                 focus_secs,

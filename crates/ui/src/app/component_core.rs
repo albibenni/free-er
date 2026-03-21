@@ -5,6 +5,7 @@ use super::{
 use gtk4::prelude::*;
 use relm4::prelude::*;
 use relm4::ComponentController;
+use tracing::debug;
 
 #[relm4::component(pub)]
 impl Component for App {
@@ -204,6 +205,7 @@ impl Component for App {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        debug!(target: "free_er_ui::app", ?msg, "app message received");
         match msg {
             // ── UI / Navigation ──────────────────────────────────────────
             AppMsg::ToggleSidebar => {
