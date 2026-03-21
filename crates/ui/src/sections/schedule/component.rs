@@ -200,16 +200,19 @@ impl Component for ScheduleSection {
 
                         gtk4::Button {
                             set_label: "‹",
+                            add_css_class: "suggested-action",
                             #[watch]
                             set_sensitive: model.week_offset > MIN_WEEK_OFFSET,
                             connect_clicked => ScheduleInput::PrevWeek,
                         },
                         gtk4::Button {
                             set_label: "Today",
+                            add_css_class: "suggested-action",
                             connect_clicked => ScheduleInput::Today,
                         },
                         gtk4::Button {
                             set_label: "›",
+                            add_css_class: "suggested-action",
                             #[watch]
                             set_sensitive: model.week_offset < MAX_WEEK_OFFSET,
                             connect_clicked => ScheduleInput::NextWeek,
