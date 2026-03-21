@@ -83,8 +83,12 @@ pub(super) fn apply_accent_css(hex: &str) {
     let css = format!(
         "button.suggested-action:not(.flat) {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}\
          button.suggested-action:not(.flat):hover {{ background-color: rgba({r},{g},{b},0.32); background-image: none; }}\
-         button.destructive-action:not(.flat) {{ background-color: rgba(220, 53, 69, 0.5); background-image: none; color: white; border: 1px solid rgba(220, 53, 69, 1); }}\
-         button.destructive-action:not(.flat):hover {{ background-color: rgba(220, 53, 69, 1); background-image: none; }}\
+         button.suggested-action-dialog:not(.flat) {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}\
+         button.suggested-action-dialog:not(.flat):hover {{ background-color: rgba({r},{g},{b},0.32); background-image: none; }}\
+         button.destructive-action:not(.flat) {{ background-color: rgba(220, 53, 69, 0.12); background-image: none; color: red; border: 1px solid rgba(220, 53, 69, 0.35); }}\
+         button.destructive-action:not(.flat):hover {{ background-color: rgba(220, 53, 69, 0.32); background-image: none; }}\
+         button.destructive-action-dialog:not(.flat) {{ background-color: rgba(220, 53, 69, 0.12); background-image: none; color: red; border: 1px solid rgba(220, 53, 69, 0.35); }}\
+         button.destructive-action-dialog:not(.flat):hover {{ background-color: rgba(220, 53, 69, 0.32); background-image: none; }}\
          switch:checked {{ background-color: {hex}; }}\
          listbox row:selected, listbox.boxed-list row:selected {{ background-color: {hex}; color: white; }}"
     );

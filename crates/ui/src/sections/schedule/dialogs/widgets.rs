@@ -62,8 +62,9 @@ pub(super) fn append_button_row(vbox: &gtk4::Box) -> (gtk4::Button, gtk4::Button
     row.set_halign(gtk4::Align::End);
     row.set_margin_top(8);
     let cancel = gtk4::Button::with_label("Cancel");
+    cancel.add_css_class("destructive-action-dialog");
     let save = gtk4::Button::with_label("Save");
-    save.add_css_class("suggested-action");
+    save.add_css_class("suggested-action-dialog");
     row.append(&cancel);
     row.append(&save);
     vbox.append(&row);

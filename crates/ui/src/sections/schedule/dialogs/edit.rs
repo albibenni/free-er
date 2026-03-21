@@ -46,6 +46,7 @@ pub(super) fn show_edit_dialog(
     let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
     let cancel_btn = gtk4::Button::with_label("Cancel");
+    cancel_btn.add_css_class("destructive-action");
     let save_btn = gtk4::Button::with_label("Save");
     save_btn.add_css_class("suggested-action");
     btn_row.append(&del_btn);
