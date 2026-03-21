@@ -80,3 +80,4 @@ keeps paniking
 ## OPTIMIZATION
 
 - [x] pomodoro.rs refactor - too much code, should be split into smaller functions
+- [ ] event loop - use a more efficient way to handle events, maybe with a channel or a queue, instead of matching on every event
