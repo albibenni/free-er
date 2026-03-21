@@ -72,9 +72,10 @@ pub(super) fn set_accent_color(hex: String) {
 
 pub(super) fn apply_accent_css(hex: &str) {
     let css = format!(
-        "button.suggested-action {{ background-color: {hex}; color: white; }}\
-         button.suggested-action:hover {{ background-color: {hex}; opacity: 0.85; }}\
-         switch:checked {{ background-color: {hex}; }}"
+        "button:not(.destructive-action):not(.flat) {{ background-color: {hex}; color: white; }}\
+         button:not(.destructive-action):not(.flat):hover {{ background-color: {hex}; opacity: 0.85; }}\
+         switch:checked {{ background-color: {hex}; }}\
+         listbox row:selected {{ background-color: {hex}; color: white; }}"
     );
     thread_local! {
         static PROVIDER: gtk4::CssProvider = {

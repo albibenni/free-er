@@ -86,6 +86,7 @@ impl SimpleComponent for FocusSection {
 
                 gtk4::Button {
                     set_label: "Skip Break",
+                    add_css_class: "suggested-action",
                     #[watch]
                     set_visible: model.focus_active,
                     connect_clicked => FocusInput::SkipBreak,
