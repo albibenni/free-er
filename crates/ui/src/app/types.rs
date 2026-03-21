@@ -123,3 +123,9 @@ pub enum AppMsg {
     /// Daemon responded — reset the failure counter.
     DaemonAlive,
 }
+
+#[derive(Debug)]
+pub enum AppCmdOutput {
+    /// Initial accent color fetched from daemon at startup.
+    AccentColorFetched(String),
+}

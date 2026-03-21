@@ -1,4 +1,4 @@
-use super::types::{App, AppMsg, Page};
+use super::types::{App, AppCmdOutput, AppMsg, Page};
 use super::{
     focus_handlers, forwarders, schedule_handlers, settings_handlers, status_handlers, url_handlers,
 };
@@ -11,7 +11,7 @@ impl Component for App {
     type Init = ();
     type Input = AppMsg;
     type Output = ();
-    type CommandOutput = ();
+    type CommandOutput = AppCmdOutput;
 
     view! {
         gtk4::ApplicationWindow {
@@ -173,6 +173,13 @@ impl Component for App {
         widgets
             .stack
             .add_named(model.settings.widget(), Some("settings"));
+
+        // Fetch accent color from daemon once at startup
+        sender.command(|out, _| async move {
+            if let Ok(status) = crate::ipc_client::get_status().await {
+                out.emit(AppCmdOutput::AccentColorFetched(status.accent_color));
+            }
+        });
 
         // Poll daemon status every 2 seconds
         let tick_sender = sender.clone();
@@ -415,6 +422,25 @@ impl Component for App {
                 if self.daemon_failures >= 3 {
                     relm4::main_application().quit();
                 }
+            }
+        }
+    }
+
+    fn update_cmd(
+        &mut self,
+        msg: AppCmdOutput,
+        _sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        match msg {
+            AppCmdOutput::AccentColorFetched(hex) => {
+                settings_handlers::apply_accent_css(&hex);
+                self.pomodoro
+                    .sender()
+                    .emit(crate::sections::pomodoro::PomodoroInput::AccentColorUpdated(hex.clone()));
+                self.settings
+                    .sender()
+                    .emit(crate::sections::settings::SettingsInput::AccentColorUpdated(hex));
             }
         }
     }
