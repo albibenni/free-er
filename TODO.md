@@ -6,6 +6,12 @@
   - [x] icons
   - [x] toggle sidebar with a button - if closed, only show icons, if open show icons and text
   - [x] settings on the bottom, not in the middle
+- [ ] accent color:
+  - [x] allow user to choose from a palette of colors
+  - [ ] use accent color for buttons, icons, highlights
+- [ ] dark light mode:
+  - [ ] automatic based on system settings
+  - [ ] manual toggle in settings
 
 ## LOGIC
 
@@ -40,7 +46,7 @@
 - [x] modify repeating days
 - [x] see repreating days in calendar imports too - but blocked from modifying them
 - [x] change default allowed list from settings
-- [ ] import from open websites
+- [x] import from open websites
 - [x] rules for import
   - [x] personalized list
     - [x] no screen
