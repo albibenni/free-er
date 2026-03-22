@@ -239,7 +239,15 @@ impl Component for PomodoroSection {
                                         },
                                         gtk4::Label {
                                             #[watch]
-                                            set_label: &format!("{}m", model.focus_secs / 60),
+                                            set_label: &if model.phase.as_deref() == Some("Focus") {
+                                                if let Some(secs) = model.seconds_remaining {
+                                                    format!("{:02}:{:02}", secs / 60, secs % 60)
+                                                } else {
+                                                    format!("{}m", model.focus_secs / 60)
+                                                }
+                                            } else {
+                                                format!("{}m", model.focus_secs / 60)
+                                            },
                                             add_css_class: "title-1",
                                             set_halign: gtk4::Align::Center,
                                         },
@@ -304,7 +312,15 @@ impl Component for PomodoroSection {
                                         },
                                         gtk4::Label {
                                             #[watch]
-                                            set_label: &format!("{}m", model.break_secs / 60),
+                                            set_label: &if model.phase.as_deref() == Some("Break") {
+                                                if let Some(secs) = model.seconds_remaining {
+                                                    format!("{:02}:{:02}", secs / 60, secs % 60)
+                                                } else {
+                                                    format!("{}m", model.break_secs / 60)
+                                                }
+                                            } else {
+                                                format!("{}m", model.break_secs / 60)
+                                            },
                                             add_css_class: "title-1",
                                             set_halign: gtk4::Align::Center,
                                         },
