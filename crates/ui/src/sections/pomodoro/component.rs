@@ -590,9 +590,9 @@ impl Component for PomodoroSection {
             rv.seconds_remaining = self.seconds_remaining;
         }
 
+        self.update_view(widgets, sender);
         widgets.focus_ring.queue_draw();
         widgets.break_ring.queue_draw();
-        self.update_view(widgets, sender);
     }
 }
 
