@@ -1,6 +1,8 @@
 use super::*;
 use crate::app::test_support::{lock_ipc, MockDaemon};
-use shared::ipc::{Command, ImportRuleSummary, RuleSetSummary, ScheduleSummary, ScheduleType, StatusResponse};
+use shared::ipc::{
+    Command, ImportRuleSummary, RuleSetSummary, ScheduleSummary, ScheduleType, StatusResponse,
+};
 use uuid::Uuid;
 
 fn run_async<F, T>(fut: F) -> T
@@ -58,7 +60,9 @@ fn parses_successful_responses() {
             schedule_type: ScheduleType::Break,
         }])
         .unwrap(),
-        Command::StartGoogleOAuth => serde_json::json!({ "auth_url": "https://example.com/auth" }).to_string(),
+        Command::StartGoogleOAuth => {
+            serde_json::json!({ "auth_url": "https://example.com/auth" }).to_string()
+        }
         Command::AddRuleSet { .. } => serde_json::json!({ "id": rule_set_id }).to_string(),
         Command::AddSchedule { .. } => serde_json::json!({ "id": schedule_id }).to_string(),
         _ => "{}".to_string(),

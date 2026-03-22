@@ -42,10 +42,11 @@ RestartSec=3
 WantedBy=default.target
 EOF
 
-# ── 4. Enable and start the daemon service ───────────────────────────────────
-echo "==> Enabling and starting free-er.service..."
+# ── 4. Enable and (re)start the daemon service ───────────────────────────────
+echo "==> Enabling and (re)starting free-er.service..."
 systemctl --user daemon-reload
-systemctl --user enable --now free-er.service
+systemctl --user enable free-er.service
+systemctl --user restart free-er.service
 
 # ── 5. Add UI to Hyprland autostart (idempotent) ─────────────────────────────
 EXEC_LINE="exec-once = uwsm-app -- free-er-ui"
@@ -56,6 +57,16 @@ else
     echo "" >> "$HYPR_AUTOSTART"
     echo "# free-er UI" >> "$HYPR_AUTOSTART"
     echo "$EXEC_LINE" >> "$HYPR_AUTOSTART"
+fi
+
+# ── 6. Relaunch UI if already running ────────────────────────────────────────
+if pgrep -x free-er-ui > /dev/null; then
+    echo "==> Relaunching free-er-ui..."
+    pkill -x free-er-ui
+    sleep 0.5
+    uwsm-app -- free-er-ui &
+else
+    echo "==> free-er-ui not running, will start on next Hyprland login."
 fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────

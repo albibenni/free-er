@@ -24,7 +24,7 @@
 
 ## FEATURES
 
-- [ ] open at startup
+- [x] open at startup
 
 ### CALENDAR
 

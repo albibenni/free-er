@@ -80,7 +80,9 @@ This will:
 3. Create and enable a systemd user service for the daemon (`~/.config/systemd/user/free-er.service`)
 4. Add `exec-once = uwsm-app -- free-er-ui` to `~/.config/hypr/autostart.conf`
 
-After running, the daemon starts immediately and on every login. The UI launches automatically with the Hyprland session. Re-running the script is safe — it overwrites existing files and skips already-configured entries.
+After running, the daemon starts immediately and on every login. The UI launches automatically with the Hyprland session.
+
+Re-running the script is safe and handles new builds: it restarts the daemon service and relaunches `free-er-ui` if it is already running, so the new binaries take effect immediately without requiring a logout.
 
 **Useful commands:**
 
