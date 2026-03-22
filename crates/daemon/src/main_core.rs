@@ -10,6 +10,8 @@ mod rule_matcher;
 use anyhow::Result;
 use tracing::{info, warn};
 
+const CALENDAR_SYNC_INTERVAL_SECS: u64 = 6 * 60 * 60;
+
 /// Initialise the global tracing subscriber.  Uses `try_init` so that test
 /// binaries (which may call this multiple times) never panic.
 fn setup_tracing() -> Result<()> {
@@ -40,7 +42,7 @@ async fn run_daemon() -> Result<()> {
     // Background task: sync CalDAV calendar every 6 hours.
     let cal_state = state.clone();
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(6 * 60 * 60));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(CALENDAR_SYNC_INTERVAL_SECS));
         loop {
             interval.tick().await;
             if let Some(cfg) = cal_state.caldav_config() {
@@ -61,7 +63,7 @@ async fn run_daemon() -> Result<()> {
     // Background task: sync Google Calendar every 6 hours.
     let gcal_state = state.clone();
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(6 * 60 * 60));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(CALENDAR_SYNC_INTERVAL_SECS));
         loop {
             interval.tick().await;
             let cfg = match gcal_state.google_calendar_config() {
