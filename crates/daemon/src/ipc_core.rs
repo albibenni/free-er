@@ -242,18 +242,6 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             schedule_type,
         } => {
             use chrono::NaiveTime;
-            fn wday(d: u8) -> Option<chrono::Weekday> {
-                match d {
-                    0 => Some(chrono::Weekday::Mon),
-                    1 => Some(chrono::Weekday::Tue),
-                    2 => Some(chrono::Weekday::Wed),
-                    3 => Some(chrono::Weekday::Thu),
-                    4 => Some(chrono::Weekday::Fri),
-                    5 => Some(chrono::Weekday::Sat),
-                    6 => Some(chrono::Weekday::Sun),
-                    _ => None,
-                }
-            }
             let start =
                 NaiveTime::from_hms_opt(start_min / 60, start_min % 60, 0).unwrap_or_default();
             let end = NaiveTime::from_hms_opt(end_min / 60, end_min % 60, 0).unwrap_or_default();
@@ -296,18 +284,6 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             schedule_type,
         } => {
             use chrono::NaiveTime;
-            fn wday(d: u8) -> Option<chrono::Weekday> {
-                match d {
-                    0 => Some(chrono::Weekday::Mon),
-                    1 => Some(chrono::Weekday::Tue),
-                    2 => Some(chrono::Weekday::Wed),
-                    3 => Some(chrono::Weekday::Thu),
-                    4 => Some(chrono::Weekday::Fri),
-                    5 => Some(chrono::Weekday::Sat),
-                    6 => Some(chrono::Weekday::Sun),
-                    _ => None,
-                }
-            }
             let start =
                 NaiveTime::from_hms_opt(start_min / 60, start_min % 60, 0).unwrap_or_default();
             let end = NaiveTime::from_hms_opt(end_min / 60, end_min % 60, 0).unwrap_or_default();
@@ -501,6 +477,19 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
                 false,
             )
         }
+    }
+}
+
+fn wday(d: u8) -> Option<chrono::Weekday> {
+    match d {
+        0 => Some(chrono::Weekday::Mon),
+        1 => Some(chrono::Weekday::Tue),
+        2 => Some(chrono::Weekday::Wed),
+        3 => Some(chrono::Weekday::Thu),
+        4 => Some(chrono::Weekday::Fri),
+        5 => Some(chrono::Weekday::Sat),
+        6 => Some(chrono::Weekday::Sun),
+        _ => None,
     }
 }
 
