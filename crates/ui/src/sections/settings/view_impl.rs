@@ -147,20 +147,34 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.strict_mode,
-                    connect_state_set[sender] => move |switch, state| {
+                    connect_state_set[sender, strict_mode_guard] => move |switch, state| {
+                        if strict_mode_guard.get() {
+                            // Let GTK's default handler sync active↔state visually,
+                            // but skip our dialog code by returning early.
+                            return gtk4::glib::Propagation::Proceed;
+                        }
                         if state {
-                            // Keep the switch visually inactive until confirmed
+                            // Revert the visual without re-entering this handler
+                            strict_mode_guard.set(true);
+                            switch.set_active(false);
+                            strict_mode_guard.set(false);
                             switch.set_state(false);
                             let sw_root = switch.clone();
                             let sw_for_confirm = switch.clone();
                             let s = sender.clone();
-                            crate::sections::strict_mode::show_strict_mode_enable_dialog(
-                                &sw_root,
-                                move || {
-                                    sw_for_confirm.set_state(true);
-                                    s.input(SettingsInput::SetStrictMode(true));
-                                },
-                            );
+                            let guard_for_confirm = strict_mode_guard.clone();
+                            // Defer dialog until pointer grab from the click is released
+                            gtk4::glib::idle_add_local_once(move || {
+                                crate::sections::strict_mode::show_strict_mode_enable_dialog(
+                                    &sw_root,
+                                    move || {
+                                        guard_for_confirm.set(true);
+                                        sw_for_confirm.set_state(true);
+                                        guard_for_confirm.set(false);
+                                        s.input(SettingsInput::SetStrictMode(true));
+                                    },
+                                );
+                            });
                             return gtk4::glib::Propagation::Stop;
                         }
                         // Keep the switch visually active (clear GTK pending state)
@@ -330,7 +344,11 @@ impl SimpleComponent for SettingsSection {
     ) -> ComponentParts<Self> {
         let mut model = SettingsSection::new_model(strict_mode);
         let accent_ref = model.accent_ref.clone();
+        let strict_mode_guard = model.strict_mode_guard.clone();
+        // Block signal handler during initial set_active call
+        strict_mode_guard.set(true);
         let widgets = view_output!();
+        strict_mode_guard.set(false);
 
         let dots: [(&gtk4::DrawingArea, &'static str); 9] = [
             (&widgets.dot_blue,   "#3584e4"),
@@ -360,6 +378,14 @@ impl SimpleComponent for SettingsSection {
                 for dot in &self.color_dots {
                     dot.queue_draw();
                 }
+            }
+            // Block the state_set signal handler whenever strict_mode changes programmatically
+            // (both user-confirmed changes and daemon-driven updates) so update_view's
+            // set_active call doesn't re-trigger the enable/disable dialogs.
+            SettingsInput::StrictModeUpdated(_) | SettingsInput::SetStrictMode(_) => {
+                self.strict_mode_guard.set(true);
+                let g = self.strict_mode_guard.clone();
+                gtk4::glib::idle_add_local_once(move || g.set(false));
             }
             _ => {}
         }

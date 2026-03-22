@@ -1,6 +1,6 @@
 use super::{state::SettingsState, types::SettingsOutput};
 use gtk4::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -21,6 +21,7 @@ pub struct SettingsSection {
     pub(super) accent_color: String,
     pub(super) accent_ref: Rc<RefCell<String>>,
     pub(super) color_dots: Vec<gtk4::DrawingArea>,
+    pub(super) strict_mode_guard: Rc<Cell<bool>>,
 }
 
 impl SettingsSection {
@@ -44,6 +45,7 @@ impl SettingsSection {
             accent_color,
             accent_ref,
             color_dots: Vec::new(),
+            strict_mode_guard: Rc::new(Cell::new(false)),
         }
     }
 
