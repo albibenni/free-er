@@ -2,7 +2,7 @@ use gtk4::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-const CONFIRM_PHRASE: &str = "I undertand and want to quit!";
+const CONFIRM_PHRASE: &str = "I understand and want to quit!";
 
 /// Shows a strict mode confirmation dialog.
 ///

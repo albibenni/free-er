@@ -28,18 +28,18 @@
 
 ### STRICT MODE
 
-- [ ] block all toggle in settings
-  - [ ] disable strict mode require a confirmation dialog with a warning and a call to action to disable it
-- [ ] calendar settings are untoggable if strict mode is on
-- [ ] calendar settings lists are disabled if strict mode is on
-- [ ] pomodoro require a confirmation dialog with a warning and a call to stop it
-- [ ] quick break require a confirmation dialog with a warning and a call to action to disable strict mode
-- [ ] allowed list add with strict mode on should require a confirmation dialog with a warning and a call to action to add a new allowed site
-  - [ ] same for adding a website from 'Open tabs'
-- [ ] schedule task require a confirmation dialog with a warning and a call to action to create a new task if strict mode is on to change the list of allowed sites for that task or from focus mode to break mode (and vice versa)
-- [ ] schedule task cannot be modified if strict mode is on - changing the time or the allowed list should require a confirmation dialog with a warning and a call to action to modify the task
-- [ ] schedule task cannot be deleted if strict mode is on - deleting a task should require a confirmation dialog with a warning and a call to action to delete the task
-- [ ] schedule cannnot be created if strict mode is on - creating a task should require a confirmation dialog with a warning and a call to action to create the task
+- [x] block all toggle in settings
+  - [x] disable strict mode require a confirmation dialog with a warning and a call to action to disable it
+- [x] calendar settings are untoggable if strict mode is on
+- [x] calendar settings lists are disabled if strict mode is on
+- [x] pomodoro require a confirmation dialog with a warning and a call to stop it
+- [x] quick break require a confirmation dialog with a warning and a call to action to disable strict mode
+- [x] allowed list add with strict mode on should require a confirmation dialog with a warning and a call to action to add a new allowed site
+  - [x] same for adding a website from 'Open tabs'
+- [x] schedule task require a confirmation dialog with a warning and a call to action to create a new task if strict mode is on to change the list of allowed sites for that task or from focus mode to break mode (and vice versa)
+- [x] schedule task cannot be modified if strict mode is on - changing the time or the allowed list should require a confirmation dialog with a warning and a call to action to modify the task
+- [x] schedule task cannot be deleted if strict mode is on - deleting a task should require a confirmation dialog with a warning and a call to action to delete the task
+- [x] schedule cannnot be created if strict mode is on - creating a task should require a confirmation dialog with a warning and a call to action to create the task
   
 ### CALENDAR
 
@@ -89,7 +89,7 @@
 - [x] allowed list not working
 - [x] focus button not responding - responsivness issue
 - [x] allowed list doesn't show the list of allowed sites
-- [ ] why clone on sender in app.rs
+- [x] why clone on sender in app.rs
 - [x] save schedule doesn't save the schedule on the calendar
 - [ ] break isn't actual break - it is still in focus
 - [x] thread 'tokio-rt-worker' (285106) panicked at /home/albibenni/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk4-0.10.3/src/auto/css_provider.rs:30:9:
