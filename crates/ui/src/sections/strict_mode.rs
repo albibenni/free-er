@@ -2,7 +2,7 @@ use gtk4::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-const CONFIRM_PHRASE: &str = ""; //kobe inspirational quote to not quit
+const CONFIRM_PHRASE: &str = "I undertand and want to quit!";
 
 /// Shows a strict mode confirmation dialog.
 ///
@@ -47,7 +47,7 @@ pub fn show_strict_mode_dialog(
 
     let quote_label = gtk4::Label::new(None);
     quote_label.set_markup(&format!(
-        "<i>\"The most important thing is that you keep pushing, keep striving, and never give up.\"</i>"
+        "<i>\"The moment you give up is the moment you let someone else win.\" — Kobe Bryant</i>"
     ));
     quote_label.set_wrap(true);
     quote_label.set_max_width_chars(42);
