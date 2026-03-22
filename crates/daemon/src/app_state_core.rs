@@ -362,12 +362,22 @@ impl AppState {
             .unwrap_or_else(Uuid::nil)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn list_rule_sets(&self) -> Vec<shared::models::RuleSet> {
         self.lock().config.rule_sets.clone()
     }
 
+    pub fn list_rule_set_summaries(&self) -> Vec<RuleSetSummary> {
+        Self::rule_set_summaries(&self.lock())
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn list_schedules(&self) -> Vec<shared::models::Schedule> {
         self.lock().config.schedules.clone()
+    }
+
+    pub fn list_schedule_summaries(&self) -> Vec<ScheduleSummary> {
+        Self::schedule_summaries(&self.lock())
     }
 
     pub fn add_schedule(&self, schedule: shared::models::Schedule) {

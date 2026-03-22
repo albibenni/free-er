@@ -1,7 +1,7 @@
 use crate::app_state::AppState;
 use anyhow::Result;
 use shared::{
-    ipc::{Command, DaemonEvent, PomodoroPhase, StatusResponse},
+    ipc::{Command, PomodoroPhase, StatusResponse},
     models::RuleSet,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -95,7 +95,7 @@ async fn handle_subscription(
     let mut rx = state.subscribe();
 
     // Send a full snapshot immediately so the UI can paint without a round-trip.
-    let snapshot = build_initial_snapshot(&state);
+    let snapshot = state.build_snapshot_event();
     let line = serde_json::to_string(&snapshot)? + "\n";
     writer.write_all(line.as_bytes()).await?;
 
@@ -109,7 +109,7 @@ async fn handle_subscription(
             }
             Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                 warn!("subscription lagged by {n} events — sending resync snapshot");
-                let snapshot = build_initial_snapshot(&state);
+                let snapshot = state.build_snapshot_event();
                 let line = serde_json::to_string(&snapshot)? + "\n";
                 if writer.write_all(line.as_bytes()).await.is_err() {
                     break;
@@ -119,10 +119,6 @@ async fn handle_subscription(
         }
     }
     Ok(())
-}
-
-fn build_initial_snapshot(state: &AppState) -> DaemonEvent {
-    state.build_snapshot_event()
 }
 
 fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
@@ -210,15 +206,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             }
         }
         Command::ListRuleSets => {
-            let rule_sets: Vec<shared::ipc::RuleSetSummary> = state
-                .list_rule_sets()
-                .into_iter()
-                .map(|rs| shared::ipc::RuleSetSummary {
-                    id: rs.id,
-                    name: rs.name,
-                    allowed_urls: rs.allowed_urls,
-                })
-                .collect();
+            let rule_sets = state.list_rule_set_summaries();
             (
                 serde_json::to_string(&rule_sets)
                     .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}")),
@@ -303,28 +291,7 @@ fn handle_command(cmd: Command, state: &AppState) -> (String, bool) {
             ok(true)
         }
         Command::ListSchedules => {
-            use chrono::Timelike;
-            let summaries: Vec<shared::ipc::ScheduleSummary> = state
-                .list_schedules()
-                .into_iter()
-                .map(|s| shared::ipc::ScheduleSummary {
-                    id: s.id,
-                    name: s.name,
-                    days: s
-                        .days
-                        .iter()
-                        .map(|d| d.num_days_from_monday() as u8)
-                        .collect(),
-                    start_min: s.start.hour() * 60 + s.start.minute(),
-                    end_min: s.end.hour() * 60 + s.end.minute(),
-                    enabled: s.enabled,
-                    imported: s.imported,
-                    imported_repeating: s.imported_repeating,
-                    specific_date: s.specific_date.map(|d| d.format("%Y-%m-%d").to_string()),
-                    schedule_type: s.schedule_type,
-                    rule_set_id: s.rule_set_id,
-                })
-                .collect();
+            let summaries = state.list_schedule_summaries();
             (
                 serde_json::to_string(&summaries)
                     .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}")),
