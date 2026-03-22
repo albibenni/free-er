@@ -114,6 +114,10 @@ pub(super) fn reduce_settings_input(
             Some(SettingsEffect::Output(SettingsOutput::AccentColorChanged(hex)))
         }
         SettingsInput::AccentColorUpdated(_) => None,
+        SettingsInput::StrictModeUpdated(enabled) => {
+            state.strict_mode = enabled;
+            None
+        }
     }
 }
 

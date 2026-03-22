@@ -4,6 +4,7 @@ pub mod focus;
 pub mod pomodoro;
 pub mod schedule;
 pub mod settings;
+pub mod strict_mode;
 
 #[cfg(test)]
 pub(crate) mod test_support {

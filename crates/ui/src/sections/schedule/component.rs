@@ -60,6 +60,7 @@ pub struct ScheduleSection {
     draw_data: Rc<RefCell<DrawData>>,
     rule_sets: Vec<RuleSetSummary>,
     default_rule_set_id: Option<uuid::Uuid>,
+    strict_mode: bool,
 }
 
 #[derive(Debug)]
@@ -138,6 +139,7 @@ pub enum ScheduleInput {
         end_min: u32,
     },
     ResyncCalendar,
+    StrictModeUpdated(bool),
 }
 
 #[derive(Debug)]
@@ -254,6 +256,7 @@ impl Component for ScheduleSection {
             draw_data: draw_data.clone(),
             rule_sets: vec![],
             default_rule_set_id: None,
+            strict_mode: false,
         };
 
         let widgets = view_output!();
@@ -459,6 +462,9 @@ impl Component for ScheduleSection {
             ScheduleInput::RuleSetsUpdated(sets) => {
                 self.rule_sets = sets;
             }
+            ScheduleInput::StrictModeUpdated(enabled) => {
+                self.strict_mode = enabled;
+            }
             ScheduleInput::CommitCreate {
                 name,
                 days,
@@ -468,7 +474,7 @@ impl Component for ScheduleSection {
                 schedule_type,
                 rule_set_id,
             } => {
-                let _ = sender.output(ScheduleOutput::CreateSchedule {
+                let output = ScheduleOutput::CreateSchedule {
                     name,
                     days,
                     start_min,
@@ -476,7 +482,19 @@ impl Component for ScheduleSection {
                     specific_date,
                     schedule_type,
                     rule_set_id,
-                });
+                };
+                if self.strict_mode {
+                    let root_clone = _root.clone();
+                    let s = sender.clone();
+                    crate::sections::strict_mode::show_strict_mode_dialog(
+                        &root_clone,
+                        "Strict Mode is active.\n\nCreating a schedule is restricted. Are you sure?",
+                        "Create Schedule",
+                        move || { let _ = s.output(output); },
+                    );
+                } else {
+                    let _ = sender.output(output);
+                }
             }
             ScheduleInput::CommitEdit {
                 id,
@@ -488,7 +506,7 @@ impl Component for ScheduleSection {
                 schedule_type,
                 rule_set_id,
             } => {
-                let _ = sender.output(ScheduleOutput::UpdateSchedule {
+                let output = ScheduleOutput::UpdateSchedule {
                     id,
                     name,
                     days,
@@ -497,10 +515,34 @@ impl Component for ScheduleSection {
                     schedule_type,
                     rule_set_id,
                     specific_date,
-                });
+                };
+                if self.strict_mode {
+                    let root_clone = _root.clone();
+                    let s = sender.clone();
+                    crate::sections::strict_mode::show_strict_mode_dialog(
+                        &root_clone,
+                        "Strict Mode is active.\n\nEditing a schedule is restricted. Are you sure?",
+                        "Edit Schedule",
+                        move || { let _ = s.output(output); },
+                    );
+                } else {
+                    let _ = sender.output(output);
+                }
             }
             ScheduleInput::CommitDelete(id) => {
-                let _ = sender.output(ScheduleOutput::DeleteSchedule(id));
+                let output = ScheduleOutput::DeleteSchedule(id);
+                if self.strict_mode {
+                    let root_clone = _root.clone();
+                    let s = sender.clone();
+                    crate::sections::strict_mode::show_strict_mode_dialog(
+                        &root_clone,
+                        "Strict Mode is active.\n\nDeleting a schedule is restricted. Are you sure?",
+                        "Delete Schedule",
+                        move || { let _ = s.output(output); },
+                    );
+                } else {
+                    let _ = sender.output(output);
+                }
             }
             ScheduleInput::ResyncCalendar => {
                 let _ = sender.output(ScheduleOutput::ResyncCalendar);
@@ -520,13 +562,19 @@ impl Component for ScheduleSection {
                     .find(|s| s.id == id)
                     .cloned();
                 if let Some(sched) = sched {
-                    let _ = sender.output(drag_move_output(
-                        &sched,
-                        col,
-                        start_min,
-                        end_min,
-                        specific_date,
-                    ));
+                    let output = drag_move_output(&sched, col, start_min, end_min, specific_date);
+                    if self.strict_mode {
+                        let root_clone = _root.clone();
+                        let s = sender.clone();
+                        crate::sections::strict_mode::show_strict_mode_dialog(
+                            &root_clone,
+                            "Strict Mode is active.\n\nMoving a schedule is restricted. Are you sure?",
+                            "Move Schedule",
+                            move || { let _ = s.output(output); },
+                        );
+                    } else {
+                        let _ = sender.output(output);
+                    }
                 }
             }
             ScheduleInput::CommitDragResize {
@@ -543,7 +591,19 @@ impl Component for ScheduleSection {
                     .find(|s| s.id == id)
                     .cloned();
                 if let Some(sched) = sched {
-                    let _ = sender.output(drag_resize_output(&sched, col, start_min, end_min));
+                    let output = drag_resize_output(&sched, col, start_min, end_min);
+                    if self.strict_mode {
+                        let root_clone = _root.clone();
+                        let s = sender.clone();
+                        crate::sections::strict_mode::show_strict_mode_dialog(
+                            &root_clone,
+                            "Strict Mode is active.\n\nResizing a schedule is restricted. Are you sure?",
+                            "Resize Schedule",
+                            move || { let _ = s.output(output); },
+                        );
+                    } else {
+                        let _ = sender.output(output);
+                    }
                 }
             }
         }

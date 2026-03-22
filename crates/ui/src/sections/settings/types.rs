@@ -14,6 +14,7 @@ pub enum SettingsInput {
     GoogleStatusUpdated(bool),
     SetAccentColor(String),
     AccentColorUpdated(String),
+    StrictModeUpdated(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

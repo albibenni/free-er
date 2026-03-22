@@ -20,6 +20,7 @@ pub struct PomodoroSection {
     break_secs: u64,
     ring_visual: Rc<RefCell<RingVisualState>>,
     accent_color: Rc<RefCell<(f64, f64, f64)>>,
+    strict_mode: bool,
 }
 
 #[derive(Debug)]
@@ -51,6 +52,7 @@ pub enum PomodoroInput {
     },
     RuleSetsUpdated(Vec<RuleSetSummary>),
     AccentColorUpdated(String),
+    StrictModeUpdated(bool),
 }
 
 #[derive(Debug)]
@@ -429,6 +431,7 @@ impl Component for PomodoroSection {
                 seconds_remaining: None,
             })),
             accent_color: Rc::new(RefCell::new((0.204, 0.518, 0.894))), // #3584e4
+            strict_mode: false,
         };
         let widgets = view_output!();
 
@@ -525,7 +528,18 @@ impl Component for PomodoroSection {
                 });
             }
             PomodoroInput::Stop => {
-                let _ = sender.output(PomodoroOutput::Stop);
+                if self.strict_mode {
+                    let root_clone = _root.clone();
+                    let s = sender.clone();
+                    crate::sections::strict_mode::show_strict_mode_dialog(
+                        &root_clone,
+                        "Strict Mode is active.\n\nStopping the Pomodoro timer is restricted. To stop, you must disable Strict Mode first, or confirm below.",
+                        "Stop Pomodoro",
+                        move || { let _ = s.output(PomodoroOutput::Stop); },
+                    );
+                } else {
+                    let _ = sender.output(PomodoroOutput::Stop);
+                }
             }
             PomodoroInput::RuleSetRowSelected(idx) => {
                 self.selected_rule_set_id = if idx >= 0 {
@@ -545,6 +559,9 @@ impl Component for PomodoroSection {
                 if let Some(rgb) = hex_to_rgb(&hex) {
                     *self.accent_color.borrow_mut() = rgb;
                 }
+            }
+            PomodoroInput::StrictModeUpdated(enabled) => {
+                self.strict_mode = enabled;
             }
             PomodoroInput::RuleSetsUpdated(sets) => {
                 while let Some(child) = widgets.rule_set_list.first_child() {

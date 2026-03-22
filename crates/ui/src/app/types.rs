@@ -28,6 +28,7 @@ pub struct App {
     pub(super) daemon_failures: u32,
     /// Whether the "daemon gone" dialog is already showing.
     pub(super) daemon_dialog_shown: bool,
+    pub(super) strict_mode: bool,
     pub(super) focus: Controller<FocusSection>,
     pub(super) pomodoro: Controller<PomodoroSection>,
     pub(super) allowed_lists: Controller<AllowedListsSection>,
@@ -70,6 +71,7 @@ pub enum AppMsg {
     DisconnectGoogle,
     StrictModeChanged(bool),
     AllowNewTabChanged(bool),
+    StrictModeStateUpdated(bool),
     SaveCalDav {
         url: String,
         user: String,

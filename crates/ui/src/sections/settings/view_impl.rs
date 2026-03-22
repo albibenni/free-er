@@ -147,7 +147,19 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.strict_mode,
-                    connect_state_set[sender] => move |_, state| {
+                    connect_state_set[sender] => move |switch, state| {
+                        if !state {
+                            // Disable requires confirmation
+                            let sw_root = switch.clone();
+                            let s = sender.clone();
+                            crate::sections::strict_mode::show_strict_mode_dialog(
+                                &sw_root,
+                                "You are about to disable Strict Mode.\n\nThis will allow changes to all blocked settings. Are you sure?",
+                                "Disable Strict Mode",
+                                move || { s.input(SettingsInput::SetStrictMode(false)); },
+                            );
+                            return gtk4::glib::Propagation::Stop;
+                        }
                         sender.input(SettingsInput::SetStrictMode(state));
                         gtk4::glib::Propagation::Proceed
                     },
@@ -161,6 +173,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.allow_new_tab,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_state_set[sender] => move |_, state| {
                         sender.input(SettingsInput::SetAllowNewTab(state));
                         gtk4::glib::Propagation::Proceed
@@ -183,6 +197,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.allow_search_engines,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_state_set[sender] => move |_, state| {
                         sender.input(SettingsInput::SetSearchEngines(state));
                         gtk4::glib::Propagation::Proceed
@@ -197,6 +213,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.allow_localhost,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_state_set[sender] => move |_, state| {
                         sender.input(SettingsInput::SetLocalhost(state));
                         gtk4::glib::Propagation::Proceed
@@ -211,6 +229,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.allow_ai_sites,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_state_set[sender] => move |_, state| {
                         sender.input(SettingsInput::SetAiSites(state));
                         gtk4::glib::Propagation::Proceed
@@ -225,6 +245,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.whatsapp,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_state_set[sender] => move |_, state| {
                         sender.input(SettingsInput::SetQuick(WHATSAPP, state));
                         gtk4::glib::Propagation::Proceed
@@ -239,6 +261,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.telegram,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_state_set[sender] => move |_, state| {
                         sender.input(SettingsInput::SetQuick(TELEGRAM, state));
                         gtk4::glib::Propagation::Proceed
@@ -253,6 +277,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.discord,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_state_set[sender] => move |_, state| {
                         sender.input(SettingsInput::SetQuick(DISCORD, state));
                         gtk4::glib::Propagation::Proceed
@@ -267,6 +293,8 @@ impl SimpleComponent for SettingsSection {
                 gtk4::Switch {
                     #[watch]
                     set_active: model.spotify,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_state_set[sender] => move |_, state| {
                         sender.input(SettingsInput::SetQuick(SPOTIFY, state));
                         gtk4::glib::Propagation::Proceed

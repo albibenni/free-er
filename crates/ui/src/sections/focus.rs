@@ -6,6 +6,8 @@ pub struct FocusSection {
     focus_active: bool,
     pomodoro_running: bool,
     active_rule_set: Option<String>,
+    strict_mode: bool,
+    root_widget: gtk4::Box,
 }
 
 #[derive(Debug)]
@@ -17,6 +19,7 @@ pub enum FocusInput {
         rule_set: Option<String>,
     },
     PomodoroActive(bool),
+    StrictModeUpdated(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,10 +29,11 @@ pub enum FocusOutput {
 }
 
 #[relm4::component(pub)]
-impl SimpleComponent for FocusSection {
+impl Component for FocusSection {
     type Init = ();
     type Input = FocusInput;
     type Output = FocusOutput;
+    type CommandOutput = ();
 
     view! {
         gtk4::Box {
@@ -131,18 +135,37 @@ impl SimpleComponent for FocusSection {
             focus_active: false,
             pomodoro_running: false,
             active_rule_set: None,
+            strict_mode: false,
+            root_widget: root.clone(),
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, msg: FocusInput, sender: ComponentSender<Self>) {
+    fn update_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        msg: FocusInput,
+        sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
         match msg {
             FocusInput::SkipBreak => {
                 let _ = sender.output(FocusOutput::SkipBreak);
             }
             FocusInput::TakeBreak { break_secs } => {
-                let _ = sender.output(FocusOutput::TakeBreak { break_secs });
+                if self.strict_mode {
+                    let root_clone = self.root_widget.clone();
+                    let s = sender.clone();
+                    crate::sections::strict_mode::show_strict_mode_dialog(
+                        &root_clone,
+                        "Strict Mode is active.\n\nTaking a quick break is restricted. To enable quick breaks, disable Strict Mode first, or confirm below.",
+                        "Take Break",
+                        move || { let _ = s.output(FocusOutput::TakeBreak { break_secs }); },
+                    );
+                } else {
+                    let _ = sender.output(FocusOutput::TakeBreak { break_secs });
+                }
             }
             FocusInput::StatusUpdated { active, rule_set } => {
                 self.focus_active = active;
@@ -162,7 +185,11 @@ impl SimpleComponent for FocusSection {
                     self.active_rule_set = None;
                 }
             }
+            FocusInput::StrictModeUpdated(enabled) => {
+                self.strict_mode = enabled;
+            }
         }
+        self.update_view(widgets, sender);
     }
 }
 

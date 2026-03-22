@@ -161,6 +161,7 @@ impl Component for App {
             default_rule_set_id: None,
             daemon_failures: 0,
             daemon_dialog_shown: false,
+            strict_mode: false,
             focus,
             pomodoro,
             allowed_lists,
@@ -317,6 +318,27 @@ impl Component for App {
             AppMsg::DisconnectGoogle => settings_handlers::disconnect_google(),
             AppMsg::StrictModeChanged(enabled) => settings_handlers::set_strict_mode(enabled),
             AppMsg::AllowNewTabChanged(enabled) => settings_handlers::set_allow_new_tab(enabled),
+            AppMsg::StrictModeStateUpdated(enabled) => {
+                self.strict_mode = enabled;
+                self.focus
+                    .sender()
+                    .emit(crate::sections::focus::FocusInput::StrictModeUpdated(enabled));
+                self.pomodoro
+                    .sender()
+                    .emit(crate::sections::pomodoro::PomodoroInput::StrictModeUpdated(enabled));
+                self.allowed_lists
+                    .sender()
+                    .emit(crate::sections::allowed_lists::AllowedListsInput::StrictModeUpdated(enabled));
+                self.schedule
+                    .sender()
+                    .emit(crate::sections::schedule::ScheduleInput::StrictModeUpdated(enabled));
+                self.calendar_rules
+                    .sender()
+                    .emit(crate::sections::calendar_rules::CalendarRulesInput::StrictModeUpdated(enabled));
+                self.settings
+                    .sender()
+                    .emit(crate::sections::settings::SettingsInput::StrictModeUpdated(enabled));
+            }
             AppMsg::SaveCalDav { url, user, pass } => {
                 settings_handlers::save_caldav(url, user, pass);
             }

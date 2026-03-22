@@ -14,6 +14,7 @@ pub struct AllowedListsSection {
     creating_new: bool,
     open_tabs: Vec<OpenTab>,
     show_tab_picker: bool,
+    strict_mode: bool,
 }
 
 #[derive(Debug)]
@@ -31,6 +32,7 @@ pub enum AllowedListsInput {
     ToggleTabPicker,
     OpenTabsReceived(Vec<OpenTab>),
     AddTabUrl { url: String },
+    StrictModeUpdated(bool),
 }
 
 #[derive(Debug)]
@@ -268,6 +270,7 @@ impl Component for AllowedListsSection {
             creating_new: false,
             open_tabs: vec![],
             show_tab_picker: false,
+            strict_mode: false,
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -286,11 +289,29 @@ impl Component for AllowedListsSection {
                 let raw = self.url_entry.text().to_string();
                 if let (Some(id), false) = (self.selected_id, raw.is_empty()) {
                     let pattern = extract_pattern(&raw);
-                    let _ = sender.output(AllowedListsOutput::AddUrl {
-                        rule_set_id: id,
-                        url: pattern,
-                    });
-                    self.url_entry.set_text("");
+                    if self.strict_mode {
+                        let root_clone = _root.clone();
+                        let s = sender.clone();
+                        let pattern_clone = pattern.clone();
+                        crate::sections::strict_mode::show_strict_mode_dialog(
+                            &root_clone,
+                            "Strict Mode is active.\n\nAdding sites to the allowed list is restricted. Are you sure?",
+                            "Add Site",
+                            move || {
+                                let _ = s.output(AllowedListsOutput::AddUrl {
+                                    rule_set_id: id,
+                                    url: pattern_clone.clone(),
+                                });
+                            },
+                        );
+                        self.url_entry.set_text("");
+                    } else {
+                        let _ = sender.output(AllowedListsOutput::AddUrl {
+                            rule_set_id: id,
+                            url: pattern,
+                        });
+                        self.url_entry.set_text("");
+                    }
                 }
             }
             AllowedListsInput::RemoveUrl { rule_set_id, url } => {
@@ -321,7 +342,21 @@ impl Component for AllowedListsSection {
             AllowedListsInput::ConfirmNewList => {
                 let name = self.new_list_name.text().to_string();
                 if !name.is_empty() {
-                    let _ = sender.output(AllowedListsOutput::CreateRuleSet(name));
+                    if self.strict_mode {
+                        let root_clone = _root.clone();
+                        let s = sender.clone();
+                        let name_clone = name.clone();
+                        crate::sections::strict_mode::show_strict_mode_dialog(
+                            &root_clone,
+                            "Strict Mode is active.\n\nCreating a new allowed list is restricted. Are you sure?",
+                            "Create List",
+                            move || {
+                                let _ = s.output(AllowedListsOutput::CreateRuleSet(name_clone.clone()));
+                            },
+                        );
+                    } else {
+                        let _ = sender.output(AllowedListsOutput::CreateRuleSet(name));
+                    }
                 }
                 self.creating_new = false;
                 self.new_list_name.set_text("");
@@ -355,14 +390,34 @@ impl Component for AllowedListsSection {
             AllowedListsInput::AddTabUrl { url } => {
                 if let Some(id) = self.selected_id {
                     let pattern = extract_pattern(&url);
-                    let _ = sender.output(AllowedListsOutput::AddUrl {
-                        rule_set_id: id,
-                        url: pattern.clone(),
-                    });
+                    if self.strict_mode {
+                        let root_clone = _root.clone();
+                        let s = sender.clone();
+                        let pattern_clone = pattern.clone();
+                        crate::sections::strict_mode::show_strict_mode_dialog(
+                            &root_clone,
+                            "Strict Mode is active.\n\nAdding sites to the allowed list is restricted. Are you sure?",
+                            "Add Site",
+                            move || {
+                                let _ = s.output(AllowedListsOutput::AddUrl {
+                                    rule_set_id: id,
+                                    url: pattern_clone.clone(),
+                                });
+                            },
+                        );
+                    } else {
+                        let _ = sender.output(AllowedListsOutput::AddUrl {
+                            rule_set_id: id,
+                            url: pattern.clone(),
+                        });
+                    }
                     // Optimistic: remove this tab from the picker for immediate feedback
                     self.open_tabs.retain(|t| extract_pattern(&t.url) != pattern);
                     self.rebuild_tab_picker(widgets, &sender);
                 }
+            }
+            AllowedListsInput::StrictModeUpdated(enabled) => {
+                self.strict_mode = enabled;
             }
         }
         self.update_view(widgets, sender);

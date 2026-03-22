@@ -13,6 +13,7 @@ pub struct CalendarRulesSection {
     caldav_pass: gtk4::EntryBuffer,
     google_connected: bool,
     caldav_connected: bool,
+    strict_mode: bool,
 }
 
 #[derive(Debug)]
@@ -27,6 +28,7 @@ pub enum CalendarRulesInput {
     RemoveFocusKeyword(String),
     RemoveBreakKeyword(String),
     RulesUpdated(Vec<ImportRuleSummary>),
+    StrictModeUpdated(bool),
 }
 
 #[derive(Debug)]
@@ -117,6 +119,8 @@ impl Component for CalendarRulesSection {
             gtk4::Box {
                 set_orientation: gtk4::Orientation::Horizontal,
                 set_spacing: 8,
+                #[watch]
+                set_sensitive: !model.strict_mode,
 
                 gtk4::Entry {
                     set_buffer: &model.focus_entry,
@@ -137,6 +141,8 @@ impl Component for CalendarRulesSection {
             gtk4::ListBox {
                 add_css_class: "boxed-list",
                 set_selection_mode: gtk4::SelectionMode::None,
+                #[watch]
+                set_sensitive: !model.strict_mode,
             },
 
             gtk4::Separator {},
@@ -158,6 +164,8 @@ impl Component for CalendarRulesSection {
             gtk4::Box {
                 set_orientation: gtk4::Orientation::Horizontal,
                 set_spacing: 8,
+                #[watch]
+                set_sensitive: !model.strict_mode,
 
                 gtk4::Entry {
                     set_buffer: &model.break_entry,
@@ -178,6 +186,8 @@ impl Component for CalendarRulesSection {
             gtk4::ListBox {
                 add_css_class: "boxed-list",
                 set_selection_mode: gtk4::SelectionMode::None,
+                #[watch]
+                set_sensitive: !model.strict_mode,
             },
 
             gtk4::Separator {},
@@ -195,15 +205,21 @@ impl Component for CalendarRulesSection {
             gtk4::Entry {
                 set_buffer: &model.caldav_url,
                 set_placeholder_text: Some("Calendar URL (.ics or CalDAV)"),
+                #[watch]
+                set_sensitive: !model.strict_mode,
             },
             gtk4::Entry {
                 set_buffer: &model.caldav_user,
                 set_placeholder_text: Some("Username (optional)"),
+                #[watch]
+                set_sensitive: !model.strict_mode,
             },
             gtk4::Entry {
                 set_buffer: &model.caldav_pass,
                 set_placeholder_text: Some("Password (optional)"),
                 set_visibility: false,
+                #[watch]
+                set_sensitive: !model.strict_mode,
             },
 
             gtk4::Box {
@@ -221,6 +237,8 @@ impl Component for CalendarRulesSection {
                     set_label: "Save",
                     set_css_classes: &["suggested-action"],
                     set_halign: gtk4::Align::End,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_clicked => CalendarRulesInput::SaveCalDav,
                 },
             },
@@ -249,6 +267,8 @@ impl Component for CalendarRulesSection {
                     set_css_classes: &["suggested-action"],
                     #[watch]
                     set_visible: !model.google_connected,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_clicked => CalendarRulesInput::ConnectGoogle,
                 },
                 gtk4::Button {
@@ -256,6 +276,8 @@ impl Component for CalendarRulesSection {
                     set_css_classes: &["destructive-action"],
                     #[watch]
                     set_visible: model.google_connected,
+                    #[watch]
+                    set_sensitive: !model.strict_mode,
                     connect_clicked => CalendarRulesInput::DisconnectGoogle,
                 },
             },
@@ -273,6 +295,7 @@ impl Component for CalendarRulesSection {
             caldav_pass: gtk4::EntryBuffer::default(),
             google_connected: false,
             caldav_connected: false,
+            strict_mode: false,
         };
         let widgets = view_output!();
         ComponentParts { model, widgets }
@@ -356,6 +379,9 @@ impl Component for CalendarRulesSection {
                     keyword: kw,
                     schedule_type: ScheduleType::Break,
                 });
+            }
+            CalendarRulesInput::StrictModeUpdated(enabled) => {
+                self.strict_mode = enabled;
             }
             CalendarRulesInput::RulesUpdated(rules) => {
                 let (focus_keywords, break_keywords) = split_rules(rules);

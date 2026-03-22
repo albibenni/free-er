@@ -48,6 +48,7 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
             settings_sender.emit(SettingsInput::AccentColorUpdated(status.accent_color.clone()));
             pom_sender.emit(PomodoroInput::AccentColorUpdated(status.accent_color.clone()));
             sender.input(AppMsg::ApplyAccentCss(status.accent_color));
+            sender.input(AppMsg::StrictModeStateUpdated(status.strict_mode));
             if let Some(id) = status.default_rule_set_id {
                 sender.input(AppMsg::SetDefaultRuleSet(id));
             }
@@ -82,7 +83,7 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
         }
 
         DaemonEvent::ConfigChanged {
-            strict_mode: _,
+            strict_mode,
             allow_new_tab,
             accent_color,
             google_calendar_connected,
@@ -96,6 +97,7 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
             settings_sender.emit(SettingsInput::AccentColorUpdated(accent_color.clone()));
             pom_sender.emit(PomodoroInput::AccentColorUpdated(accent_color.clone()));
             sender.input(AppMsg::ApplyAccentCss(accent_color));
+            sender.input(AppMsg::StrictModeStateUpdated(strict_mode));
             if let Some(id) = default_rule_set_id {
                 sender.input(AppMsg::SetDefaultRuleSet(id));
             }
