@@ -26,6 +26,21 @@
 
 - [x] open at startup
 
+### STRICT MODE
+
+- [ ] block all toggle in settings
+  - [ ] disable strict mode require a confirmation dialog with a warning and a call to action to disable it
+- [ ] calendar settings are untoggable if strict mode is on
+- [ ] calendar settings lists are disabled if strict mode is on
+- [ ] pomodoro require a confirmation dialog with a warning and a call to stop it
+- [ ] quick break require a confirmation dialog with a warning and a call to action to disable strict mode
+- [ ] allowed list add with strict mode on should require a confirmation dialog with a warning and a call to action to add a new allowed site
+  - [ ] same for adding a website from 'Open tabs'
+- [ ] schedule task require a confirmation dialog with a warning and a call to action to create a new task if strict mode is on to change the list of allowed sites for that task or from focus mode to break mode (and vice versa)
+- [ ] schedule task cannot be modified if strict mode is on - changing the time or the allowed list should require a confirmation dialog with a warning and a call to action to modify the task
+- [ ] schedule task cannot be deleted if strict mode is on - deleting a task should require a confirmation dialog with a warning and a call to action to delete the task
+- [ ] schedule cannnot be created if strict mode is on - creating a task should require a confirmation dialog with a warning and a call to action to create the task
+  
 ### CALENDAR
 
 - [x] allow modify existing schedules from calendar ui
@@ -55,7 +70,7 @@
     - [x] no screen
     - [x] focus, study, work
     - [x] break, free, colloquio
-- [ ] calendar view scrollable - focussed to current time
+- [x] calendar view scrollable - focussed to current time
 
 ### POMODORO
 
@@ -64,6 +79,9 @@
 - [x] opposite - clock wise to increase, counter clock wise to decrease
 - [ ] break timer clock - connected to the pomodoro end
 - [x] race condition between pomodoro and calendar task - pomodoro is above calendar task, but when pomodoro ends, calendar task should come back
+- [ ] pomodoro list selection cannot be changed while pomodoro is active
+- [ ] pomodoro cannot be increased or decreased while active (both for focus and break)
+- [ ] disable stop if pomodoro isn't active
 
 ## BUG
 
