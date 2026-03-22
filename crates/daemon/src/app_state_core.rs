@@ -220,7 +220,6 @@ impl AppState {
         inner.config.rule_sets.iter().find(|r| r.id == id).cloned()
     }
 
-    #[allow(dead_code)]
     pub fn config(&self) -> Config {
         self.lock().config.clone()
     }
