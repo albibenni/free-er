@@ -269,10 +269,6 @@ impl Component for App {
                 self.update_view(widgets, sender);
                 return;
             }
-            AppMsg::StartFocus { rule_set_id } => {
-                focus_handlers::start_focus(rule_set_id.or(self.default_rule_set_id));
-            }
-            AppMsg::StopFocus => focus_handlers::stop_focus(),
             AppMsg::SkipBreak => focus_handlers::skip_break(),
             AppMsg::StartPomodoro {
                 focus_secs,

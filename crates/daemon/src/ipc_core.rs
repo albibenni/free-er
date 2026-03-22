@@ -90,12 +90,14 @@ async fn handle_subscription(
     mut writer: tokio::net::unix::OwnedWriteHalf,
     state: AppState,
 ) -> Result<()> {
+    // Subscribe first, then snapshot — eliminates a race where apply_schedule
+    // fires between snapshot and subscribe, causing the UI to miss the event.
+    let mut rx = state.subscribe();
+
     // Send a full snapshot immediately so the UI can paint without a round-trip.
     let snapshot = build_initial_snapshot(&state);
     let line = serde_json::to_string(&snapshot)? + "\n";
     writer.write_all(line.as_bytes()).await?;
-
-    let mut rx = state.subscribe();
 
     loop {
         match rx.recv().await {

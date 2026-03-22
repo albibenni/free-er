@@ -424,7 +424,21 @@ impl AppState {
                     .fold((None, false), |(focus, brk), s| {
                         match s.schedule_type {
                             shared::models::ScheduleType::Focus if focus.is_none() => {
-                                (Some(s.rule_set_id), brk)
+                                // If no specific list was assigned (nil sentinel), fall back
+                                // to the effective default rule set so blocking still works.
+                                let eid = if s.rule_set_id.is_nil() {
+                                    inner
+                                        .config
+                                        .default_rule_set_id
+                                        .filter(|id| {
+                                            inner.config.rule_sets.iter().any(|r| r.id == *id)
+                                        })
+                                        .or_else(|| inner.config.rule_sets.first().map(|r| r.id))
+                                        .unwrap_or_else(Uuid::nil)
+                                } else {
+                                    s.rule_set_id
+                                };
+                                (Some(eid), brk)
                             }
                             shared::models::ScheduleType::Break => (focus, true),
                             _ => (focus, brk),

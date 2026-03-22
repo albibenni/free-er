@@ -16,10 +16,8 @@ fn focus_handlers_send_expected_commands() {
         .unwrap();
     let _guard = rt.enter();
 
-    start_focus(Some(default_id));
-    start_focus(None);
-    stop_focus();
     skip_break();
+    take_break(300);
     start_pomodoro(25, 5, Some(default_id));
     stop_pomodoro();
 
@@ -28,16 +26,11 @@ fn focus_handlers_send_expected_commands() {
     });
 
     let received = daemon.received();
-    assert!(received.iter().any(|c| matches!(
-        c,
-        Command::StartFocus { rule_set_id } if *rule_set_id == default_id
-    )));
-    assert!(received.iter().any(|c| matches!(
-        c,
-        Command::StartFocus { rule_set_id } if *rule_set_id == Uuid::nil()
-    )));
-    assert!(received.iter().any(|c| matches!(c, Command::StopFocus)));
     assert!(received.iter().any(|c| matches!(c, Command::SkipBreak)));
+    assert!(received.iter().any(|c| matches!(
+        c,
+        Command::TakeBreak { duration_secs } if *duration_secs == 300
+    )));
     assert!(received.iter().any(|c| matches!(
         c,
         Command::StartPomodoro {
@@ -59,9 +52,8 @@ fn focus_handlers_handle_ipc_failures_without_panicking() {
         .unwrap();
     let _guard = rt.enter();
 
-    start_focus(None);
-    stop_focus();
     skip_break();
+    take_break(900);
     start_pomodoro(1, 1, None);
     stop_pomodoro();
 

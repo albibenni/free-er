@@ -29,17 +29,15 @@ fn focus_component_emits_focus_outputs() {
     host.present();
     flush();
 
-    controller.emit(FocusInput::Toggle);
     controller.emit(FocusInput::SkipBreak);
+    controller.emit(FocusInput::TakeBreak { break_secs: 5 * 60 });
     controller.emit(FocusInput::StatusUpdated {
         active: true,
         rule_set: Some("Work".into()),
     });
-    controller.emit(FocusInput::Toggle);
     flush();
 
     let out = outputs.borrow();
-    assert!(out.iter().any(|o| matches!(o, FocusOutput::StartFocus { .. })));
     assert!(out.iter().any(|o| matches!(o, FocusOutput::SkipBreak)));
-    assert!(out.iter().any(|o| matches!(o, FocusOutput::StopFocus)));
+    assert!(out.iter().any(|o| matches!(o, FocusOutput::TakeBreak { break_secs: 300 })));
 }

@@ -32,6 +32,7 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
                 phase: status.pomodoro_phase.map(|p| format!("{p:?}")),
                 seconds_remaining: status.seconds_remaining,
             });
+            focus_sender.emit(FocusInput::PomodoroActive(pomodoro_active));
             sender.input(AppMsg::SetFocusActive(status.focus_active));
             sender.input(AppMsg::SetPomodoroActive(pomodoro_active));
             settings_sender.emit(SettingsInput::GoogleStatusUpdated(
@@ -52,7 +53,6 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
             }
             dispatch_rule_sets(
                 rule_sets,
-                &focus_sender,
                 &lists_sender,
                 &pom_sender,
                 &schedule_sender,
@@ -77,6 +77,7 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
                 phase: phase.map(|p| format!("{p:?}")),
                 seconds_remaining,
             });
+            focus_sender.emit(FocusInput::PomodoroActive(pomodoro_active));
             sender.input(AppMsg::SetPomodoroActive(pomodoro_active));
         }
 
@@ -103,7 +104,6 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
         DaemonEvent::RuleSetsChanged { rule_sets } => {
             dispatch_rule_sets(
                 rule_sets,
-                &focus_sender,
                 &lists_sender,
                 &pom_sender,
                 &schedule_sender,
@@ -124,7 +124,6 @@ pub(super) fn handle_event(app: &App, event: DaemonEvent, sender: ComponentSende
 
 fn dispatch_rule_sets(
     rule_sets: Vec<RuleSetSummary>,
-    focus_sender: &relm4::Sender<FocusInput>,
     lists_sender: &relm4::Sender<AllowedListsInput>,
     pom_sender: &relm4::Sender<PomodoroInput>,
     schedule_sender: &relm4::Sender<ScheduleInput>,
@@ -135,7 +134,6 @@ fn dispatch_rule_sets(
     use crate::sections::pomodoro::PomodoroInput as PI;
     use crate::sections::schedule::ScheduleInput as SI;
 
-    focus_sender.emit(FocusInput::RuleSetsUpdated(rule_sets.clone()));
     lists_sender.emit(AL::RuleSetsUpdated(rule_sets.clone()));
     pom_sender.emit(PI::RuleSetsUpdated(rule_sets.clone()));
     schedule_sender.emit(SI::RuleSetsUpdated(rule_sets.clone()));

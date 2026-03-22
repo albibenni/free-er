@@ -5,14 +5,6 @@ use uuid::Uuid;
 #[test]
 fn maps_focus_outputs() {
     assert!(matches!(
-        map_focus_output(FocusOutput::StartFocus { rule_set_id: None }),
-        AppMsg::StartFocus { rule_set_id: None }
-    ));
-    assert!(matches!(
-        map_focus_output(FocusOutput::StopFocus),
-        AppMsg::StopFocus
-    ));
-    assert!(matches!(
         map_focus_output(FocusOutput::SkipBreak),
         AppMsg::SkipBreak
     ));

@@ -41,8 +41,6 @@ pub enum AppMsg {
     Navigate(Page),
     ToggleSidebar,
     // Focus / Pomodoro session control
-    StartFocus { rule_set_id: Option<Uuid> },
-    StopFocus,
     SkipBreak,
     StartPomodoro {
         focus_secs: u64,
