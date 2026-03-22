@@ -95,8 +95,8 @@ impl AppState {
         }
     }
 
-    fn rule_sets_event(inner: &Inner) -> DaemonEvent {
-        let rule_sets = inner
+    fn rule_set_summaries(inner: &Inner) -> Vec<RuleSetSummary> {
+        inner
             .config
             .rule_sets
             .iter()
@@ -105,13 +105,12 @@ impl AppState {
                 name: rs.name.clone(),
                 allowed_urls: rs.allowed_urls.clone(),
             })
-            .collect();
-        DaemonEvent::RuleSetsChanged { rule_sets }
+            .collect()
     }
 
-    fn schedules_event(inner: &Inner) -> DaemonEvent {
+    fn schedule_summaries(inner: &Inner) -> Vec<ScheduleSummary> {
         use chrono::Timelike;
-        let schedules = inner
+        inner
             .config
             .schedules
             .iter()
@@ -132,8 +131,19 @@ impl AppState {
                 schedule_type: s.schedule_type.clone(),
                 rule_set_id: s.rule_set_id,
             })
-            .collect();
-        DaemonEvent::SchedulesChanged { schedules }
+            .collect()
+    }
+
+    fn rule_sets_event(inner: &Inner) -> DaemonEvent {
+        DaemonEvent::RuleSetsChanged {
+            rule_sets: Self::rule_set_summaries(inner),
+        }
+    }
+
+    fn schedules_event(inner: &Inner) -> DaemonEvent {
+        DaemonEvent::SchedulesChanged {
+            schedules: Self::schedule_summaries(inner),
+        }
     }
 
     fn import_rules_event(inner: &Inner) -> DaemonEvent {
@@ -744,7 +754,6 @@ impl AppState {
 
     /// Build a full InitialSnapshot event in a single lock acquisition.
     pub fn build_snapshot_event(&self) -> DaemonEvent {
-        use chrono::Timelike;
         let inner = self.lock();
 
         let active_rule_set_name = inner
@@ -785,39 +794,8 @@ impl AppState {
             accent_color: inner.config.accent_color.clone(),
         };
 
-        let rule_sets = inner
-            .config
-            .rule_sets
-            .iter()
-            .map(|rs| RuleSetSummary {
-                id: rs.id,
-                name: rs.name.clone(),
-                allowed_urls: rs.allowed_urls.clone(),
-            })
-            .collect();
-
-        let schedules = inner
-            .config
-            .schedules
-            .iter()
-            .map(|s| ScheduleSummary {
-                id: s.id,
-                name: s.name.clone(),
-                days: s
-                    .days
-                    .iter()
-                    .map(|d| d.num_days_from_monday() as u8)
-                    .collect(),
-                start_min: s.start.hour() * 60 + s.start.minute(),
-                end_min: s.end.hour() * 60 + s.end.minute(),
-                enabled: s.enabled,
-                imported: s.imported,
-                imported_repeating: s.imported_repeating,
-                specific_date: s.specific_date.map(|d| d.format("%Y-%m-%d").to_string()),
-                schedule_type: s.schedule_type.clone(),
-                rule_set_id: s.rule_set_id,
-            })
-            .collect();
+        let rule_sets = Self::rule_set_summaries(&inner);
+        let schedules = Self::schedule_summaries(&inner);
 
         let import_rules = inner
             .config
