@@ -8,6 +8,7 @@ use shared::{
 };
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
+use tracing::warn;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -49,7 +50,10 @@ impl AppState {
 
     /// Acquire the inner lock, recovering gracefully if it is poisoned.
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
-        self.0.lock().unwrap_or_else(|e| e.into_inner())
+        self.0.lock().unwrap_or_else(|e| {
+            warn!("AppState mutex was poisoned — recovering from panic in critical section");
+            e.into_inner()
+        })
     }
 
     /// Subscribe to push events from the daemon.
