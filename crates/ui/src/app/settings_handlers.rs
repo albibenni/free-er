@@ -92,7 +92,7 @@ pub(super) fn apply_accent_css(hex: &str) {
          switch:checked {{ background-color: {hex}; }}\
          list.boxed-list row:selected {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}\
          list.boxed-list row:hover {{ background-color: rgba({r},{g},{b},0.32); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.55); }}\
-         list.boxed-list row:selected:hover {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}"
+         list.boxed-list:disabled row:selected {{ background-color: rgba(128,128,128,0.2); background-image: none; color: inherit; border: 1px solid rgba(128,128,128,0.45); }}"
     );
     thread_local! {
         static PROVIDER: gtk4::CssProvider = {
