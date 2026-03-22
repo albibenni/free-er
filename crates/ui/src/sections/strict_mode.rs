@@ -2,6 +2,8 @@ use gtk4::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+const CONFIRM_PHRASE: &str = ""; //kobe inspirational quote to not quit
+
 /// Shows a strict mode confirmation dialog.
 ///
 /// - `root`: any widget inside the window (used to find the parent window)
@@ -40,7 +42,29 @@ pub fn show_strict_mode_dialog(
     msg_label.set_wrap(true);
     msg_label.set_max_width_chars(42);
     msg_label.set_justify(gtk4::Justification::Center);
+    msg_label.set_selectable(false);
     vbox.append(&msg_label);
+
+    let quote_label = gtk4::Label::new(None);
+    quote_label.set_markup(&format!(
+        "<i>\"The most important thing is that you keep pushing, keep striving, and never give up.\"</i>"
+    ));
+    quote_label.set_wrap(true);
+    quote_label.set_max_width_chars(42);
+    quote_label.set_justify(gtk4::Justification::Center);
+    quote_label.set_selectable(false);
+    quote_label.set_margin_top(4);
+    vbox.append(&quote_label);
+
+    let prompt_label = gtk4::Label::new(None);
+    prompt_label.set_markup(&format!("Type <b><tt>{CONFIRM_PHRASE}</tt></b> to proceed"));
+    prompt_label.set_selectable(false);
+    prompt_label.set_margin_top(4);
+    vbox.append(&prompt_label);
+
+    let entry = gtk4::Entry::new();
+    entry.set_placeholder_text(Some(CONFIRM_PHRASE));
+    vbox.append(&entry);
 
     let btn_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
     btn_row.set_halign(gtk4::Align::End);
@@ -49,6 +73,7 @@ pub fn show_strict_mode_dialog(
     let cancel_btn = gtk4::Button::with_label("Cancel");
     let confirm_btn = gtk4::Button::with_label(confirm_label);
     confirm_btn.add_css_class("destructive-action");
+    confirm_btn.set_sensitive(false);
 
     btn_row.append(&cancel_btn);
     btn_row.append(&confirm_btn);
@@ -56,10 +81,22 @@ pub fn show_strict_mode_dialog(
 
     dialog.set_child(Some(&vbox));
 
+    let cb = confirm_btn.clone();
+    entry.connect_changed(move |e| {
+        cb.set_sensitive(e.text().as_str() == CONFIRM_PHRASE);
+    });
+
+    // Allow pressing Enter to confirm when phrase matches
+    let cb = confirm_btn.clone();
+    entry.connect_activate(move |_| {
+        if cb.is_sensitive() {
+            cb.emit_clicked();
+        }
+    });
+
     let d = dialog.clone();
     cancel_btn.connect_clicked(move |_| d.close());
 
-    // Wrap the FnOnce in an Option inside a RefCell so it can be called from Fn
     let callback: Rc<RefCell<Option<Box<dyn FnOnce()>>>> =
         Rc::new(RefCell::new(Some(Box::new(on_confirm))));
     let d = dialog.clone();
