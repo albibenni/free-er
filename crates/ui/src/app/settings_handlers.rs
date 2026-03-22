@@ -83,6 +83,7 @@ pub(super) fn apply_accent_css(hex: &str) {
     let css = format!(
         "button.suggested-action:not(.flat) {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}\
          button.suggested-action:not(.flat):hover {{ background-color: rgba({r},{g},{b},0.32); background-image: none; }}\
+         button.suggested-action:not(.flat):disabled {{ background-color: rgba(128,128,128,0.08); background-image: none; color: rgba(128,128,128,0.5); border: 1px solid rgba(128,128,128,0.2); }}\
          button.suggested-action-dialog:not(.flat) {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}\
          button.suggested-action-dialog:not(.flat):hover {{ background-color: rgba({r},{g},{b},0.32); background-image: none; }}\
          button.destructive-action:not(.flat) {{ background-color: rgba(220, 53, 69, 0.12); background-image: none; color: red; border: 1px solid rgba(220, 53, 69, 0.35); }}\
