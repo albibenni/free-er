@@ -28,9 +28,6 @@ pub enum PomodoroInput {
         focus_secs: u64,
         break_secs: u64,
     },
-    SetQuickBreak {
-        break_secs: u64,
-    },
     AdjustFocus(i64),
     AdjustBreak(i64),
     DragFocusAt {
@@ -185,32 +182,6 @@ impl Component for PomodoroSection {
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 90 * 60, break_secs: 20 * 60 },
                             },
 
-                            gtk4::Separator {
-                                set_orientation: gtk4::Orientation::Horizontal,
-                                set_margin_top: 4,
-                                set_margin_bottom: 2,
-                            },
-
-                            gtk4::Label {
-                                set_label: "QUICK BREAK",
-                                add_css_class: "dim-label",
-                                set_halign: gtk4::Align::Start,
-                            },
-                            gtk4::Button {
-                                set_label: "5m",
-                                add_css_class: "suggested-action",
-                                connect_clicked => PomodoroInput::SetQuickBreak { break_secs: 5 * 60 },
-                            },
-                            gtk4::Button {
-                                set_label: "15m",
-                                add_css_class: "suggested-action",
-                                connect_clicked => PomodoroInput::SetQuickBreak { break_secs: 15 * 60 },
-                            },
-                            gtk4::Button {
-                                set_label: "30m",
-                                add_css_class: "suggested-action",
-                                connect_clicked => PomodoroInput::SetQuickBreak { break_secs: 30 * 60 },
-                            },
                         },
 
                         // Center: focus / break controls
@@ -483,9 +454,6 @@ impl Component for PomodoroSection {
                 break_secs,
             } => {
                 self.focus_secs = focus_secs;
-                self.break_secs = break_secs;
-            }
-            PomodoroInput::SetQuickBreak { break_secs } => {
                 self.break_secs = break_secs;
             }
             PomodoroInput::AdjustFocus(delta_min) => {

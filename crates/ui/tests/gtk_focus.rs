@@ -39,7 +39,7 @@ fn focus_component_emits_focus_outputs() {
     flush();
 
     let out = outputs.borrow();
-    assert!(out.iter().any(|o| matches!(o, FocusOutput::StartFocus)));
+    assert!(out.iter().any(|o| matches!(o, FocusOutput::StartFocus { .. })));
     assert!(out.iter().any(|o| matches!(o, FocusOutput::SkipBreak)));
     assert!(out.iter().any(|o| matches!(o, FocusOutput::StopFocus)));
 }

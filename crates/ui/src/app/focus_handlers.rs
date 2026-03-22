@@ -42,6 +42,14 @@ pub(super) fn start_pomodoro(focus_secs: u64, break_secs: u64, rule_set_id: Opti
     });
 }
 
+pub(super) fn take_break(break_secs: u64) {
+    tokio::spawn(async move {
+        if let Err(e) = ipc_client::send(&Command::TakeBreak { duration_secs: break_secs }).await {
+            error!("TakeBreak IPC failed: {e}");
+        }
+    });
+}
+
 pub(super) fn stop_pomodoro() {
     tokio::spawn(async {
         if let Err(e) = ipc_client::send(&Command::StopPomodoro).await {

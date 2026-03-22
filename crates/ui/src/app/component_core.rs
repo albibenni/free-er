@@ -52,6 +52,17 @@ impl Component for App {
                             gtk4::Image { set_icon_name: Some("media-playback-start-symbolic") },
                             #[name = "lbl_focus"]
                             gtk4::Label { set_label: "Focus" },
+                            #[name = "lbl_focus_status"]
+                            gtk4::Label {
+                                #[watch]
+                                set_label: if model.focus_active || model.pomodoro_active { "●" } else { "" },
+                                #[watch]
+                                set_css_classes: if model.focus_active || model.pomodoro_active {
+                                    &["accent"]
+                                } else {
+                                    &[]
+                                },
+                            },
                         },
                     },
                     gtk4::Button {
@@ -145,6 +156,8 @@ impl Component for App {
         let model = App {
             current_page: Page::Focus,
             sidebar_open: true,
+            focus_active: false,
+            pomodoro_active: false,
             default_rule_set_id: None,
             daemon_failures: 0,
             daemon_dialog_shown: false,
@@ -174,6 +187,8 @@ impl Component for App {
         widgets
             .stack
             .add_named(model.settings.widget(), Some("settings"));
+
+        widgets.stack.set_visible_child_name("focus");
 
         // Long-lived subscription task: connects to daemon, receives push events,
         // reconnects automatically on failure.
@@ -217,6 +232,7 @@ impl Component for App {
                     .sidebar
                     .set_width_request(if open { 160 } else { 48 });
                 widgets.lbl_focus.set_visible(open);
+                widgets.lbl_focus_status.set_visible(open);
                 widgets.lbl_allowed.set_visible(open);
                 widgets.lbl_pomodoro.set_visible(open);
                 widgets.lbl_schedule.set_visible(open);
@@ -242,7 +258,20 @@ impl Component for App {
             }
 
             // ── Focus / Pomodoro ─────────────────────────────────────────
-            AppMsg::StartFocus => focus_handlers::start_focus(self.default_rule_set_id),
+            AppMsg::TakeBreak { break_secs } => focus_handlers::take_break(break_secs),
+            AppMsg::SetFocusActive(active) => {
+                self.focus_active = active;
+                self.update_view(widgets, sender);
+                return;
+            }
+            AppMsg::SetPomodoroActive(active) => {
+                self.pomodoro_active = active;
+                self.update_view(widgets, sender);
+                return;
+            }
+            AppMsg::StartFocus { rule_set_id } => {
+                focus_handlers::start_focus(rule_set_id.or(self.default_rule_set_id));
+            }
             AppMsg::StopFocus => focus_handlers::stop_focus(),
             AppMsg::SkipBreak => focus_handlers::skip_break(),
             AppMsg::StartPomodoro {

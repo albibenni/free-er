@@ -13,9 +13,10 @@ use super::{App, AppMsg};
 
 fn map_focus_output(out: FocusOutput) -> AppMsg {
     match out {
-        FocusOutput::StartFocus => AppMsg::StartFocus,
+        FocusOutput::StartFocus { rule_set_id } => AppMsg::StartFocus { rule_set_id },
         FocusOutput::StopFocus => AppMsg::StopFocus,
         FocusOutput::SkipBreak => AppMsg::SkipBreak,
+        FocusOutput::TakeBreak { break_secs } => AppMsg::TakeBreak { break_secs },
     }
 }
 

@@ -20,6 +20,8 @@ pub enum Page {
 pub struct App {
     pub(super) current_page: Page,
     pub(super) sidebar_open: bool,
+    pub(super) focus_active: bool,
+    pub(super) pomodoro_active: bool,
     /// ID of the selected default rule set.
     pub(super) default_rule_set_id: Option<Uuid>,
     /// Consecutive status-poll failures — when it reaches the threshold the UI exits.
@@ -39,7 +41,7 @@ pub enum AppMsg {
     Navigate(Page),
     ToggleSidebar,
     // Focus / Pomodoro session control
-    StartFocus,
+    StartFocus { rule_set_id: Option<Uuid> },
     StopFocus,
     SkipBreak,
     StartPomodoro {
@@ -116,6 +118,9 @@ pub enum AppMsg {
     ApplyAccentCss(String),
     /// Fetch open browser tabs from daemon and forward to AllowedLists.
     FetchOpenTabs,
+    TakeBreak { break_secs: u64 },
+    SetFocusActive(bool),
+    SetPomodoroActive(bool),
     /// Send Shutdown to the daemon then quit the UI.
     ShutdownDaemon,
     /// A push event arrived from the daemon subscription.

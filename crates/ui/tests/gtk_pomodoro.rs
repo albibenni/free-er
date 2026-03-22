@@ -59,9 +59,6 @@ fn pomodoro_component_emits_start_and_stop() {
         focus_secs: 25 * 60,
         break_secs: 5 * 60,
     });
-    controller.emit(PomodoroInput::SetQuickBreak {
-        break_secs: 15 * 60,
-    });
     controller.emit(PomodoroInput::AdjustFocus(10));
     controller.emit(PomodoroInput::AdjustBreak(-3));
     let focus_drag = drag_controller(&controller.widgets().focus_ring);
