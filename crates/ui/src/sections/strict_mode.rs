@@ -159,6 +159,7 @@ pub fn show_strict_mode_enable_dialog(
         "• Stopping the Pomodoro timer requires confirmation\n\
          • Taking quick breaks requires confirmation\n\
          • Adding sites to allowed lists requires confirmation\n\
+         • Removing sites from allowed lists will be disabled\n\
          • Creating, editing, or deleting schedules requires confirmation\n\
          • Calendar rules fields will be disabled\n\
          • Quick Allow toggles will be disabled",

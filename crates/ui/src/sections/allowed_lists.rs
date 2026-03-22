@@ -418,6 +418,7 @@ impl Component for AllowedListsSection {
             }
             AllowedListsInput::StrictModeUpdated(enabled) => {
                 self.strict_mode = enabled;
+                self.rebuild_url_list(widgets, &sender);
             }
         }
         self.update_view(widgets, sender);
@@ -482,6 +483,7 @@ impl AllowedListsSection {
             del_btn.add_css_class("flat");
             del_btn.set_margin_end(4);
             del_btn.set_valign(gtk4::Align::Center);
+            del_btn.set_sensitive(!self.strict_mode);
             let url_clone = url.clone();
             let s = sender.clone();
             del_btn.connect_clicked(move |_| {
