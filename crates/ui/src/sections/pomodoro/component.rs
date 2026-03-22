@@ -163,28 +163,32 @@ impl Component for PomodoroSection {
                             },
                             gtk4::Button {
                                 set_label: "25/5",
-                                add_css_class: "suggested-action",
+                                #[watch]
+                                set_css_classes: if model.phase.is_none() { &["suggested-action"] } else { &[] },
                                 #[watch]
                                 set_sensitive: model.phase.is_none(),
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 25 * 60, break_secs: 5 * 60 },
                             },
                             gtk4::Button {
                                 set_label: "45/15",
-                                add_css_class: "suggested-action",
+                                #[watch]
+                                set_css_classes: if model.phase.is_none() { &["suggested-action"] } else { &[] },
                                 #[watch]
                                 set_sensitive: model.phase.is_none(),
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 45 * 60, break_secs: 15 * 60 },
                             },
                             gtk4::Button {
                                 set_label: "50/10",
-                                add_css_class: "suggested-action",
+                                #[watch]
+                                set_css_classes: if model.phase.is_none() { &["suggested-action"] } else { &[] },
                                 #[watch]
                                 set_sensitive: model.phase.is_none(),
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 50 * 60, break_secs: 10 * 60 },
                             },
                             gtk4::Button {
                                 set_label: "90/20",
-                                add_css_class: "suggested-action",
+                                #[watch]
+                                set_css_classes: if model.phase.is_none() { &["suggested-action"] } else { &[] },
                                 #[watch]
                                 set_sensitive: model.phase.is_none(),
                                 connect_clicked => PomodoroInput::SelectPreset { focus_secs: 90 * 60, break_secs: 20 * 60 },
@@ -247,14 +251,16 @@ impl Component for PomodoroSection {
                                     set_spacing: 6,
                                     gtk4::Button {
                                         set_label: "−",
-                                        add_css_class: "suggested-action",
+                                        #[watch]
+                                        set_css_classes: if model.phase.is_none() { &["suggested-action"] } else { &[] },
                                         #[watch]
                                         set_sensitive: model.phase.is_none(),
                                         connect_clicked => PomodoroInput::AdjustFocus(-5),
                                     },
                                     gtk4::Button {
                                         set_label: "+",
-                                        add_css_class: "suggested-action",
+                                        #[watch]
+                                        set_css_classes: if model.phase.is_none() { &["suggested-action"] } else { &[] },
                                         #[watch]
                                         set_sensitive: model.phase.is_none(),
                                         connect_clicked => PomodoroInput::AdjustFocus(5),
@@ -310,14 +316,16 @@ impl Component for PomodoroSection {
                                     set_spacing: 6,
                                     gtk4::Button {
                                         set_label: "−",
-                                        add_css_class: "suggested-action",
+                                        #[watch]
+                                        set_css_classes: if model.phase.is_none() { &["suggested-action"] } else { &[] },
                                         #[watch]
                                         set_sensitive: model.phase.is_none(),
                                         connect_clicked => PomodoroInput::AdjustBreak(-5),
                                     },
                                     gtk4::Button {
                                         set_label: "+",
-                                        add_css_class: "suggested-action",
+                                        #[watch]
+                                        set_css_classes: if model.phase.is_none() { &["suggested-action"] } else { &[] },
                                         #[watch]
                                         set_sensitive: model.phase.is_none(),
                                         connect_clicked => PomodoroInput::AdjustBreak(5),
@@ -378,7 +386,8 @@ impl Component for PomodoroSection {
                         },
                         gtk4::Button {
                             set_label: "Stop",
-                            add_css_class: "destructive-action",
+                            #[watch]
+                            set_css_classes: if model.phase.is_some() { &["destructive-action"] } else { &[] },
                             #[watch]
                             set_sensitive: model.phase.is_some(),
                             connect_clicked => PomodoroInput::Stop,

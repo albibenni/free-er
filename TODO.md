@@ -79,9 +79,10 @@
 - [x] opposite - clock wise to increase, counter clock wise to decrease
 - [ ] break timer clock - connected to the pomodoro end
 - [x] race condition between pomodoro and calendar task - pomodoro is above calendar task, but when pomodoro ends, calendar task should come back
-- [ ] pomodoro list selection cannot be changed while pomodoro is active
-- [ ] pomodoro cannot be increased or decreased while active (both for focus and break)
-- [ ] disable stop if pomodoro isn't active
+- [x] pomodoro list selection cannot be changed while pomodoro is active
+- [x] pomodoro cannot be increased or decreased while active (both for focus and break)
+- [x] disable stop if pomodoro isn't active
+- [ ] countdown clock - show remaining mm:ss
 
 ## BUG
 
