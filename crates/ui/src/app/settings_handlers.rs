@@ -90,6 +90,8 @@ pub(super) fn apply_accent_css(hex: &str) {
          button.destructive-action-dialog:not(.flat) {{ background-color: rgba(220, 53, 69, 0.12); background-image: none; color: red; border: 1px solid rgba(220, 53, 69, 0.35); }}\
          button.destructive-action-dialog:not(.flat):hover {{ background-color: rgba(220, 53, 69, 0.32); background-image: none; }}\
          switch:checked {{ background-color: {hex}; }}\
+         switch trough:checked {{ background-color: {hex}; }}\
+         switch:disabled trough:checked {{ background-color: {hex}; opacity: 1; }}\
          list.boxed-list row:selected {{ background-color: rgba({r},{g},{b},0.12); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.35); }}\
          list.boxed-list row:hover {{ background-color: rgba({r},{g},{b},0.32); background-image: none; color: {hex}; border: 1px solid rgba({r},{g},{b},0.55); }}\
          list.boxed-list:disabled row:selected {{ background-color: rgba(128,128,128,0.2); background-image: none; color: inherit; border: 1px solid rgba(128,128,128,0.45); }}"

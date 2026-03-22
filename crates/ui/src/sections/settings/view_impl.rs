@@ -149,14 +149,20 @@ impl SimpleComponent for SettingsSection {
                     set_active: model.strict_mode,
                     connect_state_set[sender] => move |switch, state| {
                         if !state {
+                            // Keep the switch visually active (clear GTK pending state)
+                            switch.set_state(true);
                             // Disable requires confirmation
                             let sw_root = switch.clone();
+                            let sw_for_confirm = switch.clone();
                             let s = sender.clone();
                             crate::sections::strict_mode::show_strict_mode_dialog(
                                 &sw_root,
                                 "You are about to disable Strict Mode.\n\nThis will allow changes to all blocked settings. Are you sure?",
                                 "Disable Strict Mode",
-                                move || { s.input(SettingsInput::SetStrictMode(false)); },
+                                move || {
+                                    sw_for_confirm.set_state(false);
+                                    s.input(SettingsInput::SetStrictMode(false));
+                                },
                             );
                             return gtk4::glib::Propagation::Stop;
                         }
