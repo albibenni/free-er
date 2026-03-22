@@ -14,7 +14,7 @@ pub fn focus_fraction(state: &RingVisualState) -> f64 {
             return (rem as f64 / state.focus_secs.max(1) as f64).clamp(0.05, 1.0);
         }
     }
-    ((state.focus_secs as f64 / 60.0) / 90.0).clamp(0.15, 0.95)
+    ((state.focus_secs as f64 / 60.0) / 90.0).clamp(0.05, 0.95)
 }
 
 pub fn break_fraction(state: &RingVisualState) -> f64 {
@@ -23,7 +23,7 @@ pub fn break_fraction(state: &RingVisualState) -> f64 {
             return (rem as f64 / state.break_secs.max(1) as f64).clamp(0.05, 1.0);
         }
     }
-    ((state.break_secs as f64 / 60.0) / 30.0).clamp(0.10, 0.95)
+    ((state.break_secs as f64 / 60.0) / 30.0).clamp(0.03, 0.95)
 }
 
 pub fn draw_ring(
